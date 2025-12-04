@@ -1,0 +1,102 @@
+{
+  "step_type": "kyutai_asr",
+  "name": "Kyutai ASR Step",
+  "description": "ASR utilisant Kyutai STT (Moshi) pour transcription audio en temps réel",
+  "category": "audio_processing",
+  "version": "1.0.0",
+  "inputs": {
+    "type": "audio",
+    "format": "binary",
+    "description": "Chunks audio à transcrire",
+    "metadata": {
+      "client_id": "string",
+      "audio_format": "string",
+      "sample_rate": "integer",
+      "chunk_size": "integer"
+    }
+  },
+  "outputs": {
+    "type": "text",
+    "format": "string",
+    "description": "Texte transcrit depuis l'audio",
+    "metadata": {
+      "original_client_id": "string",
+      "transcription_type": "string",
+      "word_count": "integer",
+      "event_type": "string"
+    }
+  },
+  "configuration": {
+    "host": {
+      "type": "string",
+      "default": "caronboulme.fr",
+      "description": "Serveur Kyutai STT local"
+    },
+    "port": {
+      "type": "integer",
+      "default": 443,
+      "description": "Port du serveur Kyutai"
+    },
+    "api_key": {
+      "type": "string",
+      "default": "public_token",
+      "description": "Token d'authentification Kyutai"
+    },
+    "sample_rate": {
+      "type": "integer",
+      "default": 24000,
+      "description": "Taux d'échantillonnage attendu",
+      "values": [16000, 24000, 48000]
+    },
+    "samples_per_frame": {
+      "type": "integer",
+      "default": 1920,
+      "description": "Nombre d'échantillons par frame (80ms à 24kHz)"
+    },
+    "pause_threshold": {
+      "type": "float",
+      "default": 0.9,
+      "description": "Seuil de détection de pause",
+      "min": 0.0,
+      "max": 1.0
+    },
+    "vad_threshold": {
+      "type": "float",
+      "default": 0.8,
+      "description": "Seuil de détection d'activité vocale",
+      "min": 0.0,
+      "max": 1.0
+    }
+  },
+  "providers": {
+    "kyutai": {
+      "class_name": "KyutaiASRStep",
+      "required_config": ["host"],
+      "optional_config": ["port", "api_key", "pause_threshold", "vad_threshold"]
+    },
+    "mock": {
+      "class_name": "MockKyutaiASRStep",
+      "required_config": [],
+      "optional_config": ["simulate_delay", "simulate_vad"]
+    }
+  },
+  "requirements": {
+    "cpu": "medium",
+    "memory": "medium",
+    "network": "required",
+    "latency": "medium"
+  },
+  "error_conditions": [
+    "kyutai_server_unavailable",
+    "websocket_connection_failed",
+    "audio_format_invalid",
+    "transcription_timeout",
+    "api_key_invalid"
+  ],
+  "capabilities": {
+    "real_time": true,
+    "voice_activity_detection": true,
+    "streaming": true,
+    "pause_detection": true
+  }
+}

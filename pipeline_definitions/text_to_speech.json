@@ -1,0 +1,40 @@
+{
+  "name": "Pipeline Text to Speech WebSocket",
+  "description": "Pipeline WebSocket texte vers audio avec Chatterbox TTS",
+  "category": "tts_ai",
+  "version": "1.0.0",
+  "steps": [
+    {
+      "id": "websocket_server",
+      "type": "websocket_server",
+      "config": {
+        "host": "localhost",
+        "port": 8767,
+        "mode": "text_to_audio"
+      }
+    },
+    {
+      "id": "chatterbox_tts",
+      "type": "chatterbox_tts",
+      "config": {
+        "host": "https://caronboulme.fr/chatterbox/speech",
+        "voice": "Fip4",
+        "language_id": "fr",
+        "speed": 1.0,
+        "quality_mode": "quality"
+      }
+    }
+  ],
+  "connections": [
+    {
+      "from": "websocket_server",
+      "to": "chatterbox_tts",
+      "message_types": ["text"]
+    },
+    {
+      "from": "chatterbox_tts",
+      "to": "websocket_server",
+      "message_types": ["audio_chunk"]
+    }
+  ]
+}

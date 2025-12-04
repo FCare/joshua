@@ -1,0 +1,42 @@
+{
+  "name": "Pipeline Audio Transcription WebSocket",
+  "description": "Pipeline audio streaming avec WebSocket et transcription Kyutai STT",
+  "category": "audio_ai",
+  "version": "1.0.0",
+  "steps": [
+    {
+      "id": "websocket_server",
+      "type": "websocket_server",
+      "config": {
+        "host": "localhost",
+        "port": 8766,
+        "mode": "audio_to_text",
+        "audio_format": "pcm16",
+        "sample_rate": 24000
+      }
+    },
+    {
+      "id": "asr_step", 
+      "type": "kyutai_asr",
+      "config": {
+        "host": "caronboulme.fr",
+        "port": 443,
+        "sample_rate": 24000,
+        "pause_threshold": 0.9,
+        "vad_threshold": 0.8
+      }
+    }
+  ],
+  "connections": [
+    {
+      "from": "websocket_server",
+      "to": "asr_step",
+      "message_types": ["audio_chunk"]
+    },
+    {
+      "from": "asr_step", 
+      "to": "websocket_server",
+      "message_types": ["transcription"]
+    }
+  ]
+}

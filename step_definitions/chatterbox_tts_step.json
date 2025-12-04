@@ -1,0 +1,43 @@
+{
+  "name": "chatterbox_tts",
+  "class_name": "ChatterboxTTSStep",
+  "module_path": "steps.tts.chatterbox_tts_step",
+  "description": "TTS Chatterbox pour synthèse vocale française",
+  "version": "1.0",
+  "category": "tts",
+  "input_formats": ["text"],
+  "output_formats": ["audio_chunk"],
+  "configuration": {
+    "host": {
+      "type": "string",
+      "default": "https://caronboulme.fr/chatterbox/speech",
+      "description": "URL API Chatterbox"
+    },
+    "voice": {
+      "type": "string", 
+      "default": "Fip4",
+      "description": "Voix à utiliser"
+    },
+    "language_id": {
+      "type": "string",
+      "default": "fr",
+      "description": "Langue"
+    },
+    "speed": {
+      "type": "float",
+      "default": 1.0,
+      "description": "Vitesse de parole"
+    },
+    "quality_mode": {
+      "type": "string",
+      "default": "quality",
+      "description": "Mode qualité"
+    }
+  },
+  "example_config": {
+    "host": "https://caronboulme.fr/chatterbox/speech",
+    "voice": "Fip4",
+    "language_id": "fr",
+    "speed": 1.0
+  }
+}
