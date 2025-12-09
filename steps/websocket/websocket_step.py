@@ -1,5 +1,6 @@
 import asyncio
 import json
+import logging
 import threading
 import time
 import base64
@@ -8,6 +9,8 @@ from typing import Optional, Dict, Any
 from pipeline_framework import PipelineStep
 from messages.base_message import Message, InputMessage, OutputMessage, ErrorMessage, MessageType
 from utils.chunk_queue import ChunkQueue
+
+logger = logging.getLogger(__name__)
 
 
 class WebSocketStep(PipelineStep):
@@ -31,9 +34,9 @@ class WebSocketStep(PipelineStep):
         # Mode de fonctionnement : "audio_to_text" ou "text_to_audio"
         self.mode = config.get("mode", "audio_to_text") if config else "audio_to_text"
         
-        # ChunkQueues pour traiter les messages de manière asynchrone
-        self.outgoing_message_queue = ChunkQueue(handler=self._handle_outgoing_message)
-        self.incoming_message_queue = ChunkQueue(handler=self._handle_incoming_message)
+        # Chaque step ne crée que son input_queue avec handler ASYNC
+        # output_queue sera définie par le pipeline builder (= input_queue du step suivant)
+        self.input_queue = ChunkQueue(handler=self._handle_input_message_async)
     
     def init(self) -> bool:
         """Démarre le serveur WebSocket dans un thread séparé"""
@@ -66,53 +69,44 @@ class WebSocketStep(PipelineStep):
         finally:
             self.event_loop.close()
     
-    def process_message(self, message) -> Optional[OutputMessage]:
+    async def _handle_input_message_async(self, message_data):
+        """Handler ASYNC pour traiter les réponses du ChatStep - ChunkQueue gère la boucle !"""
         try:
-            if message.type == MessageType.OUTPUT:
-                # Envoie le message vers la ChunkQueue pour traitement asynchrone
-                self.outgoing_message_queue.enqueue(message)
-                return None
+            logger.info(f"WebSocket received message from ChatStep: type={type(message_data).__name__}")
+            
+            if hasattr(message_data, 'data'):
+                text_data = message_data.data
+                metadata = getattr(message_data, 'metadata', {})
+                
+                # Extraire le client_id original de la métadonnée
+                original_client_id = metadata.get('original_client_id')
+                
+                if not original_client_id:
+                    logger.warning(f"No original_client_id in metadata, cannot route response: {metadata}")
+                    return
+                
+                logger.info(f"Sending chat response to client {original_client_id}: '{str(text_data)[:50]}{'...' if len(str(text_data)) > 50 else ''}'")
+                
+                # SIMPLE : await direct ! ChunkQueue gère la boucle asyncio
+                if original_client_id in self.connections:
+                    await self.send_to_specific_client(original_client_id, str(text_data), metadata)
+                else:
+                    logger.warning(f"Client {original_client_id} not connected (available: {list(self.connections.keys())})")
+                
+            else:
+                logger.warning(f"Received message without data attribute: {message_data}")
                 
         except Exception as e:
-            return ErrorMessage(error=str(e), step_name=self.name)
-    
-    def _handle_outgoing_message(self, message):
-        """Handler pour traiter les messages sortants via ChunkQueue"""
-        try:
-            if self.mode == "audio_to_text":
-                # Mode ASR: diffuser du texte transcrit
-                text_data = message.data
-                asyncio.run_coroutine_threadsafe(
-                    self.broadcast_text(str(text_data)),
-                    self.event_loop
-                )
-            elif self.mode == "text_to_audio":
-                # Mode TTS: diffuser des chunks audio
-                audio_data = message.data
-                asyncio.run_coroutine_threadsafe(
-                    self.broadcast_audio(audio_data),
-                    self.event_loop
-                )
-        except Exception as e:
-            pass
-    
-    def _handle_incoming_message(self, message_data):
-        """Handler pour traiter les messages entrants via ChunkQueue"""
-        try:
-            # Ce handler peut être utilisé pour du preprocessing des messages entrants
-            # Pour l'instant, le traitement direct dans websocket_handler est suffisant
-            pass
-        except Exception as e:
-            pass
+            logger.error(f"Error in _handle_input_message_async: {e}")
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
     
     def cleanup(self):
         self.running = False
         
         # Arrête les ChunkQueues
-        if hasattr(self, 'outgoing_message_queue') and self.outgoing_message_queue:
-            self.outgoing_message_queue.stop()
-        if hasattr(self, 'incoming_message_queue') and self.incoming_message_queue:
-            self.incoming_message_queue.stop()
+        if hasattr(self, 'input_queue') and self.input_queue:
+            self.input_queue.stop()
         
         if self.websocket_server:
             self.websocket_server.close()
@@ -124,9 +118,12 @@ class WebSocketStep(PipelineStep):
         self.connections[client_id] = websocket
         
         try:
+            logger.info(f"WebSocket handler started for client {client_id}, mode={self.mode}")
             async for message in websocket:
+                logger.info(f"Received message from {client_id}: type={type(message).__name__}, length={len(str(message)) if isinstance(message, str) else len(message) if isinstance(message, bytes) else 'unknown'}")
+                
                 if self.mode == "audio_to_text" and isinstance(message, bytes):
-                    # Mode ASR: recevoir de l'audio
+                    logger.info(f"Processing audio message from {client_id}: {len(message)} bytes")
                     audio_message = InputMessage(
                         data=message,
                         metadata={
@@ -136,15 +133,18 @@ class WebSocketStep(PipelineStep):
                             "timestamp": time.time()
                         }
                     )
-                    await self.output_queue.put(audio_message)
+                    self.output_queue.enqueue(audio_message)
+                    logger.info(f"Audio message queued for processing")
                     
-                elif self.mode == "text_to_audio" and isinstance(message, str):
-                    # Mode TTS: recevoir du texte
+                elif (self.mode == "text_to_audio" or self.mode == "text_to_text") and isinstance(message, str):
+                    logger.info(f"Processing text message from {client_id}: '{message[:100]}{'...' if len(message) > 100 else ''}'")
                     try:
                         data = json.loads(message)
                         text_data = data.get("text", message)
+                        logger.info(f"Parsed JSON message, extracted text: '{text_data}'")
                     except:
                         text_data = message
+                        logger.info(f"Using raw text message: '{text_data}'")
                     
                     text_message = InputMessage(
                         data=text_data,
@@ -153,10 +153,13 @@ class WebSocketStep(PipelineStep):
                             "timestamp": time.time()
                         }
                     )
-                    await self.output_queue.put(text_message)
+                    self.output_queue.enqueue(text_message)
+                    logger.info(f"Text message queued for processing: '{text_data}'")
                     
         except Exception as e:
-            pass
+            logger.error(f"Error in websocket_handler for {client_id}: {e}")
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
         finally:
             if client_id in self.connections:
                 del self.connections[client_id]
@@ -173,26 +176,71 @@ class WebSocketStep(PipelineStep):
         except Exception as e:
             raise
     
+    async def send_to_specific_client(self, client_id: str, text: str, metadata: dict):
+        """Envoie un message texte à un client spécifique"""
+        if client_id not in self.connections:
+            logger.warning(f"❌ Client {client_id} not found in connections")
+            return
+            
+        websocket = self.connections[client_id]
+        
+        # Détermine le type de message selon les métadonnées
+        response_type = metadata.get('response_type', 'transcription')
+        message_type = "chat_response" if response_type in ['partial', 'finish'] else "transcription"
+        
+        message = {
+            "type": message_type,
+            "text": text,
+            "timestamp": time.time(),
+            "metadata": metadata
+        }
+        
+        try:
+            await websocket.send(json.dumps(message))
+            logger.debug(f"✅ Sent to {client_id}: '{text[:30]}{'...' if len(text) > 30 else ''}'")
+        except Exception as e:
+            logger.error(f"❌ Failed to send to {client_id}: {e}")
+            # Supprimer la connexion défaillante
+            if client_id in self.connections:
+                del self.connections[client_id]
+                logger.info(f"🗑️ Removed disconnected client {client_id}")
+
     async def broadcast_text(self, text: str):
+        """Broadcast simple text (pour compatibilité)"""
+        await self.broadcast_text_with_metadata(text, {})
+    
+    async def broadcast_text_with_metadata(self, text: str, metadata: dict):
+        """Broadcast text avec métadonnées"""
+        logger.info(f"🔊 Broadcasting to {len(self.connections)} clients: '{text[:30]}{'...' if len(text) > 30 else ''}'")
+        
         if not self.connections:
+            logger.warning("❌ No connections to broadcast to")
             return
             
         message = {
             "type": "transcription",
             "text": text,
-            "timestamp": time.time()
+            "timestamp": time.time(),
+            "metadata": metadata
         }
         
         disconnected = []
+        sent_count = 0
         for client_id, websocket in self.connections.items():
             try:
                 await websocket.send(json.dumps(message))
-            except:
+                sent_count += 1
+                logger.debug(f"✅ Sent to {client_id}")
+            except Exception as e:
+                logger.error(f"❌ Failed to send to {client_id}: {e}")
                 disconnected.append(client_id)
+        
+        logger.info(f"📤 Sent to {sent_count}/{len(self.connections)} clients")
         
         for client_id in disconnected:
             if client_id in self.connections:
                 del self.connections[client_id]
+                logger.info(f"🗑️ Removed disconnected client {client_id}")
     
     async def broadcast_audio(self, audio_data: bytes):
         if not self.connections:

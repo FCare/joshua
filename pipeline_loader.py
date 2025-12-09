@@ -8,6 +8,7 @@ from messages.base_message import InputMessage, OutputMessage
 from steps.websocket.websocket_step import WebSocketStep
 from steps.asr.kyutai_asr_step import KyutaiASRStep
 from steps.tts.chatterbox_tts_step import ChatterboxTTSStep
+from steps.chat.openai_chat_step import OpenAIChatStep
 
 
 class PipelineLoader:
@@ -107,7 +108,8 @@ class PipelineLoader:
             "websocket_server": WebSocketStep,
             "audio_websocket_server": WebSocketStep,
             "kyutai_asr": KyutaiASRStep,
-            "chatterbox_tts": ChatterboxTTSStep
+            "chatterbox_tts": ChatterboxTTSStep,
+            "openai_chat": OpenAIChatStep
         }
         
         step_class = type_class_mapping.get(step_type)
@@ -117,6 +119,9 @@ class PipelineLoader:
         try:
             return step_class(step_id, config)
         except Exception as e:
+            print(f"❌ Erreur création step {step_type}/{step_id}: {e}")
+            import traceback
+            traceback.print_exc()
             return None
     
     def create_pipeline_from_definition(self, pipeline_id: str, 
@@ -173,6 +178,14 @@ class PipelineLoader:
                 
                 if tts_step and ws_step:
                     tts_step.set_output_queue(ws_step.input_queue)
+            
+            elif "chat" in pipeline_name.lower():
+                chat_step = steps_map.get("openai_chat")
+                ws_step = steps_map.get("websocket_server")
+                
+                if chat_step and ws_step:
+                    chat_step.set_output_queue(ws_step.input_queue)
+                    ws_step.set_output_queue(chat_step.input_queue)
                     
         except Exception as e:
             pass

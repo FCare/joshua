@@ -4,6 +4,7 @@ import queue
 from abc import ABC, abstractmethod
 from typing import Optional, Dict, Any, List
 from messages.base_message import Message, InputMessage, OutputMessage, ErrorMessage
+from utils.chunk_queue import ChunkQueue
 
 
 class PipelineStep(ABC):
@@ -11,57 +12,30 @@ class PipelineStep(ABC):
     def __init__(self, name: str, config: Optional[Dict] = None):
         self.name = name
         self.config = config or {}
-        self.input_queue = asyncio.Queue()
-        self.output_queue = asyncio.Queue()
         self.is_running = False
-        self._task = None
+        
+        # Chaque step ne crée que des input_queues
+        # output_queue sera définie par le pipeline builder (= input_queue du step suivant)
+        self.input_queue = None
+        self.output_queue = None
     
     @abstractmethod
     def init(self) -> bool:
         pass
     
     @abstractmethod
-    def process_message(self, message) -> Optional[OutputMessage]:
-        pass
-    
-    @abstractmethod
     def cleanup(self):
         pass
-    
-    def set_output_queue(self, queue_instance):
-        self.output_queue = queue_instance
     
     async def start(self):
         if not self.init():
             return False
-        
         self.is_running = True
-        self._task = asyncio.create_task(self._message_loop())
         return True
     
     async def stop(self):
         self.is_running = False
-        if self._task:
-            self._task.cancel()
-            try:
-                await self._task
-            except asyncio.CancelledError:
-                pass
         self.cleanup()
-    
-    async def _message_loop(self):
-        while self.is_running:
-            try:
-                message = await asyncio.wait_for(self.input_queue.get(), timeout=1.0)
-                result = self.process_message(message)
-                if result and self.output_queue:
-                    await self.output_queue.put(result)
-            except asyncio.TimeoutError:
-                continue
-            except Exception as e:
-                error_msg = ErrorMessage(error=str(e), step_name=self.name)
-                if self.output_queue:
-                    await self.output_queue.put(error_msg)
 
 
 class Pipeline:
@@ -82,7 +56,7 @@ class Pipeline:
         from_step = self.steps[from_step_name]
         to_step = self.steps[to_step_name]
         
-        from_step.set_output_queue(to_step.input_queue)
+        from_step.output_queue = to_step.input_queue
         self.connections.append((from_step_name, to_step_name))
     
     async def start(self):
@@ -104,4 +78,5 @@ class Pipeline:
     
     async def send_message(self, step_name: str, message: Message):
         if step_name in self.steps:
-            await self.steps[step_name].input_queue.put(message)
+            # ChunkQueue utilise enqueue() au lieu de put()
+            self.steps[step_name].input_queue.enqueue(message)

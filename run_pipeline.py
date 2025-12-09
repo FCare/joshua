@@ -1,7 +1,24 @@
 import argparse
 import asyncio
 import sys
+import logging
 from pipeline_loader import PipelineLoader
+
+# Charger les variables d'environnement
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
+# Configuration du logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(sys.stdout)
+    ]
+)
 
 
 def list_pipelines():

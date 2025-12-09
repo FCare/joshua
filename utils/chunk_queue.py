@@ -11,9 +11,9 @@ class ChunkQueue(queue.PriorityQueue):
                 item = self.get(timeout=1)  #Wait for a chunk
                 priority, timestamp, counter, chunk = item
                 f(chunk)
+                self.task_done() #Trigger that it is done
             except queue.Empty:
                 continue
-            self.task_done() #Trigger that it is done
 
     def wrapper_targetFuncAsync(self, f, looper):
         async def wait_for_f(chunk):
@@ -28,19 +28,20 @@ class ChunkQueue(queue.PriorityQueue):
             try:
                 item = self.get(timeout=1)  #Wait for a chunk
                 priority, timestamp, counter, chunk = item
-                if looper.is_running():
-                    future = asyncio.run_coroutine_threadsafe(f(chunk), looper)
-                    result = future.result()
-                else:
-                    # Si la boucle n'est pas active, exécute directement
-                    looper.run_until_complete(f(chunk))
+                try:
+                    if looper.is_running():
+                        future = asyncio.run_coroutine_threadsafe(f(chunk), looper)
+                        result = future.result()
+                    else:
+                        # Si la boucle n'est pas active, exécute directement
+                        looper.run_until_complete(f(chunk))
+                except Exception as e:
+                    # Log error but continue processing
+                    pass
+                finally:
+                    self.task_done() #Trigger that it is done
             except queue.Empty:
                 continue
-            except Exception as e:
-                # Log error but continue processing
-                pass
-            finally:
-                self.task_done() #Trigger that it is done
 
     def __init__(self, size = 0, handler = None, priority = 2):
         super().__init__(size)

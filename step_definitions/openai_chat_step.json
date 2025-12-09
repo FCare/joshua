@@ -1,0 +1,59 @@
+{
+    "id": "openai_chat_step",
+    "name": "OpenAI Chat Step", 
+    "description": "Step de chat conversationnel utilisant Azure OpenAI avec streaming",
+    "class_name": "OpenAIChatStep",
+    "module_path": "steps.chat.openai_chat_step",
+    "default_config": {
+        "model": "gpt-4o-mini",
+        "temperature": 0.7,
+        "max_tokens": 1000,
+        "system_prompt": "You are a helpful assistant that provides clear and concise responses."
+    },
+    "config_schema": {
+        "type": "object",
+        "properties": {
+            "api_key": {
+                "type": "string",
+                "description": "Azure OpenAI API key (can also be set via OPENAI_API_KEY env var)"
+            },
+            "endpoint": {
+                "type": "string",
+                "description": "Azure OpenAI endpoint URL",
+                "default": "https://amsuie-superreno-azure-openai.cognitiveservices.azure.com"
+            },
+            "api_version": {
+                "type": "string",
+                "description": "Azure OpenAI API version",
+                "default": "2025-01-01-preview"
+            },
+            "model": {
+                "type": "string",
+                "description": "Azure OpenAI model to use",
+                "default": "gpt-4o-mini"
+            },
+            "temperature": {
+                "type": "number",
+                "description": "Temperature for response generation",
+                "minimum": 0.0,
+                "maximum": 2.0,
+                "default": 0.7
+            },
+            "max_tokens": {
+                "type": "integer",
+                "description": "Maximum tokens in response",
+                "minimum": 1,
+                "maximum": 4000,
+                "default": 1000
+            },
+            "system_prompt": {
+                "type": "string",
+                "description": "System prompt for the assistant",
+                "default": "You are a helpful assistant that provides clear and concise responses."
+            }
+        }
+    },
+    "inputs": ["text"],
+    "outputs": ["text"],
+    "capabilities": ["streaming", "conversational", "stateful"]
+}
