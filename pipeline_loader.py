@@ -10,6 +10,7 @@ from steps.asr.kyutai_asr_step import KyutaiASRStep
 from steps.tts.chatterbox_tts_step import ChatterboxTTSStep
 from steps.chat.openai_chat_step import OpenAIChatStep
 from steps.utils.duplicator_step import DuplicatorStep
+from steps.text.sentence_normalizer_step import SentenceNormalizerStep
 
 
 class PipelineLoader:
@@ -111,7 +112,8 @@ class PipelineLoader:
             "kyutai_asr": KyutaiASRStep,
             "chatterbox_tts": ChatterboxTTSStep,
             "openai_chat": OpenAIChatStep,
-            "duplicator": DuplicatorStep
+            "duplicator": DuplicatorStep,
+            "sentence_normalizer": SentenceNormalizerStep
         }
         
         step_class = type_class_mapping.get(step_type)
@@ -141,6 +143,7 @@ class PipelineLoader:
             "websocket_server": "websocket_server",
             "OpenAI Chat Step": "openai_chat",
             "Duplicator Step": "duplicator",
+            "Sentence Normalizer Step": "sentence_normalizer",
             "chatterbox_tts": "chatterbox_tts",
             "Kyutai ASR Step": "kyutai_asr"
         }

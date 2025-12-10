@@ -5,13 +5,12 @@ from typing import Optional, Dict, Any
 
 from pipeline_framework import PipelineStep
 from messages.base_message import Message, InputMessage, OutputMessage, ErrorMessage, MessageType
-from utils.chunk_queue import ChunkQueue
 
 
 class ChatterboxTTSStep(PipelineStep):
     
     def __init__(self, name: str = "ChatterboxTTS", config: Optional[Dict] = None):
-        super().__init__(name, config)
+        super().__init__(name, config, handler=self._handle_input_message)
         
         self.host = config.get("host", "https://caronboulme.fr/chatterbox/speech") if config else "https://caronboulme.fr/chatterbox/speech"
         self.voice = config.get("voice", "Fip4") if config else "Fip4"
@@ -34,22 +33,16 @@ class ChatterboxTTSStep(PipelineStep):
         self._lock = threading.Lock()
         self._current_response = None
         
-        # Chaque step ne crée que son input_queue avec handler
-        # output_queue sera définie par le pipeline builder (= input_queue du step suivant)
-        self.input_queue = ChunkQueue(handler=self._handle_input_message)
         
         # Accumulateur pour collecter le texte complet avant synthesis
         self._text_accumulator = ""
         self._accumulator_metadata = {}
         
-        # ChunkQueue pour traiter les chunks audio de manière asynchrone
-        self.audio_chunk_queue = ChunkQueue(handler=self._process_audio_chunk_async)
     
     def init(self) -> bool:
         return True
     
     def _handle_input_message(self, input_message):
-        """Handler pour traiter les messages d'input via ChunkQueue (depuis duplicateur)"""
         try:
             # Extraire le texte depuis le message du duplicateur
             if hasattr(input_message, 'data'):
@@ -162,8 +155,8 @@ class ChatterboxTTSStep(PipelineStep):
                                 print(f"🚀 TTFT: {ttft_ms:.1f}ms")
                             
                             total_audio_bytes += len(chunk)
-                            # Envoie le chunk vers la ChunkQueue pour traitement asynchrone
-                            self.audio_chunk_queue.enqueue(chunk)
+                            # Traitement direct du chunk audio (pas de queue intermédiaire)
+                            self._send_audio_chunk(chunk)
                     
                     # Calcul des métriques finales
                     end_time = time.time()
@@ -177,14 +170,8 @@ class ChatterboxTTSStep(PipelineStep):
                     
                     print(f"📊 TTS Metrics: {total_audio_bytes} bytes ({audio_duration_seconds:.2f}s) - RTF: {rtf:.2f}x")
                     
-                    # Signal de fin du streaming audio
-                    end_message = {
-                        "type": "audio_finished",
-                        "total_chunks": chunk_count,
-                        "total_bytes": total_audio_bytes,
-                        "duration_seconds": audio_duration_seconds
-                    }
-                    self.audio_chunk_queue.enqueue(end_message)
+                    # Envoyer un message de fin pour signaler que l'audio est terminé
+                    self._send_audio_finished()
                             
         except Exception as e:
             pass
@@ -192,52 +179,70 @@ class ChatterboxTTSStep(PipelineStep):
             with self._lock:
                 self._current_response = None
     
-    def _process_audio_chunk_async(self, chunk):
-        """Handler asynchrone pour traiter les chunks audio via ChunkQueue"""
-        self._process_audio_chunk(chunk)
-    
-    def _process_audio_chunk(self, chunk):
-        if chunk:
-            # Si c'est un dict, c'est un message de contrôle (ex: fin de stream)
-            if isinstance(chunk, dict):
-                if chunk.get("type") == "audio_finished":
-                    # Transmettre le signal de fin
-                    if self.output_queue:
-                        self.output_queue.enqueue(chunk)
+    def _send_audio_chunk(self, chunk):
+        """Envoie directement un chunk audio à l'output_queue"""
+        if not chunk:
+            return
+        
+        # Premier chunk - supprimer l'en-tête WAV
+        if hasattr(self, '_is_first_chunk') and self._is_first_chunk:
+            self._is_first_chunk = False
+            if len(chunk) > 44:
+                chunk = chunk[44:]
+            else:
                 return
-            
-            # Chunk audio normal
-            if hasattr(self, '_is_first_chunk') and self._is_first_chunk:
-                self._is_first_chunk = False
-                if len(chunk) > 44:
-                    chunk = chunk[44:]
-                else:
-                    return
-            
-            # Fusionner les métadonnées client avec les métadonnées audio
-            audio_metadata = {
-                "type": "audio_chunk",
-                "format": "pcm",
-                "timestamp": time.time()
-            }
-            
-            # Préserver les métadonnées client (original_client_id, etc.)
-            if hasattr(self, '_current_metadata') and self._current_metadata:
-                audio_metadata.update(self._current_metadata)
-                # S'assurer que le type reste "audio_chunk"
-                audio_metadata["type"] = "audio_chunk"
-            
-            audio_message = OutputMessage(
-                result=chunk,
-                metadata=audio_metadata
-            )
-            
-            if self.output_queue:
-                try:
-                    # Utiliser ChunkQueue.enqueue() pour encapsuler correctement
-                    self.output_queue.enqueue(audio_message)
-                except Exception as e:
-                    print(f"❌ Error sending audio chunk to output_queue: {e}")
+        
+        # Créer les métadonnées audio
+        audio_metadata = {
+            "type": "audio_chunk",
+            "format": "pcm",
+            "timestamp": time.time()
+        }
+        
+        # Préserver les métadonnées client (original_client_id, etc.)
+        if hasattr(self, '_current_metadata') and self._current_metadata:
+            audio_metadata.update(self._current_metadata)
+            # S'assurer que le type reste "audio_chunk"
+            audio_metadata["type"] = "audio_chunk"
+        
+        # Créer et envoyer le message audio
+        audio_message = OutputMessage(
+            result=chunk,
+            metadata=audio_metadata
+        )
+        
+        if self.output_queue:
+            try:
+                self.output_queue.enqueue(audio_message)
+            except Exception as e:
+                print(f"❌ Error sending audio chunk to output_queue: {e}")
+    
+    def _send_audio_finished(self):
+        """Envoie un message de fin pour signaler que l'audio est terminé"""
+        # Créer les métadonnées de fin
+        finish_metadata = {
+            "type": "audio_finished",
+            "timestamp": time.time()
+        }
+        
+        # Préserver les métadonnées client (original_client_id, etc.)
+        if hasattr(self, '_current_metadata') and self._current_metadata:
+            finish_metadata.update(self._current_metadata)
+            # S'assurer que le type reste "audio_finished"
+            finish_metadata["type"] = "audio_finished"
+        
+        # Créer et envoyer le message de fin
+        finish_message = OutputMessage(
+            result="",  # Pas de données, juste un signal de fin
+            metadata=finish_metadata
+        )
+        
+        if self.output_queue:
+            try:
+                self.output_queue.enqueue(finish_message)
+                print(f"🏁 TTS finished signal sent for client: {finish_metadata.get('original_client_id')}")
+            except Exception as e:
+                print(f"❌ Error sending audio finished signal: {e}")
     
     def cleanup(self):
         with self._lock:
@@ -248,6 +253,3 @@ class ChatterboxTTSStep(PipelineStep):
                 except:
                     pass
         
-        # Arrête la ChunkQueue
-        if hasattr(self, 'audio_chunk_queue') and self.audio_chunk_queue:
-            self.audio_chunk_queue.stop()

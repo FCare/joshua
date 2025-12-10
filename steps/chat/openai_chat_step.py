@@ -9,7 +9,6 @@ from enum import Enum
 
 from pipeline_framework import PipelineStep
 from messages.base_message import Message, InputMessage, OutputMessage, ErrorMessage, MessageType
-from utils.chunk_queue import ChunkQueue
 
 try:
     import openai
@@ -90,12 +89,12 @@ class FinishResponseEvent(LLMEvent):
 
 class OpenAIChatStep(PipelineStep):
     """
-    Step de chat utilisant OpenAI avec ChunkQueue pour streaming.
+    Step de chat utilisant OpenAI avec streaming.
     Prend du texte en entrée (en plusieurs fois) et streame les réponses.
     """
     
     def __init__(self, name: str = "OpenAIChat", config: Optional[Dict] = None):
-        super().__init__(name, config)
+        super().__init__(name, config, handler=self._handle_input_event)
         
         # Charge le fichier .env
         if OPENAI_DEPENDENCIES_AVAILABLE and dotenv:
@@ -118,13 +117,6 @@ class OpenAIChatStep(PipelineStep):
         
         # Thread safety
         self._lock = threading.Lock()
-        
-        # Chaque step ne crée que son input_queue avec handler
-        # output_queue sera définie par le pipeline builder (= input_queue du step suivant)
-        self.input_queue = ChunkQueue(handler=self._handle_input_event)
-        
-        # ChunkQueue interne pour traiter les réponses OpenAI
-        self.response_chunk_queue = ChunkQueue(handler=self._handle_response_streaming)
         
         # Client OpenAI
         self.client = None
@@ -156,52 +148,8 @@ class OpenAIChatStep(PipelineStep):
             logger.error(f"OpenAI Chat init error: {e}")
             return False
     
-    def process_message(self, message: Message) -> Optional[Message]:
-        """
-        Traite un message contenant du texte pour le chat
-        """
-        try:
-            if message.type != MessageType.INPUT:
-                return None
-            
-            # Récupère le texte
-            text_data = message.data
-            if not text_data:
-                return ErrorMessage(error_message="Pas de données texte")
-            
-            # Récupère l'ID du client pour le routage de retour
-            if message.metadata:
-                self.current_client_id = message.metadata.get("client_id")
-            
-            # Vérifie que OpenAI est initialisé
-            if not self.client:
-                return ErrorMessage(error_message="OpenAI non initialisé")
-            
-            # Traite le texte avec la ChunkQueue
-            text_str = str(text_data)
-            input_event = InputEvent(text=text_str)
-            self.input_chunk_queue.enqueue(input_event)
-            
-            # Retourne un message de confirmation
-            return OutputMessage(
-                result="Texte reçu pour traitement",
-                metadata={
-                    "text_length": len(text_str),
-                    "client_id": self.current_client_id,
-                    "timestamp": time.time()
-                }
-            )
-            
-        except Exception as e:
-            error_msg = f"Erreur traitement texte chat: {e}"
-            logger.error(error_msg)
-            return ErrorMessage(
-                error=e,
-                error_message=error_msg
-            )
     
     def _handle_input_event(self, input_message):
-        """Handler pour traiter les messages d'input via ChunkQueue"""
         try:
             with self._lock:
                 # Extraire le client_id des métadonnées du message entrant
@@ -287,7 +235,6 @@ class OpenAIChatStep(PipelineStep):
                 stream=True
             )
             
-            # Stream la réponse via ChunkQueue
             assistant_response = ""
             
             for chunk in response:
@@ -301,9 +248,17 @@ class OpenAIChatStep(PipelineStep):
                     assistant_response += content
                     logger.info(f"OpenAI stream chunk: '{content[:50]}{'...' if len(content) > 50 else ''}'")
                     
-                    # Envoie le chunk via ChunkQueue
-                    partial_event = PartialResponseEvent(text=content)
-                    self.response_chunk_queue.enqueue(partial_event)
+                    # Envoie directement vers l'output_queue
+                    if self.output_queue:
+                        output_message = OutputMessage(
+                            result=content,
+                            metadata={
+                                "original_client_id": self.current_client_id,
+                                "chunk_type": "partial",
+                                "timestamp": time.time()
+                            }
+                        )
+                        self.output_queue.enqueue(output_message)
                 
                 # Vérifie si c'est la fin
                 if hasattr(choice, 'finish_reason') and choice.finish_reason == "stop":
@@ -314,9 +269,17 @@ class OpenAIChatStep(PipelineStep):
                             "content": assistant_response
                         })
                     
-                    # Envoie l'événement de fin
-                    finish_event = FinishResponseEvent()
-                    self.response_chunk_queue.enqueue(finish_event)
+                    # Envoie un marqueur de fin (optionnel)
+                    if self.output_queue:
+                        finish_message = OutputMessage(
+                            result="",
+                            metadata={
+                                "original_client_id": self.current_client_id,
+                                "chunk_type": "finish",
+                                "timestamp": time.time()
+                            }
+                        )
+                        self.output_queue.enqueue(finish_message)
                     break
             
         except Exception as e:
@@ -324,7 +287,6 @@ class OpenAIChatStep(PipelineStep):
             self._send_error_response(str(e))
     
     def _handle_response_streaming(self, response_event: LLMEvent):
-        """Handler pour streamer les réponses via ChunkQueue"""
         try:
             if response_event.type == LLMEventType.PARTIAL_RESPONSE:
                 logger.info(f"Handling partial response: '{response_event.data}'")
@@ -356,12 +318,10 @@ class OpenAIChatStep(PipelineStep):
             logger.error(f"Error handling response streaming: {e}")
     
     def _send_output_message(self, message: OutputMessage):
-        """Envoie un message vers la queue de sortie (ChunkQueue)"""
         if self.output_queue:
             try:
-                # ChunkQueue utilise enqueue()
                 self.output_queue.enqueue(message)
-                logger.info(f"Message enqueued to output ChunkQueue: {type(message).__name__}")
+                logger.info(f"Message enqueued to output: {type(message).__name__}")
             except Exception as e:
                 logger.error(f"Erreur envoi message: {e}")
     
@@ -406,11 +366,8 @@ class OpenAIChatStep(PipelineStep):
         """Nettoie les ressources du chat"""
         print(f"Nettoyage OpenAI Chat {self.name}")
         
-        # Arrête les ChunkQueues
         if hasattr(self, 'input_queue') and self.input_queue:
             self.input_queue.stop()
-        if hasattr(self, 'response_chunk_queue') and self.response_chunk_queue:
-            self.response_chunk_queue.stop()
         
         # Nettoie l'état
         with self._lock:

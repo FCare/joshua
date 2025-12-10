@@ -15,16 +15,13 @@ class DuplicatorStep(PipelineStep):
     """
     
     def __init__(self, name: str = "Duplicator", config: Optional[Dict] = None):
-        super().__init__(name, config)
+        super().__init__(name, config, handler=self._handle_input_message)
         
         # Configuration
         self.duplication_count = config.get("duplication_count", 2) if config else 2
         
         # Liste des output_queues (sera configurée par le pipeline)
         self.output_queues = []
-        
-        # Input queue avec handler
-        self.input_queue = ChunkQueue(handler=self._handle_input_message)
         
         logger.info(f"DuplicatorStep '{name}' configuré pour {self.duplication_count} sorties")
     

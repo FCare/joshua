@@ -1,0 +1,51 @@
+{
+  "id": "Sentence Normalizer Step",
+  "name": "Sentence Normalizer Step",
+  "description": "Normalise les chunks de texte du LLM en phrases complètes pour TTS avec conversion des nombres et abréviations",
+  "category": "text_processing",
+  "version": "1.0.0",
+  "author": "Pipeline Framework",
+  "class_name": "SentenceNormalizerStep",
+  "module_path": "steps.text.sentence_normalizer_step",
+  "default_config": {
+    "language_id": "fr"
+  },
+  "config_schema": {
+    "type": "object",
+    "properties": {
+      "language_id": {
+        "type": "string",
+        "enum": ["fr", "en"],
+        "default": "fr",
+        "description": "Code de langue pour la normalisation (fr pour français, en pour anglais)"
+      }
+    },
+    "additionalProperties": false
+  },
+  "input_types": ["text", "chat_chunk", "llm_chunk"],
+  "output_types": ["normalized_text"],
+  "dependencies": [],
+  "capabilities": [
+    "sentence_segmentation",
+    "number_normalization", 
+    "roman_numeral_conversion",
+    "abbreviation_expansion",
+    "text_cleaning_for_tts"
+  ],
+  "tags": ["text", "normalization", "tts", "preprocessing", "sentence"],
+  "documentation": {
+    "overview": "Step qui accumule les chunks de texte provenant d'un LLM, les découpe en phrases complètes et les normalise pour la synthèse vocale.",
+    "features": [
+      "Accumulation de chunks jusqu'à obtenir des phrases complètes",
+      "Normalisation des nombres français (suppression des espaces séparateurs)",
+      "Conversion des chiffres romains en nombres arabes puis en mots",
+      "Expansion des abréviations courantes (M., Mme, etc., h, min, s)",
+      "Nettoyage du formatage Markdown et caractères indésirables"
+    ],
+    "use_cases": [
+      "Préparation de texte LLM pour TTS",
+      "Pipeline de traitement de chat conversationnel",
+      "Normalisation de contenu streaming"
+    ]
+  }
+}

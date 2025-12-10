@@ -12,7 +12,6 @@ from typing import Optional, Dict, Any
 
 from pipeline_framework import PipelineStep
 from messages.base_message import Message, InputMessage, OutputMessage, ErrorMessage, MessageType
-from utils.chunk_queue import ChunkQueue
 
 try:
     import websocket
@@ -117,7 +116,6 @@ class EndEvent(ASREvent):
 class MoshiASR:
     """
     ASR implementation using Moshi STT server via synchronous WebSocket.
-    Intégré avec ChunkQueue pour éliminer les threads manuels.
     """
 
     def __init__(self, host: str, **params):
@@ -146,13 +144,11 @@ class MoshiASR:
         self.packets_sent = 0
         self.packets_received = 0
         
-        # Output queue sera la ChunkQueue
         self.output_queue = None
 
-        logger.debug(f"{self.name}: Initialized with ChunkQueue architecture")
+        logger.debug(f"{self.name}: Initialized")
 
     def set_output_queue(self, queue):
-        """Configure la queue de sortie (ChunkQueue)"""
         self.output_queue = queue
 
     def connect(self):
@@ -276,7 +272,6 @@ class MoshiASR:
             logger.error(f"{self.name}: Error processing message: {e}")
 
     def _enqueue_event(self, event: ASREvent):
-        """Envoie un événement via ChunkQueue"""
         if self.output_queue:
             self.output_queue.enqueue(event)
 
@@ -393,11 +388,11 @@ class MoshiASR:
 
 class KyutaiASRStep(PipelineStep):
     """
-    Step ASR utilisant Moshi avec ChunkQueue pour éliminer les threads manuels.
+    Step ASR utilisant Moshi.
     """
     
     def __init__(self, name: str = "KyutaiASR", config: Optional[Dict] = None):
-        super().__init__(name, config)
+        super().__init__(name, config, handler=self._handle_input_message)
         
         self.host = config.get("host", "stt.kyutai.org") if config else "stt.kyutai.org"
         self.port = config.get("port", 443) if config else 443
@@ -413,8 +408,6 @@ class KyutaiASRStep(PipelineStep):
         self.text_buffer = []
         self.current_client_id = None
         
-        # ChunkQueue pour traiter les événements Moshi
-        self.moshi_event_queue = ChunkQueue(handler=self._handle_moshi_event)
         
         print(f"KyutaiASRStep '{self.name}' configuré pour {self.host}")
     
@@ -426,8 +419,8 @@ class KyutaiASRStep(PipelineStep):
             # Crée l'instance MoshiASR
             self.moshi_asr = MoshiASR(host=self.host)
             
-            # Configure la ChunkQueue comme output de MoshiASR
-            self.moshi_asr.set_output_queue(self.moshi_event_queue)
+            # Configure MoshiASR pour utiliser l'output_queue du step
+            self.moshi_asr.set_output_queue(self.output_queue)
             
             # Connexion WebSocket
             self.moshi_asr.connect()
@@ -440,159 +433,17 @@ class KyutaiASRStep(PipelineStep):
             logger.error(f"Kyutai ASR init error: {e}")
             return False
     
-    def _handle_moshi_event(self, moshi_event: ASREvent):
-        """Traite un événement reçu de MoshiASR via ChunkQueue"""
-        try:
-            if moshi_event.type == ASREventType.TEXT:
-                # Texte transcrit reçu
-                text = moshi_event.data
-                if text:
-                    self._handle_transcribed_text(text)
-            
-            elif moshi_event.type == ASREventType.START:
-                # Début de parole détecté
-                self._handle_speech_start()
-            
-            elif moshi_event.type == ASREventType.END:
-                # Fin de parole détectée
-                self._handle_speech_end()
-            
-            else:
-                logger.debug(f"Événement Moshi non géré: {moshi_event.type}")
-        
-        except Exception as e:
-            logger.error(f"Erreur handling événement Moshi: {e}")
-    
-    def _handle_transcribed_text(self, text: str):
-        """Traite le texte transcrit"""
-        try:
-            # Ajoute au buffer de texte
-            self.text_buffer.append(text)
-            
-            # Prépare le message de sortie
-            transcription_message = OutputMessage(
-                result=text,
-                metadata={
-                    "original_client_id": self.current_client_id,
-                    "transcription_type": "partial",
-                    "buffer_length": len(self.text_buffer),
-                    "timestamp": time.time()
-                }
-            )
-            
-            # Envoie vers la queue de sortie
-            if self.output_queue:
-                try:
-                    import asyncio
-                    if asyncio.iscoroutine(self.output_queue.put):
-                        # Asyncio queue
-                        loop = asyncio.get_event_loop()
-                        if loop.is_running():
-                            asyncio.create_task(self.output_queue.enqueue(transcription_message))
-                        else:
-                            loop.run_until_complete(self.output_queue.enqueue(transcription_message))
-                    else:
-                        # Queue normale
-                        self.output_queue.put_nowait(transcription_message)
-                    logger.debug(f"Texte transcrit envoyé: '{text}'")
-                except Exception as e:
-                    logger.error(f"Erreur envoi transcription: {e}")
-            
-        except Exception as e:
-            logger.error(f"Erreur traitement texte transcrit: {e}")
-    
-    def _handle_speech_start(self):
-        """Traite le début de parole"""
-        try:
-            logger.debug("Début de parole détecté")
-            
-            # Réinitialise le buffer
-            self.text_buffer = []
-            
-            # Envoie un événement de début
-            start_message = OutputMessage(
-                result="",
-                metadata={
-                    "original_client_id": self.current_client_id,
-                    "event_type": "speech_start",
-                    "timestamp": time.time()
-                }
-            )
-            
-            self._send_output_message(start_message)
-            
-        except Exception as e:
-            logger.error(f"Erreur traitement début parole: {e}")
-    
-    def _handle_speech_end(self):
-        """Traite la fin de parole"""
-        try:
-            logger.debug("Fin de parole détectée")
-            
-            # Compile le texte final
-            final_text = " ".join(self.text_buffer).strip()
-            
-            if final_text:
-                # Envoie la transcription finale
-                final_message = OutputMessage(
-                    result=final_text,
-                    metadata={
-                        "original_client_id": self.current_client_id,
-                        "transcription_type": "final",
-                        "word_count": len(final_text.split()),
-                        "timestamp": time.time()
-                    }
-                )
-                
-                self._send_output_message(final_message)
-                logger.info(f"Transcription finale: '{final_text}'")
-            
-            # Envoie un événement de fin
-            end_message = OutputMessage(
-                result="",
-                metadata={
-                    "original_client_id": self.current_client_id,
-                    "event_type": "speech_end",
-                    "final_text": final_text,
-                    "timestamp": time.time()
-                }
-            )
-            
-            self._send_output_message(end_message)
-            
-        except Exception as e:
-            logger.error(f"Erreur traitement fin parole: {e}")
-
-    def _send_output_message(self, message: OutputMessage):
-        """Envoie un message vers la queue de sortie"""
-        if self.output_queue:
-            try:
-                import asyncio
-                if asyncio.iscoroutine(self.output_queue.put):
-                    # Asyncio queue
-                    loop = asyncio.get_event_loop()
-                    if loop.is_running():
-                        asyncio.create_task(self.output_queue.enqueue(message))
-                    else:
-                        loop.run_until_complete(self.output_queue.enqueue(message))
-                else:
-                    # Queue normale
-                    self.output_queue.put_nowait(message)
-            except Exception as e:
-                logger.error(f"Erreur envoi message: {e}")
-    
-    def process_message(self, message: Message) -> Optional[Message]:
-        """
-        Traite un message contenant un chunk audio
-        """
+    def _handle_input_message(self, message: Message):
         try:
             if message.type != MessageType.INPUT:
-                return None
+                logger.warning(f"Type de message non supporté: {message.type}")
+                return
             
             # Récupère les données audio
             audio_data = message.data
             if not audio_data:
-                return ErrorMessage(error_message="Pas de données audio")
+                logger.error("Pas de données audio dans le message")
+                return
             
             # Récupère l'ID du client pour le routage de retour
             if message.metadata:
@@ -600,32 +451,19 @@ class KyutaiASRStep(PipelineStep):
             
             # Vérifie que MoshiASR est initialisé
             if not self.moshi_asr:
-                return ErrorMessage(error_message="MoshiASR non initialisé")
+                logger.error("MoshiASR non initialisé")
+                return
             
             # Traite le chunk audio avec MoshiASR
             if isinstance(audio_data, bytes):
                 # Audio binaire brut - utilise la méthode interne de MoshiASR
                 self.moshi_asr._process_audio_chunk(audio_data)
+                logger.debug(f"Chunk audio traité ({len(audio_data)} bytes)")
             else:
-                return ErrorMessage(error_message="Format audio non supporté (attendu: bytes)")
-            
-            # Retourne un message de confirmation (optionnel)
-            return OutputMessage(
-                result="Audio chunk traité",
-                metadata={
-                    "chunk_size": len(audio_data),
-                    "client_id": self.current_client_id,
-                    "timestamp": time.time()
-                }
-            )
+                logger.error("Format audio non supporté (attendu: bytes)")
             
         except Exception as e:
-            error_msg = f"Erreur traitement audio ASR: {e}"
-            logger.error(error_msg)
-            return ErrorMessage(
-                error=e,
-                error_message=error_msg
-            )
+            logger.error(f"Erreur traitement audio ASR: {e}")
     
     def reset_transcription(self):
         """Remet à zéro l'état de transcription"""
@@ -664,9 +502,6 @@ class KyutaiASRStep(PipelineStep):
         """Nettoie les ressources ASR"""
         print(f"Nettoyage Kyutai ASR {self.name}")
         
-        # Arrête la ChunkQueue
-        if hasattr(self, 'moshi_event_queue') and self.moshi_event_queue:
-            self.moshi_event_queue.stop()
         
         # Nettoie MoshiASR
         if self.moshi_asr:

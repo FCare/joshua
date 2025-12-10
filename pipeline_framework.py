@@ -9,14 +9,14 @@ from utils.chunk_queue import ChunkQueue
 
 class PipelineStep(ABC):
     
-    def __init__(self, name: str, config: Optional[Dict] = None):
+    def __init__(self, name: str, config: Optional[Dict] = None, handler=None):
         self.name = name
         self.config = config or {}
         self.is_running = False
         
-        # Chaque step ne crée que des input_queues
+        # PipelineStep crée l'input_queue avec le handler fourni par le step enfant
         # output_queue sera définie par le pipeline builder (= input_queue du step suivant)
-        self.input_queue = None
+        self.input_queue = ChunkQueue(handler=handler) if handler else None
         self.output_queue = None
     
     @abstractmethod
@@ -78,5 +78,4 @@ class Pipeline:
     
     async def send_message(self, step_name: str, message: Message):
         if step_name in self.steps:
-            # ChunkQueue utilise enqueue() au lieu de put()
             self.steps[step_name].input_queue.enqueue(message)

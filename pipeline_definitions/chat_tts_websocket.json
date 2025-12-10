@@ -25,6 +25,13 @@
       "config_overrides": {}
     },
     {
+      "instance_id": "sentence_normalizer",
+      "step_definition": "Sentence Normalizer Step",
+      "config_overrides": {
+        "language_id": "fr"
+      }
+    },
+    {
       "instance_id": "tts_step",
       "step_definition": "chatterbox_tts",
       "config_overrides": {}
@@ -41,7 +48,11 @@
     },
     {
       "from": "duplicator",
-      "to": ["websocket_server", "tts_step"]
+      "to": ["websocket_server", "sentence_normalizer"]
+    },
+    {
+      "from": "sentence_normalizer",
+      "to": "tts_step"
     },
     {
       "from": "tts_step",
