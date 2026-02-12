@@ -25,4 +25,4 @@ ENV PYTHONUNBUFFERED=1
 EXPOSE ${WEBSOCKET_PORT}
 
 # Point d'entrée pour démarrer le pipeline
-CMD ["python", "run_pipeline.py", "run", "--pipeline", "${PIPELINE_NAME}"]
+CMD ["sh", "-c", "python run_pipeline.py run --pipeline \"${PIPELINE_NAME}\""]

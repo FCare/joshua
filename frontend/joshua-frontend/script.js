@@ -36,6 +36,7 @@ class JoshuaChat {
         this.fileUploadBtn = document.getElementById('file-upload-btn');
         this.fileInput = document.getElementById('file-input');
         this.loading = document.getElementById('loading');
+        this.subtitle = document.querySelector('.subtitle');
     }
 
     bindEvents() {
@@ -195,7 +196,7 @@ class JoshuaChat {
                 case 'connection_established':
                     this.capabilities = message.capabilities;
                     console.log('Connection established. Capabilities:', this.capabilities);
-                    this.showCapabilities();
+                    this.updateUIBasedOnCapabilities();
                     break;
                     
                 case 'chat_response':
@@ -249,8 +250,11 @@ class JoshuaChat {
     }
 
     handleTranscription(message) {
-        // Handle ASR transcription if needed
+        // Handle transcription comme une réponse de chat
         console.log('Transcription:', message.text);
+        
+        // Traiter comme une réponse de chat pour l'affichage
+        this.handleChatResponse(message);
     }
 
     handleAudioChunk(message) {
@@ -313,17 +317,64 @@ class JoshuaChat {
         console.log(`Connection status: ${status}`);
     }
 
-    showCapabilities() {
+    updateUIBasedOnCapabilities() {
         if (this.capabilities && this.capabilities.modalities) {
             const modalities = this.capabilities.modalities;
-            const features = this.capabilities.features || [];
+            const inputModalities = modalities.input || [];
             
-            let capText = "🔧 Pipeline capabilities:\n";
-            capText += `• Input: ${modalities.input?.join(', ') || 'text'}\n`;
-            capText += `• Output: ${modalities.output?.join(', ') || 'text'}\n`;
-            capText += `• Features: ${features.join(', ')}`;
+            // Vérifier si les images sont supportées
+            const supportsImages = inputModalities.includes('image') || inputModalities.includes('images');
+            const supportsText = inputModalities.includes('text');
+            const supportsAudio = inputModalities.includes('audio');
             
-            this.addMessage(capText, 'assistant');
+            // Afficher/masquer le bouton d'upload selon le support des images
+            if (this.fileUploadBtn) {
+                if (supportsImages) {
+                    this.fileUploadBtn.style.display = 'block';
+                    this.fileUploadBtn.title = 'Upload image';
+                } else {
+                    this.fileUploadBtn.style.display = 'none';
+                }
+            }
+            
+            // Mettre à jour le texte d'aide selon les modalités supportées
+            if (this.subtitle) {
+                let helpText = '';
+                const supportedActions = [];
+                
+                if (supportsText) {
+                    supportedActions.push('type a message');
+                }
+                if (supportsImages) {
+                    supportedActions.push('upload images');
+                }
+                if (supportsAudio) {
+                    supportedActions.push('speak');
+                }
+                
+                if (supportedActions.length > 0) {
+                    if (supportedActions.length === 1) {
+                        helpText = `${supportedActions[0].charAt(0).toUpperCase() + supportedActions[0].slice(1)} to get started`;
+                    } else {
+                        const lastAction = supportedActions.pop();
+                        helpText = `${supportedActions.join(', ').charAt(0).toUpperCase() + supportedActions.join(', ').slice(1)} or ${lastAction} to get started`;
+                    }
+                } else {
+                    helpText = 'Connected to Joshua';
+                }
+                
+                this.subtitle.textContent = helpText;
+            }
+            
+            console.log('UI updated based on capabilities. Text:', supportsText, 'Images:', supportsImages, 'Audio:', supportsAudio);
+        } else {
+            // Par défaut, cacher le bouton d'upload et afficher texte générique
+            if (this.fileUploadBtn) {
+                this.fileUploadBtn.style.display = 'none';
+            }
+            if (this.subtitle) {
+                this.subtitle.textContent = 'Type a message to get started';
+            }
         }
     }
 
@@ -397,12 +448,13 @@ document.addEventListener('DOMContentLoaded', () => {
     // Show welcome message after connection is established
     setTimeout(() => {
         if (window.joshua.isConnected) {
-            window.joshua.addWelcomeMessage();
+            // Ne pas afficher automatiquement le message de bienvenue
+            // window.joshua.addWelcomeMessage();
         } else {
-            // Wait for connection and show message
+            // Wait for connection - no auto welcome message
             const checkConnection = setInterval(() => {
                 if (window.joshua.isConnected) {
-                    window.joshua.addWelcomeMessage();
+                    // window.joshua.addWelcomeMessage();
                     clearInterval(checkConnection);
                 }
             }, 500);

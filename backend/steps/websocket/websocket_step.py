@@ -264,21 +264,36 @@ class WebSocketStep(PipelineStep):
                         # Ne pas traiter les messages audio en mode texte
                         if data.get("type") == "audio":
                             continue
-                        text_data = data.get("text", message)
-                        logger.info(f"Parsed JSON message, extracted text: '{text_data}'")
+                            
+                        # Support d'images avec API simplifiée
+                        text_data = data.get("text", "")
+                        image = data.get("image")  # Une seule image
+                        images = data.get("images", [])  # Ou plusieurs images
+                        
+                        # Normaliser vers une liste
+                        if image:
+                            images = [image]
+                        
+                        logger.info(f"Parsed JSON message - text: '{text_data}', images: {len(images)}")
                     except:
                         text_data = message
+                        images = []
                         logger.info(f"Using raw text message: '{text_data}'")
                     
                     text_message = InputMessage(
-                        data=text_data,
+                        data={
+                            "text": text_data,
+                            "images": images
+                        },
                         metadata={
                             "client_id": client_id,
-                            "timestamp": time.time()
+                            "timestamp": time.time(),
+                            "has_images": len(images) > 0,
+                            "image_count": len(images)
                         }
                     )
                     self.output_queue.enqueue(text_message)
-                    logger.info(f"Text message queued for processing: '{text_data}'")
+                    logger.info(f"Message queued - text: '{text_data}', images: {len(images)}")
                     
         except Exception as e:
             logger.error(f"Error in websocket_handler for {client_id}: {e}")
@@ -321,9 +336,17 @@ class WebSocketStep(PipelineStep):
         if explicit_message_type in ['transcript_chunk', 'transcript_done']:
             message_type = explicit_message_type
         else:
-            # Ancien système basé sur response_type
+            # Système basé sur response_type ou chunk_type
             response_type = metadata.get('response_type', 'transcription')
-            message_type = "chat_response" if response_type in ['partial', 'finish'] else "transcription"
+            chunk_type = metadata.get('chunk_type')
+            
+            # Si on a chunk_type (OpenAI Chat), utiliser ça pour déterminer le type
+            if chunk_type in ['partial', 'finish']:
+                message_type = "chat_response"
+            elif response_type in ['partial', 'finish']:
+                message_type = "chat_response"
+            else:
+                message_type = "transcription"
         
         message = {
             "type": message_type,

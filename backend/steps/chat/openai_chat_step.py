@@ -189,26 +189,28 @@ class OpenAIChatStep(PipelineStep):
                 if hasattr(input_message, 'metadata') and input_message.metadata:
                     self.current_client_id = input_message.metadata.get('original_client_id') or input_message.metadata.get('client_id')
                 
-                # Extraire le texte depuis InputMessage ou InputEvent
+                # Extraire le contenu (texte + images éventuelles)
                 if hasattr(input_message, 'data'):
-                    text_data = str(input_message.data)
+                    if isinstance(input_message.data, dict):
+                        # Nouveau format avec support d'images
+                        text_data = input_message.data.get('text', '')
+                        images = input_message.data.get('images', [])
+                    else:
+                        # Format existant : texte simple
+                        text_data = str(input_message.data)
+                        images = []
                 elif hasattr(input_message, 'text'):
                     text_data = input_message.text
+                    images = []
                 else:
                     text_data = str(input_message)
+                    images = []
                 
-                logger.info(f"💬 Chat received input: '{text_data}' from client: {self.current_client_id}")
+                logger.info(f"💬 Chat received input: '{text_data}' with {len(images)} images from client: {self.current_client_id}")
                 
-                # Accumule le texte reçu
-                self.accumulated_text += text_data + " "
-                
-                # Décision: envoyer la requête maintenant ou attendre plus de texte ?
-                # Pour simplifier, on traite chaque input immédiatement
-                # Dans un vrai système, on pourrait attendre un timeout ou un signal de fin
-                
-                if self.accumulated_text.strip():
-                    self._process_chat_request(self.accumulated_text.strip())
-                    self.accumulated_text = ""  # Reset après traitement
+                # Traiter la requête avec texte et/ou images
+                if text_data.strip() or images:
+                    self._process_chat_request(text_data.strip(), images)
         
         except Exception as e:
             logger.error(f"Erreur handling input event: {e}")
@@ -231,14 +233,35 @@ class OpenAIChatStep(PipelineStep):
         except Exception as e:
             logger.error(f"Erreur lors de la mise à jour du system prompt: {e}")
     
-    def _process_chat_request(self, text: str):
-        """Traite une requête de chat complète"""
+    def _process_chat_request(self, text: str, images: list = None):
+        """Traite une requête de chat avec texte et images optionnelles"""
+        if images is None:
+            images = []
+            
         try:
-            # Ajoute le message utilisateur à l'historique
-            self.conversation_history.append({
-                "role": "user",
-                "content": text
-            })
+            # Construction du message utilisateur
+            user_message = {"role": "user"}
+            
+            if images and len(images) > 0:
+                # Format OpenAI Vision API
+                content = []
+                if text:
+                    content.append({"type": "text", "text": text})
+                
+                for image_url in images:  # Déjà des data URLs complets !
+                    content.append({
+                        "type": "image_url",
+                        "image_url": {"url": image_url}
+                    })
+                
+                user_message["content"] = content
+                logger.info(f"💬 Prepared vision message: text='{text}', images={len(images)}")
+            else:
+                # Message texte simple (format existant)
+                user_message["content"] = text
+                logger.info(f"💬 Prepared text message: '{text}'")
+            
+            self.conversation_history.append(user_message)
             
             # Prépare les messages pour l'API
             messages = self._prepare_messages()
@@ -278,6 +301,9 @@ class OpenAIChatStep(PipelineStep):
     def _call_openai_streaming(self, messages):
         """Appel OpenAI en mode streaming"""
         try:
+            logger.info(f"💬 Calling OpenAI API with model {self.model}")
+            logger.info(f"💬 Messages to send: {len(messages)} messages")
+            
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=messages,
@@ -286,9 +312,12 @@ class OpenAIChatStep(PipelineStep):
                 stream=True
             )
             
+            logger.info(f"💬 API response received, starting streaming...")
             assistant_response = ""
+            chunk_count = 0
             
             for chunk in response:
+                chunk_count += 1
                 # Vérification de sécurité pour Azure OpenAI
                 if not hasattr(chunk, 'choices') or not chunk.choices:
                     continue

@@ -16,6 +16,7 @@
             "instance_id": "websocket_server",
             "step_definition": "websocket_server",
             "config_overrides": {
+                "host": "0.0.0.0",
                 "port": 8768,
                 "mode": "text_to_text"
             }

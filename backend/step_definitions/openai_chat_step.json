@@ -55,7 +55,7 @@
             }
         }
     },
-    "inputs": ["text"],
+    "inputs": ["text", "image"],
     "outputs": ["text"],
-    "capabilities": ["streaming", "conversational", "stateful"]
+    "capabilities": ["streaming", "conversational", "stateful", "vision"]
 }
