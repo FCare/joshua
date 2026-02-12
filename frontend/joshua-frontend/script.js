@@ -20,13 +20,7 @@ class JoshuaChat {
     }
 
     getWebSocketUrl() {
-        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const host = window.location.hostname;
-        
-        // Le frontend s'exécute côté navigateur, donc il doit se connecter
-        // à l'adresse publique du backend, pas au nom de service Docker
-        const port = '8768';  // Port backend exposé
-        return `${protocol}//${host}:${port}`;
+        return `wss://joshua.caronboulme.fr`;
     }
 
     initElements() {
@@ -454,15 +448,6 @@ class JoshuaChat {
     stopGeneration() {
         // For WebSocket, we could send a stop signal if the backend supports it
         this.setGenerating(false);
-    }
-
-    // Method to configure WebSocket URL
-    setWebSocketUrl(url) {
-        this.wsUrl = url;
-        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-            this.ws.close();
-        }
-        this.connectWebSocket();
     }
 
     // Method to add a welcome message
