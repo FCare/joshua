@@ -3,6 +3,15 @@
   "description": "Pipeline audio streaming avec WebSocket et transcription Kyutai STT",
   "category": "audio_ai",
   "version": "1.0.0",
+  "capabilities": {
+    "modalities": {
+      "input": ["audio"],
+      "output": ["text"],
+      "processing": ["speech-to-text"]
+    },
+    "features": ["streaming", "real-time", "voice-activity-detection"],
+    "models": ["kyutai-asr"]
+  },
   "step_instances": [
     {
       "instance_id": "websocket_server",

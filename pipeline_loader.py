@@ -144,7 +144,7 @@ class PipelineLoader:
             traceback.print_exc()
             return None
     
-    def _create_step_config_from_definition(self, step_instance: Dict, step_definition_ref: str) -> Optional[Dict]:
+    def _create_step_config_from_definition(self, step_instance: Dict, step_definition_ref: str, pipeline_def: Optional[Dict] = None) -> Optional[Dict]:
         """Combine step_definition avec step_instance pour créer un step_config"""
         step_definition = self.step_definitions.get(step_definition_ref)
         if not step_definition:
@@ -176,6 +176,13 @@ class PipelineLoader:
             instance_overrides = step_instance.get("config", {})
         
         merged_config = {**default_config, **instance_overrides}
+        
+        # Si c'est un WebSocketStep, ajouter les capacités du pipeline
+        if step_definition_ref == "websocket_server" and pipeline_def:
+            pipeline_capabilities = pipeline_def.get("capabilities", {})
+            pipeline_name = pipeline_def.get("name", "Unknown Pipeline")
+            merged_config["pipeline_capabilities"] = pipeline_capabilities
+            merged_config["pipeline_name"] = pipeline_name
         
         # Créer le step_config dans l'ancien format pour compatibilité
         step_config = {
@@ -211,7 +218,7 @@ class PipelineLoader:
             step_definition_ref = step_instance.get("step_definition")
             if step_definition_ref:
                 # Créer la config en combinant step_definition + instance config
-                step_config = self._create_step_config_from_definition(step_instance, step_definition_ref)
+                step_config = self._create_step_config_from_definition(step_instance, step_definition_ref, pipeline_def)
                 if not step_config:
                     print(f"❌ Step definition '{step_definition_ref}' introuvable pour instance '{step_instance_id}'")
                     print(f"🔍 Step definitions disponibles: {list(self.step_definitions.keys())}")

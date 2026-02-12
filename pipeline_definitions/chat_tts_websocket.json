@@ -3,6 +3,15 @@
   "name": "Pipeline Chat TTS WebSocket",
   "description": "Pipeline de chat avec streaming texte ET génération audio via TTS",
   "version": "1.0.0",
+  "capabilities": {
+    "modalities": {
+      "input": ["audio", "text"],
+      "output": ["audio", "text"],
+      "processing": ["speech-to-text", "conversation", "llm", "text-to-speech"]
+    },
+    "features": ["streaming", "conversational", "voice", "real-time"],
+    "models": ["kyutai-asr", "qwen3-vl-8b-instruct", "chatterbox-tts"]
+  },
   "step_instances": [
     {
       "instance_id": "system_prompt",

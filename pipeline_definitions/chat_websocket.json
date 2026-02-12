@@ -1,7 +1,16 @@
 {
     "id": "Pipeline Chat WebSocket",
-    "name": "Pipeline Chat WebSocket", 
+    "name": "Pipeline Chat WebSocket",
     "description": "Pipeline de chat conversationnel avec WebSocket et OpenAI",
+    "capabilities": {
+        "modalities": {
+            "input": ["text"],
+            "output": ["text"],
+            "processing": ["conversation", "llm"]
+        },
+        "features": ["streaming", "conversational", "stateful"],
+        "models": ["qwen3-vl-8b-instruct"]
+    },
     "step_instances": [
         {
             "instance_id": "websocket_server",

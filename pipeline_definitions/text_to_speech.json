@@ -3,6 +3,15 @@
   "description": "Pipeline WebSocket texte vers audio avec Chatterbox TTS",
   "category": "tts_ai",
   "version": "1.0.0",
+  "capabilities": {
+    "modalities": {
+      "input": ["text"],
+      "output": ["audio"],
+      "processing": ["text-to-speech"]
+    },
+    "features": ["streaming", "french-voice"],
+    "models": ["chatterbox-tts"]
+  },
   "step_instances": [
     {
       "instance_id": "websocket_server",

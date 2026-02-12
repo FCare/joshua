@@ -34,6 +34,10 @@ class WebSocketStep(PipelineStep):
         # Mode de fonctionnement : "audio_to_text" ou "text_to_audio"
         self.mode = config.get("mode", "audio_to_text") if config else "audio_to_text"
         
+        # Capacités du pipeline (modalités supportées)
+        self.pipeline_capabilities = config.get("pipeline_capabilities", {}) if config else {}
+        self.pipeline_name = config.get("pipeline_name", "Unknown Pipeline") if config else "Unknown Pipeline"
+        
         # Chaque step ne crée que son input_queue avec handler ASYNC
         # output_queue sera définie par le pipeline builder (= input_queue du step suivant)
         self.input_queue = ChunkQueue(handler=self._handle_input_message_async)
@@ -188,11 +192,19 @@ class WebSocketStep(PipelineStep):
         try:
             logger.info(f"WebSocket handler started for client {client_id}, mode={self.mode}")
             
-            # Envoyer le message de connexion établie
+            # Envoyer le message de connexion établie avec les capacités du pipeline
             connection_message = {
                 "type": "connection_established",
                 "client_id": client_id,
+                "pipeline": self.pipeline_name,
                 "mode": self.mode,
+                "capabilities": self.pipeline_capabilities,
+                "server_info": {
+                    "host": self.host,
+                    "port": self.port,
+                    "audio_format": self.audio_format,
+                    "sample_rate": self.sample_rate
+                },
                 "timestamp": time.time()
             }
             await websocket.send(json.dumps(connection_message))
@@ -283,6 +295,13 @@ class WebSocketStep(PipelineStep):
                 self.websocket_handler, self.host, self.port
             )
             print(f"WebSocket server started on {self.host}:{self.port}")
+            if self.pipeline_capabilities:
+                print(f"Pipeline: {self.pipeline_name}")
+                modalities = self.pipeline_capabilities.get("modalities", {})
+                if modalities:
+                    print(f"  Input modalities: {modalities.get('input', [])}")
+                    print(f"  Output modalities: {modalities.get('output', [])}")
+                    print(f"  Processing capabilities: {modalities.get('processing', [])}")
         except ImportError as e:
             raise
         except Exception as e:
