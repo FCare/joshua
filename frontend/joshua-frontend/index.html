@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Joshua - AI Assistant</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <h1 class="title">Joshua</h1>
+            <p class="subtitle">Type a message or upload files to get started</p>
+        </header>
+
+        <!-- Chat Area -->
+        <div class="chat-container">
+            <div id="chat-messages" class="chat-messages">
+                <!-- Messages will appear here -->
+            </div>
+        </div>
+
+        <!-- Input Area -->
+        <div class="input-container">
+            <div class="input-wrapper">
+                <button id="file-upload-btn" class="file-upload-btn" title="Upload file">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66L9.64 16.2a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
+                    </svg>
+                </button>
+                
+                <textarea 
+                    id="message-input" 
+                    placeholder="Ask anything..."
+                    rows="1"
+                    maxlength="4000"
+                ></textarea>
+                
+                <button id="send-btn" class="send-btn" title="Send message">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="m5 12 7-7 7 7"/>
+                        <path d="m12 19 0-14"/>
+                    </svg>
+                </button>
+            </div>
+            
+            <div class="input-footer">
+                <span class="help-text">Press <kbd>Enter</kbd> to send, <kbd>Shift + Enter</kbd> for new line</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading indicator -->
+    <div id="loading" class="loading-indicator" style="display: none;">
+        <div class="spinner"></div>
+        <span>Joshua is thinking...</span>
+    </div>
+
+    <!-- Hidden file input -->
+    <input type="file" id="file-input" accept="*/*" style="display: none;" multiple>
+
+    <script src="script.js"></script>
+</body>
+</html>
