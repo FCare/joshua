@@ -4,11 +4,11 @@
     "description": "Pipeline de chat conversationnel avec WebSocket et OpenAI",
     "capabilities": {
         "modalities": {
-            "input": ["text"],
+            "input": ["text", "image"],
             "output": ["text"],
-            "processing": ["conversation", "llm"]
+            "processing": ["conversation", "llm", "vision"]
         },
-        "features": ["streaming", "conversational", "stateful"],
+        "features": ["streaming", "conversational", "stateful", "vision"],
         "models": ["qwen3-vl-8b-instruct"]
     },
     "step_instances": [

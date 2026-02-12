@@ -5,11 +5,11 @@
   "version": "1.0.0",
   "capabilities": {
     "modalities": {
-      "input": ["audio", "text"],
+      "input": ["audio", "text", "image"],
       "output": ["audio", "text"],
-      "processing": ["speech-to-text", "conversation", "llm", "text-to-speech"]
+      "processing": ["speech-to-text", "conversation", "llm", "vision", "text-to-speech"]
     },
-    "features": ["streaming", "conversational", "voice", "real-time"],
+    "features": ["streaming", "conversational", "voice", "real-time", "vision"],
     "models": ["kyutai-asr", "qwen3-vl-8b-instruct", "chatterbox-tts"]
   },
   "step_instances": [
