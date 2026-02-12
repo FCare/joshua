@@ -1,11 +1,11 @@
 version: '3.8'
 
 services:
-  assistant-mcp:
+  joshua-backend:
     build:
       context: .
-      dockerfile: Dockerfile
-    container_name: assistant-mcp-pipeline
+      dockerfile: Dockerfile.backend
+    container_name: joshua-backend
     environment:
       # Configuration du pipeline
       - PIPELINE_NAME=${PIPELINE_NAME:-Pipeline Chat WebSocket}
@@ -14,6 +14,8 @@ services:
       # Clés API
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - LLAMACPP_API_KEY=${LLAMACPP_API_KEY}
+      - ASR_API_KEY=${ASR_API_KEY}
+      - TTS_API_KEY=${TTS_API_KEY}
       
       # Configuration Python
       - PYTHONPATH=/app
@@ -23,25 +25,15 @@ services:
       - "${WEBSOCKET_PORT:-8768}:${WEBSOCKET_PORT:-8768}"
     
     volumes:
-      # Montage du code source pour développement (optionnel)
-      - .:/app
-      # Conservation des logs et fichiers temporaires
-      - assistant_logs:/app/logs
-      - assistant_temp:/app/temp
+      # Logs et fichiers temporaires
+      - joshua_logs:/app/logs
+      - joshua_temp:/app/temp
     
     networks:
-      - assistant-network
+      - joshua-network
     
     # Restart policy
     restart: unless-stopped
-    
-    # Healthcheck pour vérifier que le service fonctionne
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:${WEBSOCKET_PORT:-8768}/health" ]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
     
     # Logs configuration
     logging:
@@ -50,13 +42,37 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  joshua-frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: joshua-frontend
+    ports:
+      - "${FRONTEND_PORT:-3000}:80"
+    
+    depends_on:
+      - joshua-backend
+    
+    networks:
+      - joshua-network
+    
+    # Restart policy
+    restart: unless-stopped
+    
+    # Logs configuration
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "3"
+
 volumes:
-  assistant_logs:
+  joshua_logs:
     driver: local
-  assistant_temp:
+  joshua_temp:
     driver: local
 
 networks:
-  assistant-network:
+  joshua-network:
     driver: bridge
-    name: assistant-mcp-network
+    name: joshua-network

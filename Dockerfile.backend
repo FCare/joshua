@@ -1,0 +1,28 @@
+# Dockerfile pour Joshua Backend (Pipeline Framework)
+FROM python:3.12-slim
+
+WORKDIR /app
+
+# Installer les dépendances système
+RUN apt-get update && apt-get install -y \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copier les requirements et installer les dépendances Python
+COPY backend/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copier le code source du backend
+COPY backend/ .
+
+# Variables d'environnement par défaut
+ENV PIPELINE_NAME="Pipeline Chat WebSocket"
+ENV WEBSOCKET_PORT=8768
+ENV PYTHONPATH=/app
+ENV PYTHONUNBUFFERED=1
+
+# Exposer le port WebSocket
+EXPOSE ${WEBSOCKET_PORT}
+
+# Point d'entrée pour démarrer le pipeline
+CMD ["sh", "-c", "python run_pipeline.py run --pipeline \"${PIPELINE_NAME}\""]

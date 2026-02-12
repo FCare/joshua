@@ -28,7 +28,7 @@
   "configuration": {
     "host": {
       "type": "string",
-      "default": "localhost",
+      "default": "0.0.0.0",
       "description": "Interface d'écoute du serveur WebSocket"
     },
     "port": {

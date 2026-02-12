@@ -1,0 +1,14 @@
+# Dockerfile pour Joshua Frontend
+FROM nginx:alpine
+
+# Copier les fichiers du frontend
+COPY frontend/joshua-frontend/ /usr/share/nginx/html/
+
+# Configuration nginx pour SPA
+COPY frontend/nginx.conf /etc/nginx/nginx.conf
+
+# Exposer le port 80
+EXPOSE 80
+
+# Démarrer nginx
+CMD ["nginx", "-g", "daemon off;"]

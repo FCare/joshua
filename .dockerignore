@@ -1,0 +1,48 @@
+# Fichiers et dossiers à exclure du contexte Docker
+.git
+.gitignore
+.venv
+venv
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+env
+pip-log.txt
+pip-delete-this-directory.txt
+.coverage
+.pytest_cache
+htmlcov
+
+# Fichiers de développement
+*.md
+.vscode
+.idea
+
+# Fichiers temporaires
+*.tmp
+*.temp
+*.log
+logs/
+temp/
+
+# Fichiers audio de test
+*.wav
+*.mp3
+*.flac
+
+# Images de test
+*.png
+*.jpg
+*.jpeg
+
+# Cache Docker
+.dockerignore
+Dockerfile
+docker-compose.yml
+docker-entrypoint.sh
+
+# Fichiers OS
+.DS_Store
+Thumbs.db
