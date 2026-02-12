@@ -1,0 +1,62 @@
+version: '3.8'
+
+services:
+  assistant-mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: assistant-mcp-pipeline
+    environment:
+      # Configuration du pipeline
+      - PIPELINE_NAME=${PIPELINE_NAME:-Pipeline Chat WebSocket}
+      - WEBSOCKET_PORT=${WEBSOCKET_PORT:-8768}
+      
+      # Clés API
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - LLAMACPP_API_KEY=${LLAMACPP_API_KEY}
+      
+      # Configuration Python
+      - PYTHONPATH=/app
+      - PYTHONUNBUFFERED=1
+      
+    ports:
+      - "${WEBSOCKET_PORT:-8768}:${WEBSOCKET_PORT:-8768}"
+    
+    volumes:
+      # Montage du code source pour développement (optionnel)
+      - .:/app
+      # Conservation des logs et fichiers temporaires
+      - assistant_logs:/app/logs
+      - assistant_temp:/app/temp
+    
+    networks:
+      - assistant-network
+    
+    # Restart policy
+    restart: unless-stopped
+    
+    # Healthcheck pour vérifier que le service fonctionne
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:${WEBSOCKET_PORT:-8768}/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    
+    # Logs configuration
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  assistant_logs:
+    driver: local
+  assistant_temp:
+    driver: local
+
+networks:
+  assistant-network:
+    driver: bridge
+    name: assistant-mcp-network
