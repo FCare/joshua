@@ -453,20 +453,16 @@ kbd {
     opacity: 1;
 }
 
-.left-visualizer {
-    position: absolute;
-    left: 16px;
-    top: 50%;
-    transform: translateY(-50%);
-    z-index: 1;
+.center-left-visualizer {
+    position: relative;
+    margin-right: 8px;
+    align-self: center;
 }
 
-.right-visualizer {
-    position: absolute;
-    right: 16px;
-    top: 50%;
-    transform: translateY(-50%);
-    z-index: 1;
+.center-right-visualizer {
+    position: relative;
+    margin-left: 8px;
+    align-self: center;
 }
 
 .visualizer-label {
@@ -487,9 +483,9 @@ kbd {
 
 /* Microphone Button */
 .mic-btn {
-    background: #f9fafb;
+    background: #ffffff;
     color: #6b7280;
-    border: 1px solid #e5e7eb;
+    border: none;
     padding: 12px;
     border-radius: 8px;
     cursor: pointer;
@@ -504,18 +500,16 @@ kbd {
 .mic-btn:hover {
     background: #f3f4f6;
     color: #374151;
-    border-color: #d1d5db;
-    transform: translateY(-1px);
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 .mic-btn:active {
-    transform: translateY(0);
+    transform: translateY(1px);
 }
 
-/* Recording state */
+/* Recording state - inverted colors */
 .mic-btn.recording {
-    background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+    background: #6b7280;
+    color: #ffffff;
     animation: micPulse 1.5s infinite;
 }
 
@@ -526,13 +520,14 @@ kbd {
     left: 0;
     right: 0;
     bottom: 0;
-    background: radial-gradient(circle, rgba(255,255,255,0.3) 0%, transparent 70%);
+    background: radial-gradient(circle, rgba(255,255,255,0.2) 0%, transparent 70%);
     border-radius: 8px;
     animation: micGlow 2s ease-in-out infinite alternate;
 }
 
 .mic-btn.listening {
-    background: linear-gradient(135deg, #28a745 0%, #218838 100%);
+    background: #6b7280;
+    color: #ffffff;
     animation: micListening 2s ease-in-out infinite alternate;
 }
 
@@ -553,17 +548,17 @@ kbd {
 
 /* Responsive Audio Interface */
 @media (max-width: 768px) {
-    .left-visualizer {
-        left: 8px;
+    .center-left-visualizer {
+        margin-right: 4px;
     }
     
-    .right-visualizer {
-        right: 8px;
+    .center-right-visualizer {
+        margin-left: 4px;
     }
     
     #input-visualizer, #output-visualizer {
-        width: 100px;
-        height: 25px;
+        width: 80px;
+        height: 20px;
     }
     
     .visualizer-label {
