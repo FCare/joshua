@@ -413,10 +413,29 @@
                 </div>
             </div>
         </div>
+
+        <!-- Admin Section - Only visible for admins -->
+        <div id="admin-section" style="display: none;">
+            <div class="card">
+                <h2>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                        <circle cx="9" cy="7" r="4"/>
+                        <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+                        <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                    </svg>
+                    Administration - Gestion des utilisateurs
+                </h2>
+                
+                <div id="admin-users-container">
+                    <!-- Admin users management will be populated here -->
+                </div>
+            </div>
+        </div>
     </div>
 
-    <script>
-        class JoshuaProfile {
+<script>
+    class JoshuaProfile {
             constructor() {
                 this.apiBaseUrl = 'https://auth.caronboulme.fr';
                 this.userData = null;
@@ -478,6 +497,14 @@
                 
                 // Update API keys
                 this.renderApiKeys();
+                
+                // Show admin section if user is admin
+                if (this.userData.is_admin && this.userData.admin_users) {
+                    document.getElementById('admin-section').style.display = 'block';
+                    this.renderAdminUsers();
+                }
+                
+                this.hideLoading();
             }
 
             renderServices() {
@@ -581,6 +608,176 @@
                 document.getElementById('logout-btn').addEventListener('click', () => {
                     this.logout();
                 });
+            }
+
+            renderAdminUsers() {
+                const adminContainer = document.getElementById('admin-users-container');
+                if (!this.userData.admin_users || this.userData.admin_users.length === 0) {
+                    adminContainer.innerHTML = '<p>Aucun utilisateur trouvé.</p>';
+                    return;
+                }
+
+                let html = `
+                    <div class="admin-users-table">
+                        <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
+                            <thead>
+                                <tr style="background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);">
+                                    <th style="padding: 12px; text-align: left; border: 1px solid #d1d5db;">Utilisateur</th>
+                                    <th style="padding: 12px; text-align: center; border: 1px solid #d1d5db;">Status</th>
+                                    <th style="padding: 12px; text-align: center; border: 1px solid #d1d5db;">Admin</th>
+                                    <th style="padding: 12px; text-align: center; border: 1px solid #d1d5db;">Clés API</th>
+                                    <th style="padding: 12px; text-align: center; border: 1px solid #d1d5db;">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                `;
+
+                this.userData.admin_users.forEach(user => {
+                    const statusColor = user.is_active ? '#059669' : '#dc2626';
+                    const statusText = user.is_active ? 'Actif' : 'Inactif';
+                    const adminBadge = user.is_admin ? '<span style="background: #3b82f6; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.75rem;">Admin</span>' : '';
+                    
+                    html += `
+                        <tr style="border-bottom: 1px solid #e5e7eb;">
+                            <td style="padding: 12px; border: 1px solid #e5e7eb;">
+                                <div>
+                                    <strong>${user.username}</strong><br>
+                                    <small style="color: #6b7280;">${user.email}</small><br>
+                                    <small style="color: #9ca3af;">Inscription: ${new Date(user.created_at).toLocaleDateString()}</small>
+                                    ${user.last_login ? '<br><small style="color: #9ca3af;">Dernière connexion: ' + new Date(user.last_login).toLocaleDateString() + '</small>' : ''}
+                                </div>
+                            </td>
+                            <td style="padding: 12px; text-align: center; border: 1px solid #e5e7eb;">
+                                <span style="color: ${statusColor}; font-weight: 500;">${statusText}</span>
+                            </td>
+                            <td style="padding: 12px; text-align: center; border: 1px solid #e5e7eb;">
+                                ${adminBadge}
+                            </td>
+                            <td style="padding: 12px; text-align: center; border: 1px solid #e5e7eb;">
+                                <div>
+                                    <strong>${user.api_key_count}</strong> clé(s)<br>
+                                    <small style="color: #6b7280;">Max: ${user.max_api_keys}</small>
+                                </div>
+                                ${user.api_keys.length > 0 ? this.renderUserApiKeys(user.api_keys) : ''}
+                            </td>
+                            <td style="padding: 12px; text-align: center; border: 1px solid #e5e7eb;">
+                                <div style="display: flex; flex-direction: column; gap: 4px; align-items: center;">
+                                    ${user.is_active ?
+                                        `<button onclick="joshuaProfile.deactivateUser(${user.id})" class="btn btn-danger" style="font-size: 0.75rem; padding: 4px 8px;">Désactiver</button>` :
+                                        `<button onclick="joshuaProfile.activateUser(${user.id})" class="btn btn-primary" style="font-size: 0.75rem; padding: 4px 8px;">Activer</button>`
+                                    }
+                                    ${!user.is_admin ?
+                                        `<button onclick="joshuaProfile.toggleAdmin(${user.id})" class="btn btn-secondary" style="font-size: 0.75rem; padding: 4px 8px;">Promouvoir Admin</button>` :
+                                        `<button onclick="joshuaProfile.toggleAdmin(${user.id})" class="btn btn-secondary" style="font-size: 0.75rem; padding: 4px 8px;">Retirer Admin</button>`
+                                    }
+                                    <button onclick="joshuaProfile.deleteUser(${user.id}, '${user.username}')" class="btn btn-danger" style="font-size: 0.75rem; padding: 4px 8px;">Supprimer</button>
+                                </div>
+                            </td>
+                        </tr>
+                    `;
+                });
+
+                html += `
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+
+                adminContainer.innerHTML = html;
+            }
+
+            renderUserApiKeys(apiKeys) {
+                if (!apiKeys || apiKeys.length === 0) return '';
+                
+                let html = '<div style="margin-top: 8px; font-size: 0.75rem;">';
+                apiKeys.forEach(key => {
+                    const statusColor = key.is_active ? '#059669' : '#dc2626';
+                    const statusIcon = key.is_active ? '🟢' : '🔴';
+                    html += `
+                        <div style="margin: 2px 0; padding: 2px 6px; background: #f9fafb; border-radius: 4px; display: flex; justify-content: space-between; align-items: center;">
+                            <span>${statusIcon} ${key.key_name}</span>
+                            <button onclick="joshuaProfile.revokeUserKey(${key.id}, '${key.key_name}')" style="background: none; border: none; color: #dc2626; cursor: pointer; font-size: 0.7rem;">✕</button>
+                        </div>
+                    `;
+                });
+                html += '</div>';
+                return html;
+            }
+
+            async activateUser(userId) {
+                try {
+                    const response = await fetch(`${this.apiBaseUrl}/auth/admin/activate-user/${userId}`, {
+                        method: 'POST',
+                        credentials: 'include'
+                    });
+                    if (response.ok) {
+                        this.loadUserData();
+                    }
+                } catch (error) {
+                    console.error('Error activating user:', error);
+                }
+            }
+
+            async deactivateUser(userId) {
+                try {
+                    const response = await fetch(`${this.apiBaseUrl}/auth/admin/deactivate-user/${userId}`, {
+                        method: 'POST',
+                        credentials: 'include'
+                    });
+                    if (response.ok) {
+                        this.loadUserData();
+                    }
+                } catch (error) {
+                    console.error('Error deactivating user:', error);
+                }
+            }
+
+            async toggleAdmin(userId) {
+                try {
+                    const response = await fetch(`${this.apiBaseUrl}/auth/admin/toggle-admin/${userId}`, {
+                        method: 'POST',
+                        credentials: 'include'
+                    });
+                    if (response.ok) {
+                        this.loadUserData();
+                    }
+                } catch (error) {
+                    console.error('Error toggling admin:', error);
+                }
+            }
+
+            async deleteUser(userId, username) {
+                if (!confirm(`Êtes-vous sûr de vouloir supprimer l'utilisateur "${username}" ? Cette action est irréversible.`)) {
+                    return;
+                }
+                try {
+                    const response = await fetch(`${this.apiBaseUrl}/auth/admin/delete-user/${userId}`, {
+                        method: 'POST',
+                        credentials: 'include'
+                    });
+                    if (response.ok) {
+                        this.loadUserData();
+                    }
+                } catch (error) {
+                    console.error('Error deleting user:', error);
+                }
+            }
+
+            async revokeUserKey(keyId, keyName) {
+                if (!confirm(`Êtes-vous sûr de vouloir révoquer la clé "${keyName}" ?`)) {
+                    return;
+                }
+                try {
+                    const response = await fetch(`${this.apiBaseUrl}/auth/admin/revoke-user-key/${keyId}`, {
+                        method: 'POST',
+                        credentials: 'include'
+                    });
+                    if (response.ok) {
+                        this.loadUserData();
+                    }
+                } catch (error) {
+                    console.error('Error revoking key:', error);
+                }
             }
 
             async createApiKey() {
