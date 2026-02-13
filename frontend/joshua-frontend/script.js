@@ -797,14 +797,14 @@ class JoshuaChat {
                 throw new Error(`Failed to load audio processor: ${modError.message}`);
             }
 
+            // Setup audio analysis first (creates analyser nodes)
+            this.setupAudioAnalysis();
+            
             // Setup microphone input
             await this.setupMicrophoneInput();
             
             // Setup audio output
             await this.setupAudioOutput();
-            
-            // Setup audio analysis and visualization
-            this.setupAudioAnalysis();
 
             this.isAudioEnabled = true;
             // Ne pas afficher les visualiseurs lors de l'initialisation
@@ -843,8 +843,11 @@ class JoshuaChat {
         // Create microphone processor
         this.micProcessor = new AudioWorkletNode(this.audioContext, 'joshua-mic-processor');
         
-        // Connect source to processor
+        // Connect source to both processor and input analyser for visualization
         source.connect(this.micProcessor);
+        if (this.inputAnalyser) {
+            source.connect(this.inputAnalyser);
+        }
         
         // Listen for audio chunks
         this.micProcessor.port.onmessage = (event) => {
@@ -852,6 +855,8 @@ class JoshuaChat {
                 this.handleAudioChunk(event.data);
             }
         };
+        
+        console.log('🎙️ Microphone input setup completed');
     }
 
     async setupAudioOutput() {
@@ -919,7 +924,8 @@ class JoshuaChat {
     }
 
     setupAudioAnalysis() {
-        // Create analyser nodes for visualization
+        // Create analyser nodes for visualization only
+        // Don't connect anything yet - connections will be made in other setup methods
         this.inputAnalyser = this.audioContext.createAnalyser();
         this.inputAnalyser.fftSize = 256;
         this.inputAnalyser.smoothingTimeConstant = 0.8;
@@ -928,19 +934,8 @@ class JoshuaChat {
         this.outputAnalyser.fftSize = 256;
         this.outputAnalyser.smoothingTimeConstant = 0.8;
         
-        // Connect input stream to analyser
-        const source = this.audioContext.createMediaStreamSource(this.mediaStream);
-        source.connect(this.inputAnalyser);
-        
-        // Setup output analyser connection
-        if (this.audioProcessor) {
-            this.audioProcessor.disconnect();
-            this.audioProcessor.connect(this.outputAnalyser);
-            this.outputAnalyser.connect(this.audioContext.destination);
-        }
-        
-        // Start visualization
-        this.startAudioVisualization();
+        // Don't start visualization here - it will be started when recording begins
+        console.log('🔗 Audio analysis nodes created');
     }
 
 
@@ -958,6 +953,9 @@ class JoshuaChat {
         this.outputVisualizerContainer.style.display = 'block';
         this.inputVisualizerContainer.classList.add('active');
         this.outputVisualizerContainer.classList.add('active');
+        
+        // Start audio visualization
+        this.startAudioVisualization();
         
         // Start recording in microphone processor
         this.micProcessor.port.postMessage({ command: 'start' });
