@@ -35,7 +35,8 @@
       "step_definition": "Kyutai ASR Step",
       "config_overrides": {
         "host": "unmute-transcript.caronboulme.fr",
-        "port": 443
+        "port": 443,
+        "api_key": "${ASR_API_KEY}"
       }
     },
     {
