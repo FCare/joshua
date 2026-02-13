@@ -14,7 +14,7 @@ function asSamples(mili) {
 const DEFAULT_MAX_BUFFER_MS = 5 * 60 * 1000;
 
 const debug = (...args) => {
-  // console.debug(...args);
+  console.debug('🎶 [WORKLET DEBUG]', ...args);
 };
 
 class JoshuaAudioProcessor extends AudioWorkletProcessor {
