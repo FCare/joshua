@@ -780,7 +780,10 @@ class JoshuaChat {
             this.micProcessor.port.postMessage({ command: 'stop' });
         }
         
-        console.log('🎙️ Recording stopped - audio setup maintained for restart');
+        // Libérer complètement le microphone et nettoyer
+        this.cleanup();
+        
+        console.log('🎙️ Recording stopped and microphone fully released');
     }
 
     handleAudioChunk(chunkData) {
