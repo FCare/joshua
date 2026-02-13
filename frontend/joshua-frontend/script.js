@@ -674,8 +674,8 @@ class JoshuaChat {
         
         if (this.isMuted) {
             // Mode mute : cacher le speaker et les lignes de volume, afficher les X
-            speakerIcon.style.display = 'none';
-            volumeLines.forEach(line => line.style.display = 'none');
+            speakerIcon.style.display = 'block';
+            volumeLines.forEach(line => line.style.display = 'block');
             muteXLines.forEach(line => line.style.display = 'block');
             this.muteBtn.style.color = '#ef4444'; // Rouge pour mute
             this.muteBtn.title = 'Unmute Joshua\'s voice';
