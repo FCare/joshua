@@ -28,6 +28,7 @@ class JoshuaChat {
         this.outputAnalyser = null;
         this.isRecording = false;
         this.isAudioEnabled = false;
+        this.isMuted = false; // Par défaut, le son est activé
         this.animationFrames = {
             input: null,
             output: null
@@ -47,6 +48,9 @@ class JoshuaChat {
                 this.redirectToLogin();
             }
         });
+        
+        // Initialize mute button state
+        this.updateMuteButton();
     }
 
     getWebSocketUrl() {
@@ -69,6 +73,7 @@ class JoshuaChat {
         
         // Audio elements
         this.micBtn = document.getElementById('mic-btn');
+        this.muteBtn = document.getElementById('mute-btn');
         this.inputVisualizerContainer = document.getElementById('input-visualizer-container');
         this.outputVisualizerContainer = document.getElementById('output-visualizer-container');
         this.inputVisualizer = document.getElementById('input-visualizer');
@@ -119,6 +124,11 @@ class JoshuaChat {
         // Microphone button
         this.micBtn.addEventListener('click', () => {
             this.toggleAudio();
+        });
+
+        // Mute button
+        this.muteBtn.addEventListener('click', () => {
+            this.toggleMute();
         });
 
         // Initial send button state
@@ -275,17 +285,22 @@ class JoshuaChat {
                     break;
                     
                 case 'audio_finished':
-                    console.log('Audio generation finished');
+                    // Masquer le visualiseur output quand l'audio TTS se termine
+                    if (this.outputVisualizerContainer) {
+                        this.outputVisualizerContainer.classList.remove('active');
+                        setTimeout(() => {
+                            this.outputVisualizerContainer.style.display = 'none';
+                        }, 300); // Attendre la fin de la transition CSS
+                    }
                     break;
                     
                 case 'chat_finished':
-                    console.log('Chat response finished');
                     this.setGenerating(false);
                     // Ne pas afficher ce message dans l'interface
                     return; // Sortir immédiatement sans traitement supplémentaire
                     
                 default:
-                    console.log('Unknown message type:', message.type, message);
+                    console.log('Unknown message type:', message.type);
             }
         } catch (error) {
             console.error('Error parsing WebSocket message:', error, data);
@@ -619,6 +634,47 @@ class JoshuaChat {
 
     // ====== AUDIO FUNCTIONALITY ======
 
+    toggleMute() {
+        this.isMuted = !this.isMuted;
+        this.updateMuteButton();
+        this.updateOutputVisualizerVisibility();
+    }
+
+    updateMuteButton() {
+        const speakerIcon = this.muteBtn.querySelector('.speaker-icon');
+        const volumeLines = this.muteBtn.querySelectorAll('.volume-lines');
+        const muteXLines = this.muteBtn.querySelectorAll('.mute-x');
+        
+        if (this.isMuted) {
+            // Mode mute : cacher le speaker et les lignes de volume, afficher les X
+            speakerIcon.style.display = 'none';
+            volumeLines.forEach(line => line.style.display = 'none');
+            muteXLines.forEach(line => line.style.display = 'block');
+            this.muteBtn.style.color = '#ef4444'; // Rouge pour mute
+            this.muteBtn.title = 'Unmute Joshua\'s voice';
+        } else {
+            // Mode unmute : afficher le speaker et les lignes de volume, cacher les X
+            speakerIcon.style.display = 'block';
+            volumeLines.forEach(line => line.style.display = 'block');
+            muteXLines.forEach(line => line.style.display = 'none');
+            this.muteBtn.style.color = ''; // Couleur normale
+            this.muteBtn.title = 'Mute Joshua\'s voice';
+        }
+    }
+
+    updateOutputVisualizerVisibility() {
+        // L'animation output dépend du mute ET si on joue de l'audio
+        // Si muted, ne pas afficher même si on reçoit de l'audio
+        // Si unmuted et qu'on reçoit de l'audio, afficher
+        if (!this.isMuted && this.outputVisualizerContainer) {
+            // Seulement afficher si pas muted (la logique d'audio sera dans handleAudioResponse)
+        } else if (this.outputVisualizerContainer) {
+            // Si muted, cacher immédiatement
+            this.outputVisualizerContainer.style.display = 'none';
+            this.outputVisualizerContainer.classList.remove('active');
+        }
+    }
+
     async toggleAudio() {
         if (!this.isAudioEnabled) {
             await this.initAudio();
@@ -677,8 +733,10 @@ class JoshuaChat {
 
             console.log('✅ Microphone access granted');
 
-            // Create AudioContext
-            this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            // Create AudioContext with 24kHz sample rate for TTS compatibility
+            this.audioContext = new (window.AudioContext || window.webkitAudioContext)({
+                sampleRate: 24000  // Match TTS sample rate to avoid pitch/speed issues
+            });
 
             // Resume AudioContext if needed (browser policy)
             if (this.audioContext.state === 'suspended') {
@@ -892,12 +950,24 @@ class JoshuaChat {
     }
 
     async handleAudioResponse(audioData) {
+        // Si le micro est actif, désactiver automatiquement le mute pour éviter le feedback
+        if (this.isRecording && this.isMuted) {
+            this.isMuted = false;
+            this.updateMuteButton();
+        }
+        
+        // Si c'est muted, ne pas jouer l'audio et ne pas afficher le visualiseur
+        if (this.isMuted) {
+            return;
+        }
+        
         // Initialize audio output automatically if not already done
         if (!this.audioProcessor || !this.audioContext) {
-            console.log('🔊 Initializing audio output for TTS playback...');
             try {
-                // Initialize AudioContext and output processor only
-                this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                // Initialize AudioContext with 24kHz sample rate for TTS compatibility
+                this.audioContext = new (window.AudioContext || window.webkitAudioContext)({
+                    sampleRate: 24000  // Match TTS sample rate to avoid pitch/speed issues
+                });
                 
                 // Resume AudioContext if needed (browser policy)
                 if (this.audioContext.state === 'suspended') {
@@ -907,20 +977,22 @@ class JoshuaChat {
                 // Load audio processor module if not already loaded
                 try {
                     await this.audioContext.audioWorklet.addModule('./joshua-audio-processor.js');
-                    console.log('✅ joshua-audio-processor.js loaded for TTS');
                 } catch (modError) {
                     // Module might already be loaded, continue
-                    console.log('Audio processor module already loaded or failed:', modError.message);
                 }
                 
                 // Setup audio output for TTS
                 await this.setupAudioOutputOnly();
-                
-                console.log('✅ Audio output initialized for TTS playback');
             } catch (error) {
-                console.error('❌ Failed to initialize audio output for TTS:', error);
+                console.error('Failed to initialize audio output for TTS:', error);
                 return;
             }
+        }
+
+        // Afficher le visualiseur output quand on reçoit de l'audio TTS (si pas muted)
+        if (this.outputVisualizerContainer && !this.isMuted) {
+            this.outputVisualizerContainer.style.display = 'block';
+            this.outputVisualizerContainer.classList.add('active');
         }
 
         try {
@@ -943,8 +1015,6 @@ class JoshuaChat {
                 type: 'audio',
                 frame: float32Array
             });
-            
-            console.log(`🔊 Playing TTS audio chunk: ${float32Array.length} samples`);
         } catch (error) {
             console.error('Error processing audio response:', error);
         }

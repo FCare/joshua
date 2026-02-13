@@ -42,12 +42,49 @@ body {
     align-items: center;
 }
 
+.title-container {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
 .title {
     font-size: 2.5rem;
     font-weight: 600;
     color: #374151;
     margin-bottom: 8px;
     letter-spacing: -0.025em;
+}
+
+.mute-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    background: transparent;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    color: #6b7280;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    margin-bottom: 8px; /* Align with title baseline */
+}
+
+.mute-btn:hover {
+    background: #f3f4f6;
+    border-color: #9ca3af;
+    color: #374151;
+}
+
+.mute-btn:active {
+    background: #e5e7eb;
+    transform: scale(0.95);
+}
+
+.mute-btn svg {
+    width: 18px;
+    height: 18px;
 }
 
 .subtitle {
