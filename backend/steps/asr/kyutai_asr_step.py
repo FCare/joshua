@@ -453,11 +453,21 @@ class KyutaiASRStep(PipelineStep):
         
         self.host = config.get("host", "stt.kyutai.org") if config else "stt.kyutai.org"
         self.port = config.get("port", 443) if config else 443
-        self.api_key = config.get("api_key") if config else None
-        print(f"DEBUG: config.get('api_key') = {repr(self.api_key)}")
-        if not self.api_key:
-            self.api_key = os.getenv("ASR_API_KEY", "public_token")
-            print(f"DEBUG: os.getenv('ASR_API_KEY') = {repr(self.api_key)}")
+        # Prioriser la variable d'environnement sur la config par défaut
+        env_api_key = os.getenv("ASR_API_KEY")
+        config_api_key = config.get("api_key") if config else None
+        
+        # Si env existe, l'utiliser; sinon fallback sur config sauf si c'est la valeur placeholder
+        if env_api_key:
+            self.api_key = env_api_key
+        elif config_api_key and config_api_key != "your_asr_api_key_here":
+            self.api_key = config_api_key
+        else:
+            self.api_key = "public_token"  # Fallback par défaut
+            
+        print(f"DEBUG: config.get('api_key') = {repr(config_api_key)}")
+        print(f"DEBUG: os.getenv('ASR_API_KEY') = {repr(env_api_key)}")
+        print(f"DEBUG: Final API key = {repr(self.api_key[:12] + '...' + self.api_key[-8:] if self.api_key and len(self.api_key) > 20 else self.api_key)}")
         
         self.sample_rate = config.get("sample_rate", 24000) if config else 24000
         self.samples_per_frame = config.get("samples_per_frame", 1920) if config else 1920
