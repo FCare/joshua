@@ -73,7 +73,7 @@
     },
     {
       "from": "websocket_server",
-      "to": "asr_step"
+      "to": ["asr_step", "openai_chat"]
     },
     {
       "from": "asr_step",
