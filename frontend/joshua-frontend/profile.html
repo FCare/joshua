@@ -693,9 +693,10 @@
                 apiKeys.forEach(key => {
                     const statusColor = key.is_active ? '#059669' : '#dc2626';
                     const statusIcon = key.is_active ? '🟢' : '🔴';
+                    const keyPreview = key.api_key ? key.api_key.substring(0, 9) : 'n/a';
                     html += `
                         <div style="margin: 2px 0; padding: 2px 6px; background: #f9fafb; border-radius: 4px; display: flex; justify-content: space-between; align-items: center;">
-                            <span>${statusIcon} ${key.key_name}</span>
+                            <span>${statusIcon} ${key.key_name} (${keyPreview})</span>
                             <button onclick="joshuaProfile.revokeUserKey(${key.id}, '${key.key_name}')" style="background: none; border: none; color: #dc2626; cursor: pointer; font-size: 0.7rem;">✕</button>
                         </div>
                     `;
