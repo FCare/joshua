@@ -13,10 +13,23 @@ class JoshuaChat {
         this.uploadedFiles = [];
         this.capabilities = null;
         
+        // Authentication
+        this.apiBaseUrl = 'https://auth.caronboulme.fr';
+        this.isAuthenticated = false;
+        this.currentUser = null;
+        
         this.initElements();
         this.bindEvents();
         this.autoResizeTextarea();
-        this.connectWebSocket();
+        
+        // Check authentication before connecting WebSocket
+        this.checkAuthentication().then(() => {
+            if (this.isAuthenticated) {
+                this.connectWebSocket();
+            } else {
+                this.redirectToLogin();
+            }
+        });
     }
 
     getWebSocketUrl() {
@@ -31,6 +44,8 @@ class JoshuaChat {
         this.fileInput = document.getElementById('file-input');
         this.loading = document.getElementById('loading');
         this.subtitle = document.querySelector('.subtitle');
+        this.authBtn = document.getElementById('auth-btn');
+        this.authText = document.getElementById('auth-text');
     }
 
     bindEvents() {
@@ -58,6 +73,15 @@ class JoshuaChat {
 
         this.fileInput.addEventListener('change', (e) => {
             this.handleFileUpload(e.target.files);
+        });
+
+        // Auth button
+        this.authBtn.addEventListener('click', () => {
+            if (this.isAuthenticated) {
+                window.location.href = '/profile.html';
+            } else {
+                this.redirectToLogin();
+            }
         });
 
         // Initial send button state
@@ -463,6 +487,63 @@ class JoshuaChat {
         }
         this.isConnected = false;
         this.updateConnectionStatus();
+    }
+
+    // Authentication methods
+    async checkAuthentication() {
+        try {
+            const response = await fetch(`${this.apiBaseUrl}/verify`, {
+                credentials: 'include'
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                this.isAuthenticated = true;
+                this.currentUser = data.user;
+                this.updateAuthUI();
+                return true;
+            } else {
+                this.isAuthenticated = false;
+                this.currentUser = null;
+                this.updateAuthUI();
+                return false;
+            }
+        } catch (error) {
+            console.error('Authentication check failed:', error);
+            this.isAuthenticated = false;
+            this.currentUser = null;
+            this.updateAuthUI();
+            return false;
+        }
+    }
+
+    updateAuthUI() {
+        if (this.isAuthenticated && this.currentUser) {
+            this.authBtn.style.display = 'flex';
+            this.authText.textContent = this.currentUser;
+            this.subtitle.textContent = `Bienvenue, ${this.currentUser} ! Tapez votre message pour commencer.`;
+        } else {
+            this.authBtn.style.display = 'none';
+            this.subtitle.textContent = 'Connexion requise pour utiliser Joshua';
+        }
+    }
+
+    redirectToLogin() {
+        window.location.href = '/login.html';
+    }
+
+    async logout() {
+        try {
+            await fetch(`${this.apiBaseUrl}/auth/logout`, {
+                credentials: 'include'
+            });
+        } catch (error) {
+            console.error('Logout error:', error);
+        } finally {
+            this.isAuthenticated = false;
+            this.currentUser = null;
+            this.redirectToLogin();
+        }
     }
 }
 

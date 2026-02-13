@@ -10,8 +10,19 @@
     <div class="container">
         <!-- Header -->
         <header class="header">
-            <h1 class="title">Joshua</h1>
-            <p class="subtitle">Type a message or upload files to get started</p>
+            <div class="header-left">
+                <h1 class="title">Joshua</h1>
+                <p class="subtitle">Type a message or upload files to get started</p>
+            </div>
+            <div class="header-right">
+                <button id="auth-btn" class="auth-btn" style="display: none;">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                        <circle cx="12" cy="7" r="4"/>
+                    </svg>
+                    <span id="auth-text">Se connecter</span>
+                </button>
+            </div>
         </header>
 
         <!-- Chat Area -->

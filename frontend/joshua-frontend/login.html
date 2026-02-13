@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Joshua - Connexion</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+            background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+            color: #1f2937;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .login-container {
+            width: 100%;
+            max-width: 400px;
+            background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+            border-radius: 20px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1), 0 4px 10px rgba(0, 0, 0, 0.05);
+            border: 1px solid #e5e7eb;
+            overflow: hidden;
+        }
+
+        .login-header {
+            text-align: center;
+            padding: 40px 30px 30px 30px;
+            background: linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%);
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .login-header h1 {
+            font-size: 2.25rem;
+            font-weight: 700;
+            color: #374151;
+            margin-bottom: 8px;
+            letter-spacing: -0.025em;
+        }
+
+        .login-header p {
+            color: #6b7280;
+            font-size: 0.95rem;
+            font-weight: 400;
+        }
+
+        .login-form {
+            padding: 30px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #374151;
+            font-weight: 500;
+            font-size: 0.875rem;
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 12px 16px;
+            border: 1px solid #d1d5db;
+            border-radius: 12px;
+            background: linear-gradient(135deg, #ffffff 0%, #f9fafb 100%);
+            color: #1f2937;
+            font-size: 1rem;
+            transition: all 0.2s ease;
+            outline: none;
+        }
+
+        .form-input:focus {
+            border-color: #9ca3af;
+            box-shadow: 0 0 0 3px rgba(156, 163, 175, 0.1);
+            background: #ffffff;
+        }
+
+        .form-input::placeholder {
+            color: #9ca3af;
+        }
+
+        .login-btn {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, #4b5563 0%, #374151 100%);
+            color: #ffffff;
+            border: none;
+            border-radius: 12px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .login-btn:hover {
+            background: linear-gradient(135deg, #374151 0%, #1f2937 100%);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+        }
+
+        .login-btn:active {
+            transform: translateY(0);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .login-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .error-message {
+            background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
+            border: 1px solid #f87171;
+            color: #dc2626;
+            padding: 12px 16px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            font-size: 0.875rem;
+            text-align: center;
+        }
+
+        .success-message {
+            background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
+            border: 1px solid #34d399;
+            color: #059669;
+            padding: 12px 16px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            font-size: 0.875rem;
+            text-align: center;
+        }
+
+        .register-link {
+            text-align: center;
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid #e5e7eb;
+        }
+
+        .register-link a {
+            color: #6b7280;
+            text-decoration: none;
+            font-size: 0.875rem;
+            transition: color 0.2s ease;
+        }
+
+        .register-link a:hover {
+            color: #374151;
+            text-decoration: underline;
+        }
+
+        .loading-spinner {
+            width: 20px;
+            height: 20px;
+            border: 2px solid #ffffff;
+            border-top: 2px solid transparent;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 8px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .btn-loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* Responsive */
+        @media (max-width: 480px) {
+            .login-container {
+                margin: 0 20px;
+                border-radius: 16px;
+            }
+            
+            .login-header {
+                padding: 30px 20px 20px 20px;
+            }
+            
+            .login-header h1 {
+                font-size: 1.875rem;
+            }
+            
+            .login-form {
+                padding: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <div class="login-header">
+            <h1>Joshua</h1>
+            <p>Connectez-vous pour accéder à vos services</p>
+        </div>
+        
+        <div class="login-form">
+            <div id="error-message" class="error-message" style="display: none;"></div>
+            <div id="success-message" class="success-message" style="display: none;"></div>
+            
+            <form id="login-form">
+                <div class="form-group">
+                    <label for="username">Nom d'utilisateur</label>
+                    <input type="text" id="username" name="username" class="form-input" 
+                           placeholder="Entrez votre nom d'utilisateur" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="password">Mot de passe</label>
+                    <input type="password" id="password" name="password" class="form-input" 
+                           placeholder="Entrez votre mot de passe" required>
+                </div>
+                
+                <button type="submit" id="login-btn" class="login-btn">
+                    Se connecter
+                </button>
+            </form>
+            
+            <div class="register-link">
+                <p><a href="#" id="register-link">Pas de compte ? S'inscrire</a></p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class JoshuaAuth {
+            constructor() {
+                this.apiBaseUrl = 'https://auth.caronboulme.fr';
+                this.initializeEventListeners();
+                this.checkExistingAuth();
+            }
+
+            initializeEventListeners() {
+                document.getElementById('login-form').addEventListener('submit', (e) => {
+                    e.preventDefault();
+                    this.handleLogin();
+                });
+
+                document.getElementById('register-link').addEventListener('click', (e) => {
+                    e.preventDefault();
+                    this.showRegisterForm();
+                });
+            }
+
+            async checkExistingAuth() {
+                try {
+                    const response = await fetch(`${this.apiBaseUrl}/verify`, {
+                        credentials: 'include'
+                    });
+                    
+                    if (response.ok) {
+                        // Already authenticated, redirect to main interface
+                        window.location.href = '/';
+                    }
+                } catch (error) {
+                    console.log('No existing authentication');
+                }
+            }
+
+            async handleLogin() {
+                const username = document.getElementById('username').value;
+                const password = document.getElementById('password').value;
+                const loginBtn = document.getElementById('login-btn');
+                const errorDiv = document.getElementById('error-message');
+                const successDiv = document.getElementById('success-message');
+
+                // Reset messages
+                this.hideMessage(errorDiv);
+                this.hideMessage(successDiv);
+
+                // Show loading state
+                this.setButtonLoading(loginBtn, true);
+
+                try {
+                    const formData = new FormData();
+                    formData.append('username', username);
+                    formData.append('password', password);
+
+                    const response = await fetch(`${this.apiBaseUrl}/auth/login`, {
+                        method: 'POST',
+                        body: formData,
+                        credentials: 'include'
+                    });
+
+                    if (response.ok) {
+                        // Check if it's a redirect response
+                        if (response.redirected) {
+                            this.showMessage(successDiv, 'Connexion réussie ! Redirection...');
+                            setTimeout(() => {
+                                window.location.href = '/';
+                            }, 1000);
+                        } else {
+                            // Handle JSON response
+                            const data = await response.json();
+                            this.showMessage(successDiv, 'Connexion réussie ! Redirection...');
+                            setTimeout(() => {
+                                window.location.href = '/';
+                            }, 1000);
+                        }
+                    } else {
+                        // Try to get error message
+                        const errorText = await response.text();
+                        if (errorText.includes('incorrect') || errorText.includes('invalid')) {
+                            this.showMessage(errorDiv, 'Nom d\'utilisateur ou mot de passe incorrect');
+                        } else if (errorText.includes('validation') || errorText.includes('attente')) {
+                            this.showMessage(errorDiv, 'Votre compte est en attente de validation');
+                        } else {
+                            this.showMessage(errorDiv, 'Erreur de connexion. Veuillez réessayer.');
+                        }
+                    }
+                } catch (error) {
+                    console.error('Login error:', error);
+                    this.showMessage(errorDiv, 'Erreur de réseau. Veuillez vérifier votre connexion.');
+                } finally {
+                    this.setButtonLoading(loginBtn, false);
+                }
+            }
+
+            showRegisterForm() {
+                // For now, show a message - registration form could be implemented later
+                const errorDiv = document.getElementById('error-message');
+                this.showMessage(errorDiv, 'L\'inscription n\'est pas encore disponible. Contactez l\'administrateur.');
+            }
+
+            setButtonLoading(button, isLoading) {
+                if (isLoading) {
+                    button.disabled = true;
+                    button.innerHTML = '<div class="btn-loading"><div class="loading-spinner"></div>Connexion...</div>';
+                } else {
+                    button.disabled = false;
+                    button.innerHTML = 'Se connecter';
+                }
+            }
+
+            showMessage(element, message) {
+                element.textContent = message;
+                element.style.display = 'block';
+            }
+
+            hideMessage(element) {
+                element.style.display = 'none';
+            }
+        }
+
+        // Initialize authentication when page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            new JoshuaAuth();
+        });
+    </script>
+</body>
+</html>

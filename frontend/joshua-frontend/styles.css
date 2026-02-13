@@ -8,8 +8,8 @@
 
 body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
-    background-color: #ffffff;
-    color: #374151;
+    background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+    color: #1f2937;
     line-height: 1.6;
     height: 100vh;
     overflow: hidden;
@@ -26,15 +26,26 @@ body {
 
 /* Header */
 .header {
-    text-align: center;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
     padding: 40px 0 20px 0;
     flex-shrink: 0;
+}
+
+.header-left {
+    text-align: left;
+}
+
+.header-right {
+    display: flex;
+    align-items: center;
 }
 
 .title {
     font-size: 2.5rem;
     font-weight: 600;
-    color: #111827;
+    color: #374151;
     margin-bottom: 8px;
     letter-spacing: -0.025em;
 }
@@ -43,6 +54,40 @@ body {
     font-size: 1rem;
     color: #6b7280;
     font-weight: 400;
+}
+
+/* Auth Button */
+.auth-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 20px;
+    background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
+    border: 1px solid #d1d5db;
+    border-radius: 12px;
+    color: #374151;
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.auth-btn:hover {
+    background: linear-gradient(135deg, #e2e8f0 0%, #cbd5e1 100%);
+    border-color: #9ca3af;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.auth-btn:active {
+    transform: translateY(0);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.auth-btn svg {
+    width: 18px;
+    height: 18px;
 }
 
 /* Chat Area */
@@ -300,11 +345,32 @@ kbd {
     }
     
     .header {
+        flex-direction: column;
+        gap: 16px;
         padding: 20px 0 16px 0;
+        text-align: center;
+    }
+    
+    .header-left {
+        text-align: center;
+    }
+    
+    .header-right {
+        justify-content: center;
     }
     
     .title {
         font-size: 2rem;
+    }
+    
+    .auth-btn {
+        font-size: 0.8rem;
+        padding: 8px 16px;
+    }
+    
+    .auth-btn svg {
+        width: 16px;
+        height: 16px;
     }
     
     .message-content {
@@ -314,4 +380,38 @@ kbd {
     .input-container {
         padding: 16px 0 20px 0;
     }
+}
+
+/* Loading overlay for authentication */
+.auth-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(248, 250, 252, 0.95);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+}
+
+.auth-overlay .spinner {
+    width: 40px;
+    height: 40px;
+    border: 3px solid #e2e8f0;
+    border-top: 3px solid #374151;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+.auth-overlay .message {
+    margin-top: 20px;
+    color: #6b7280;
+    font-size: 1.1rem;
+}
+
+@keyframes authSpin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
 }
