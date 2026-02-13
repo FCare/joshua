@@ -191,7 +191,13 @@ class WebSocketStep(PipelineStep):
         try:
             # Extraire l'API key depuis les paramètres de query de l'URL WebSocket
             import urllib.parse as urlparse
-            parsed_url = urlparse.urlparse(websocket.path)
+            
+            # Selon la documentation websockets, l'URI complète est dans websocket.path
+            # Pour WebSocketServerProtocol: path contient l'URI avec query parameters
+            uri = websocket.path
+            logger.info(f"🔍 WebSocket path: {uri}")
+            
+            parsed_url = urlparse.urlparse(uri)
             query_params = urlparse.parse_qs(parsed_url.query)
             api_key = query_params.get('api_key', [None])[0]
             
