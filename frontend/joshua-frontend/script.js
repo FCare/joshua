@@ -589,21 +589,51 @@ class JoshuaChat {
         try {
             console.log('🎙️ Initializing audio...');
             
-            // Request microphone permission
-            this.mediaStream = await navigator.mediaDevices.getUserMedia({
-                audio: {
-                    sampleRate: 24000,
-                    channelCount: 1,
-                    echoCancellation: true,
-                    noiseSuppression: true,
-                    autoGainControl: true
+            // Check if we're in a secure context
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                throw new Error('getUserMedia not available. Please use HTTPS.');
+            }
+
+            // Check current permission state
+            let permissionStatus = null;
+            try {
+                permissionStatus = await navigator.permissions.query({name: 'microphone'});
+                console.log('🔒 Microphone permission status:', permissionStatus.state);
+                
+                if (permissionStatus.state === 'denied') {
+                    throw new Error('Microphone permission denied. Please enable it in browser settings and reload the page.');
                 }
-            });
+            } catch (permError) {
+                console.log('Permission API not available, proceeding with getUserMedia...');
+            }
+            
+            // Request microphone permission with simplified constraints first
+            console.log('📞 Requesting microphone access...');
+            try {
+                this.mediaStream = await navigator.mediaDevices.getUserMedia({
+                    audio: {
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        autoGainControl: true
+                    }
+                });
+            } catch (getUserMediaError) {
+                // Retry with minimal constraints
+                console.log('🔄 Retrying with minimal audio constraints...');
+                this.mediaStream = await navigator.mediaDevices.getUserMedia({
+                    audio: true
+                });
+            }
+
+            console.log('✅ Microphone access granted');
 
             // Create AudioContext
-            this.audioContext = new (window.AudioContext || window.webkitAudioContext)({
-                sampleRate: 24000
-            });
+            this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+
+            // Resume AudioContext if needed (browser policy)
+            if (this.audioContext.state === 'suspended') {
+                await this.audioContext.resume();
+            }
 
             // Load AudioWorklet modules
             await this.audioContext.audioWorklet.addModule('./joshua-mic-processor.js');
@@ -624,7 +654,24 @@ class JoshuaChat {
             console.log('🎙️ Audio initialized successfully');
         } catch (error) {
             console.error('❌ Audio initialization failed:', error);
-            alert('Microphone access required for voice input. Please grant permission and try again.');
+            
+            let errorMessage = 'Microphone access required for voice input.';
+            
+            if (error.name === 'NotAllowedError') {
+                errorMessage = 'Microphone permission was denied. Please:\n\n' +
+                             '1. Click the microphone icon in your browser\'s address bar\n' +
+                             '2. Select "Always allow" for microphone access\n' +
+                             '3. Refresh the page and try again\n\n' +
+                             'Or check your browser settings to enable microphone access for this site.';
+            } else if (error.name === 'NotFoundError') {
+                errorMessage = 'No microphone found. Please connect a microphone and try again.';
+            } else if (error.name === 'NotSupportedError') {
+                errorMessage = 'Microphone not supported. Please use a modern browser with HTTPS.';
+            } else if (error.message.includes('HTTPS')) {
+                errorMessage = 'Microphone access requires HTTPS. Please access the site via https://';
+            }
+            
+            alert(errorMessage);
         }
     }
 

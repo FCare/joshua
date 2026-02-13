@@ -222,7 +222,7 @@ body {
     border: none;
     color: white;
     cursor: pointer;
-    padding: 8px;
+    padding: 12px;
     border-radius: 50%;
     transition: all 0.2s ease;
     display: flex;
@@ -230,6 +230,16 @@ body {
     justify-content: center;
     margin-left: 8px;
     opacity: 0.6;
+    width: 48px;
+    height: 48px;
+    min-width: 48px;
+    min-height: 48px;
+}
+
+.send-btn svg {
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
 }
 
 .send-btn:enabled {
@@ -464,24 +474,26 @@ kbd {
 
 /* Microphone Button */
 .mic-btn {
-    background: linear-gradient(135deg, #4a4a4a 0%, #333 100%);
-    color: #e0e0e0;
-    border: none;
+    background: #f9fafb;
+    color: #6b7280;
+    border: 1px solid #e5e7eb;
     padding: 12px;
     border-radius: 8px;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: all 0.3s ease;
+    transition: all 0.2s ease;
     position: relative;
     overflow: hidden;
 }
 
 .mic-btn:hover {
-    background: linear-gradient(135deg, #555 0%, #3a3a3a 100%);
+    background: #f3f4f6;
+    color: #374151;
+    border-color: #d1d5db;
     transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(255, 255, 255, 0.1);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 .mic-btn:active {
