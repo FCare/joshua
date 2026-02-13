@@ -625,6 +625,7 @@
                                     <th style="padding: 12px; text-align: left; border: 1px solid #d1d5db;">Utilisateur</th>
                                     <th style="padding: 12px; text-align: center; border: 1px solid #d1d5db;">Status</th>
                                     <th style="padding: 12px; text-align: center; border: 1px solid #d1d5db;">Admin</th>
+                                    <th style="padding: 12px; text-align: center; border: 1px solid #d1d5db;">Services autorisés</th>
                                     <th style="padding: 12px; text-align: center; border: 1px solid #d1d5db;">Clés API</th>
                                     <th style="padding: 12px; text-align: center; border: 1px solid #d1d5db;">Actions</th>
                                 </tr>
@@ -636,6 +637,10 @@
                     const statusColor = user.is_active ? '#059669' : '#dc2626';
                     const statusText = user.is_active ? 'Actif' : 'Inactif';
                     const adminBadge = user.is_admin ? '<span style="background: #3b82f6; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.75rem;">Admin</span>' : '';
+                    
+                    // Parse user allowed scopes
+                    const userScopes = user.allowed_scopes || '';
+                    const allowedServices = userScopes === '*' ? ['*'] : (userScopes ? userScopes.split(',').map(s => s.trim()).filter(s => s) : []);
                     
                     html += `
                         <tr style="border-bottom: 1px solid #e5e7eb;">
@@ -654,6 +659,11 @@
                                 ${adminBadge}
                             </td>
                             <td style="padding: 12px; text-align: center; border: 1px solid #e5e7eb;">
+                                <div id="user-scopes-${user.id}">
+                                    ${this.renderUserScopes(user.id, allowedServices)}
+                                </div>
+                            </td>
+                            <td style="padding: 12px; text-align: center; border: 1px solid #e5e7eb;">
                                 <div>
                                     <strong>${user.api_key_count}</strong> clé(s)<br>
                                     <small style="color: #6b7280;">Max: ${user.max_api_keys}</small>
@@ -670,6 +680,7 @@
                                         `<button onclick="joshuaProfile.toggleAdmin(${user.id})" class="btn btn-secondary" style="font-size: 0.75rem; padding: 4px 8px;">Promouvoir Admin</button>` :
                                         `<button onclick="joshuaProfile.toggleAdmin(${user.id})" class="btn btn-secondary" style="font-size: 0.75rem; padding: 4px 8px;">Retirer Admin</button>`
                                     }
+                                    <button onclick="joshuaProfile.editUserScopes(${user.id})" class="btn btn-secondary" style="font-size: 0.75rem; padding: 4px 8px;">Gérer Services</button>
                                     <button onclick="joshuaProfile.deleteUser(${user.id}, '${user.username}')" class="btn btn-danger" style="font-size: 0.75rem; padding: 4px 8px;">Supprimer</button>
                                 </div>
                             </td>
@@ -779,6 +790,97 @@
                 } catch (error) {
                     console.error('Error revoking key:', error);
                 }
+            }
+
+            renderUserScopes(userId, allowedServices) {
+                // Show available services from userData
+                const availableServices = this.userData.available_services || [];
+                
+                if (!allowedServices || allowedServices.length === 0) {
+                    return '<div style="font-size: 0.75rem; max-width: 150px; color: #6b7280;">-</div>';
+                }
+
+                const serviceNames = allowedServices.map(scope => {
+                    const service = availableServices.find(s => s.name === scope);
+                    return service ? service.display_name : scope;
+                }).join(', ');
+
+                return `<div style="font-size: 0.75rem; max-width: 150px;">${serviceNames}</div>`;
+            }
+
+            editUserScopes(userId) {
+                // Find user
+                const user = this.userData.admin_users.find(u => u.id === userId);
+                if (!user) return;
+
+                const currentScopes = user.allowed_scopes || '';
+                const allowedServices = currentScopes ? currentScopes.split(',').map(s => s.trim()).filter(s => s) : [];
+
+                // Create services selection HTML
+                let servicesHtml = '<div style="margin: 10px 0;">';
+
+                this.userData.available_services.forEach(service => {
+                    const checked = allowedServices.includes(service.name) ? 'checked' : '';
+                    servicesHtml += `
+                        <label style="display: block; margin: 4px 0;">
+                            <input type="checkbox" value="${service.name}" ${checked}>
+                            ${service.display_name}
+                        </label>
+                    `;
+                });
+
+                servicesHtml += '</div>';
+
+                // Show modal or replace content
+                const scopesContainer = document.getElementById(`user-scopes-${userId}`);
+                const originalContent = scopesContainer.innerHTML;
+
+                scopesContainer.innerHTML = `
+                    <div style="background: #f9fafb; padding: 10px; border-radius: 8px; border: 1px solid #e5e7eb;">
+                        <div style="font-weight: 500; margin-bottom: 10px;">Modifier les services autorisés:</div>
+                        ${servicesHtml}
+                        <div style="margin-top: 10px; display: flex; gap: 8px;">
+                            <button onclick="joshuaProfile.saveUserScopes(${userId})" class="btn btn-primary" style="font-size: 0.75rem; padding: 4px 8px;">Sauvegarder</button>
+                            <button onclick="joshuaProfile.cancelEditScopes(${userId}, \`${originalContent.replace(/`/g, '\\`')}\`)" class="btn btn-secondary" style="font-size: 0.75rem; padding: 4px 8px;">Annuler</button>
+                        </div>
+                    </div>
+                `;
+            }
+
+            async saveUserScopes(userId) {
+                const scopesContainer = document.getElementById(`user-scopes-${userId}`);
+                const checkboxes = scopesContainer.querySelectorAll('input[type="checkbox"]:checked');
+                
+                const selectedServices = [];
+                checkboxes.forEach(checkbox => {
+                    selectedServices.push(checkbox.value);
+                });
+
+                try {
+                    const formData = new FormData();
+                    selectedServices.forEach(service => {
+                        formData.append('service', service);
+                    });
+
+                    const response = await fetch(`${this.apiBaseUrl}/auth/admin/set-user-scopes/${userId}`, {
+                        method: 'POST',
+                        body: formData,
+                        credentials: 'include'
+                    });
+
+                    if (response.ok) {
+                        this.loadUserData(); // Reload to show updated data
+                    } else {
+                        console.error('Error saving scopes');
+                    }
+                } catch (error) {
+                    console.error('Error saving scopes:', error);
+                }
+            }
+
+            cancelEditScopes(userId, originalContent) {
+                const scopesContainer = document.getElementById(`user-scopes-${userId}`);
+                scopesContainer.innerHTML = originalContent;
             }
 
             async createApiKey() {
