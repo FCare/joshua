@@ -510,17 +510,14 @@
                 // Update each rule's visual state
                 Object.keys(rules).forEach(ruleKey => {
                     const ruleElement = document.getElementById(`rule-${ruleKey}`);
-                    const iconElement = ruleElement.querySelector('.rule-icon');
                     const isValid = rules[ruleKey];
 
                     if (isValid) {
                         ruleElement.classList.add('valid');
                         ruleElement.classList.remove('invalid');
-                        iconElement.textContent = '✓';
                     } else {
                         ruleElement.classList.add('invalid');
                         ruleElement.classList.remove('valid');
-                        iconElement.textContent = '✗';
                     }
                 });
 
