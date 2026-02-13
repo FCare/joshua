@@ -640,7 +640,7 @@
                     
                     // Parse user allowed scopes
                     const userScopes = user.allowed_scopes || '';
-                    const allowedServices = userScopes === '*' ? ['*'] : (userScopes ? userScopes.split(',').map(s => s.trim()).filter(s => s) : []);
+                    const allowedServices = userScopes ? userScopes.split(',').map(s => s.trim()).filter(s => s) : [];
                     
                     html += `
                         <tr style="border-bottom: 1px solid #e5e7eb;">
