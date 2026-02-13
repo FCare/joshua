@@ -338,23 +338,23 @@
                 // Replace login form with registration form
                 const formContainer = document.querySelector('.login-container');
                 formContainer.innerHTML = `
-                    <div class="login-card">
-                        <div class="login-header">
-                            <h1>Créer un compte</h1>
-                            <p>Rejoignez Joshua Assistant</p>
-                        </div>
-
+                    <div class="login-header">
+                        <h1>Créer un compte</h1>
+                        <p>Rejoignez Joshua Assistant</p>
+                    </div>
+                    
+                    <div class="login-form">
                         <div id="error-message" class="error-message" style="display: none;"></div>
                         <div id="success-message" class="success-message" style="display: none;"></div>
-
-                        <form id="register-form" class="login-form">
+                        
+                        <form id="register-form">
                             <div class="form-group">
                                 <label for="reg-username">Nom d'utilisateur</label>
                                 <input
                                     type="text"
                                     id="reg-username"
                                     name="username"
-                                    class="login-input"
+                                    class="form-input"
                                     required
                                     autocomplete="username"
                                     placeholder="Votre nom d'utilisateur"
@@ -367,7 +367,7 @@
                                     type="email"
                                     id="reg-email"
                                     name="email"
-                                    class="login-input"
+                                    class="form-input"
                                     required
                                     autocomplete="email"
                                     placeholder="votre@email.com"
@@ -380,7 +380,7 @@
                                     type="password"
                                     id="reg-password"
                                     name="password"
-                                    class="login-input"
+                                    class="form-input"
                                     required
                                     autocomplete="new-password"
                                     placeholder="••••••••"
@@ -393,7 +393,7 @@
                                     type="password"
                                     id="reg-password-confirm"
                                     name="password-confirm"
-                                    class="login-input"
+                                    class="form-input"
                                     required
                                     autocomplete="new-password"
                                     placeholder="••••••••"
