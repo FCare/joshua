@@ -581,6 +581,10 @@ class JoshuaChat {
     async toggleAudio() {
         if (!this.isAudioEnabled) {
             await this.initAudio();
+            // Démarrer l'enregistrement automatiquement après l'initialisation
+            if (this.isAudioEnabled) {
+                this.startRecording();
+            }
         } else {
             if (this.isRecording) {
                 this.stopRecording();
