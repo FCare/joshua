@@ -163,6 +163,57 @@
             text-decoration: underline;
         }
 
+        .password-rules {
+            margin-top: 10px;
+            padding: 12px;
+            background: linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%);
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            font-size: 0.875rem;
+        }
+
+        .password-rule {
+            display: flex;
+            align-items: center;
+            margin: 6px 0;
+            transition: color 0.2s ease;
+        }
+
+        .rule-icon {
+            width: 16px;
+            height: 16px;
+            margin-right: 8px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+        }
+
+        .password-rule.valid {
+            color: #059669;
+        }
+
+        .password-rule.valid .rule-icon {
+            color: #059669;
+        }
+
+        .password-rule.valid .rule-icon::before {
+            content: "✓";
+        }
+
+        .password-rule:not(.valid) {
+            color: #dc2626;
+        }
+
+        .password-rule:not(.valid) .rule-icon {
+            color: #dc2626;
+        }
+
+        .password-rule:not(.valid) .rule-icon::before {
+            content: "✗";
+        }
+
         .loading-spinner {
             width: 20px;
             height: 20px;
@@ -385,6 +436,24 @@
                                     autocomplete="new-password"
                                     placeholder="••••••••"
                                 >
+                                <div id="password-rules" class="password-rules">
+                                    <div class="password-rule" id="rule-length">
+                                        <span class="rule-icon">✗</span>
+                                        <span class="rule-text">Au moins 8 caractères</span>
+                                    </div>
+                                    <div class="password-rule" id="rule-uppercase">
+                                        <span class="rule-icon">✗</span>
+                                        <span class="rule-text">Une lettre majuscule</span>
+                                    </div>
+                                    <div class="password-rule" id="rule-lowercase">
+                                        <span class="rule-icon">✗</span>
+                                        <span class="rule-text">Une lettre minuscule</span>
+                                    </div>
+                                    <div class="password-rule" id="rule-number">
+                                        <span class="rule-icon">✗</span>
+                                        <span class="rule-text">Un chiffre</span>
+                                    </div>
+                                </div>
                             </div>
 
                             <div class="form-group">
@@ -422,6 +491,41 @@
                     // Reload the page to show login form again
                     window.location.reload();
                 });
+
+                // Add password validation
+                document.getElementById('reg-password').addEventListener('input', (e) => {
+                    this.validatePasswordRules(e.target.value);
+                });
+            }
+
+            validatePasswordRules(password) {
+                // Password validation rules matching backend requirements
+                const rules = {
+                    length: password.length >= 8,
+                    uppercase: /[A-Z]/.test(password),
+                    lowercase: /[a-z]/.test(password),
+                    number: /\d/.test(password)
+                };
+
+                // Update each rule's visual state
+                Object.keys(rules).forEach(ruleKey => {
+                    const ruleElement = document.getElementById(`rule-${ruleKey}`);
+                    const iconElement = ruleElement.querySelector('.rule-icon');
+                    const isValid = rules[ruleKey];
+
+                    if (isValid) {
+                        ruleElement.classList.add('valid');
+                        ruleElement.classList.remove('invalid');
+                        iconElement.textContent = '✓';
+                    } else {
+                        ruleElement.classList.add('invalid');
+                        ruleElement.classList.remove('valid');
+                        iconElement.textContent = '✗';
+                    }
+                });
+
+                // Return overall validity for potential use elsewhere
+                return Object.values(rules).every(valid => valid);
             }
 
             async handleRegister() {
