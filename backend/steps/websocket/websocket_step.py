@@ -186,16 +186,16 @@ class WebSocketStep(PipelineStep):
         if self.server_thread and self.server_thread.is_alive():
             self.server_thread.join(timeout=2.0)
     
-    async def verify_authentication(self, websocket):
+    async def verify_authentication(self, websocket, path=None):
         """Vérifie l'authentification avec API key temporaire depuis Voight-Kampff"""
         try:
             # Extraire l'API key depuis les paramètres de query de l'URL WebSocket
             import urllib.parse as urlparse
             
-            # Selon la documentation websockets, l'URI complète est dans websocket.path
-            # Pour WebSocketServerProtocol: path contient l'URI avec query parameters
-            uri = websocket.path
-            logger.info(f"🔍 WebSocket path: {uri}")
+            # Selon la documentation websockets routing, le paramètre path contient l'URI complète
+            # Par exemple: "/?api_key=12345" ou "/chat?api_key=12345"
+            uri = path if path else "/"
+            logger.info(f"🔍 WebSocket URI: {uri}")
             
             parsed_url = urlparse.urlparse(uri)
             query_params = urlparse.parse_qs(parsed_url.query)
@@ -225,7 +225,7 @@ class WebSocketStep(PipelineStep):
     
     async def websocket_handler(self, websocket, path=None):
         # Vérifier l'authentification avant d'accepter la connexion
-        is_authenticated, username = await self.verify_authentication(websocket)
+        is_authenticated, username = await self.verify_authentication(websocket, path)
         if not is_authenticated:
             logger.warning("WebSocket connection rejected: authentication failed")
             await websocket.close(code=4001, reason="Authentication required")
