@@ -17,6 +17,7 @@ class JoshuaChat {
         this.apiBaseUrl = 'https://auth.caronboulme.fr';
         this.isAuthenticated = false;
         this.currentUser = null;
+        this.apiKey = null; // API key temporaire pour WebSocket
         
         // Audio properties
         this.audioContext = null;
@@ -39,7 +40,9 @@ class JoshuaChat {
         // Check authentication before connecting WebSocket
         this.checkAuthentication().then(() => {
             if (this.isAuthenticated) {
-                this.connectWebSocket();
+                this.fetchWebSocketApiKey().then(() => {
+                    this.connectWebSocket();
+                });
             } else {
                 this.redirectToLogin();
             }
@@ -201,12 +204,18 @@ class JoshuaChat {
     }
 
     connectWebSocket() {
-        // Mettre à jour l'URL WebSocket avec l'API key
-        this.wsUrl = this.getWebSocketUrl();
-        console.log(`Connecting to WebSocket: ${this.wsUrl}`);
+        // Construire l'URL WebSocket avec l'API key comme paramètre de query
+        if (!this.apiKey) {
+            console.error('No API key available for WebSocket connection');
+            this.addMessage('Authentication error. Please refresh the page.', 'assistant', true);
+            return;
+        }
+        
+        const wsUrl = `${this.getWebSocketUrl()}?api_key=${encodeURIComponent(this.apiKey)}`;
+        console.log(`Connecting to WebSocket: ${wsUrl}`);
         
         try {
-            this.ws = new WebSocket(this.wsUrl);
+            this.ws = new WebSocket(wsUrl);
             
             this.ws.onopen = () => {
                 console.log('WebSocket connected');
@@ -538,6 +547,7 @@ class JoshuaChat {
             } else {
                 this.isAuthenticated = false;
                 this.currentUser = null;
+                this.apiKey = null;
                 this.updateAuthUI();
                 return false;
             }
@@ -545,7 +555,30 @@ class JoshuaChat {
             console.error('Authentication check failed:', error);
             this.isAuthenticated = false;
             this.currentUser = null;
+            this.apiKey = null;
             this.updateAuthUI();
+            return false;
+        }
+    }
+
+    async fetchWebSocketApiKey() {
+        try {
+            const response = await fetch(`${this.apiBaseUrl}/auth/session-api-key`, {
+                method: 'POST',
+                credentials: 'include'
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                this.apiKey = data.api_key;
+                console.log(`WebSocket API key obtained (${data.status}), expires: ${data.expires_at}`);
+                return true;
+            } else {
+                console.error('Failed to get WebSocket API key:', response.status);
+                return false;
+            }
+        } catch (error) {
+            console.error('Error fetching WebSocket API key:', error);
             return false;
         }
     }
@@ -577,6 +610,8 @@ class JoshuaChat {
         } finally {
             this.isAuthenticated = false;
             this.currentUser = null;
+            this.apiKey = null; // Effacer l'API key temporaire
+            this.disconnect(); // Fermer la connexion WebSocket (méthode existante)
             this.redirectToLogin();
         }
     }

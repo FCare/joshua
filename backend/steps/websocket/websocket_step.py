@@ -187,28 +187,34 @@ class WebSocketStep(PipelineStep):
             self.server_thread.join(timeout=2.0)
     
     async def verify_authentication(self, websocket_request):
-        """Vérifie l'authentification en appelant Voight-Kampff directement"""
+        """Vérifie l'authentification avec API key temporaire depuis Voight-Kampff"""
         try:
-            # Extraire les cookies de la requête WebSocket
-            cookie_header = websocket_request.headers.get('Cookie', '')
-            if not cookie_header:
-                logger.warning("No cookies in WebSocket request")
-                return False, None
+            # Extraire l'API key depuis les paramètres de query de l'URL WebSocket
+            import urllib.parse as urlparse
+            parsed_url = urlparse.urlparse(websocket_request.uri)
+            query_params = urlparse.parse_qs(parsed_url.query)
+            api_key = query_params.get('api_key', [None])[0]
             
-            # Appeler l'endpoint /verify de Voight-Kampff
+            if not api_key:
+                logger.warning("❌ No API key provided in WebSocket connection")
+                return False, None
+                
+            logger.info(f"🔑 API key provided for WebSocket authentication: {api_key[:8]}...")
+            
+            # Vérifier l'API key avec Voight-Kampff
+            headers = {'X-API-Key': api_key}
             async with aiohttp.ClientSession() as session:
-                headers = {'Cookie': cookie_header}
                 async with session.get('http://voight-kampff:8080/verify', headers=headers) as response:
                     if response.status == 200:
                         data = await response.json()
                         username = data.get('user')
-                        logger.info(f"WebSocket authentication successful for user: {username}")
+                        logger.info(f"✅ API key authentication successful for user: {username}")
                         return True, username
                     else:
-                        logger.warning(f"WebSocket authentication failed: {response.status}")
+                        logger.warning(f"❌ API key authentication failed with status {response.status}")
                         return False, None
         except Exception as e:
-            logger.error(f"Error verifying WebSocket authentication: {e}")
+            logger.error(f"❌ API key authentication error: {e}")
             return False, None
     
     async def websocket_handler(self, websocket, path=None):
