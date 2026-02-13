@@ -1064,11 +1064,12 @@ class JoshuaChat {
             // Clear canvas with transparent background
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            // Draw 16 bars covering 0-10kHz (53 bins out of 128 total)
+            // Draw 16 bars covering 0-10kHz basé sur le sample rate réel de l'AudioContext
             const barCount = 16;
-            const maxFreqBins = Math.floor(bufferLength * (10000/24000)); // 53 bins for 0-10kHz
+            const nyquistFreq = this.audioContext.sampleRate / 2; // Fréquence de Nyquist
+            const maxFreqBins = Math.floor(bufferLength * (10000 / nyquistFreq)); // Bins pour 0-10kHz
             const barWidth = canvas.width / barCount;
-            const dataStep = Math.floor(maxFreqBins / barCount); // 53/16 ≈ 3 bins per bar
+            const dataStep = Math.floor(maxFreqBins / barCount);
 
             for (let i = 0; i < barCount; i++) {
                 const dataIndex = i * dataStep;
@@ -1106,11 +1107,12 @@ class JoshuaChat {
             // Clear canvas with transparent background
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            // Draw 16 bars covering 0-10kHz (53 bins out of 128 total)
+            // Draw 16 bars covering 0-10kHz basé sur le sample rate réel de l'AudioContext
             const barCount = 16;
-            const maxFreqBins = Math.floor(bufferLength * (10000/24000)); // 53 bins for 0-10kHz
+            const nyquistFreq = this.audioContext.sampleRate / 2; // Fréquence de Nyquist
+            const maxFreqBins = Math.floor(bufferLength * (10000 / nyquistFreq)); // Bins pour 0-10kHz
             const barWidth = canvas.width / barCount;
-            const dataStep = Math.floor(maxFreqBins / barCount); // 53/16 ≈ 3 bins per bar
+            const dataStep = Math.floor(maxFreqBins / barCount);
 
             for (let i = 0; i < barCount; i++) {
                 const dataIndex = i * dataStep;
