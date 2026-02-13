@@ -778,7 +778,18 @@ class JoshuaChat {
         // Stop recording in microphone processor
         this.micProcessor.port.postMessage({ command: 'stop' });
         
-        console.log('🎙️ Recording stopped');
+        // Libérer le microphone - arrêter les tracks du stream
+        if (this.mediaStream) {
+            this.mediaStream.getTracks().forEach(track => {
+                track.stop();
+                console.log('🎙️ Microphone track stopped');
+            });
+        }
+        
+        // Nettoyer l'audio context et remettre à zéro l'état
+        this.cleanup();
+        
+        console.log('🎙️ Recording stopped and microphone released');
     }
 
     handleAudioChunk(chunkData) {
@@ -962,6 +973,8 @@ class JoshuaChat {
         // Reset audio state
         this.isAudioEnabled = false;
         this.isRecording = false;
+        
+        // Reset visual elements
         if (this.inputVisualizerContainer) {
             this.inputVisualizerContainer.style.display = 'none';
             this.inputVisualizerContainer.classList.remove('active');
@@ -970,6 +983,9 @@ class JoshuaChat {
             this.outputVisualizerContainer.style.display = 'none';
             this.outputVisualizerContainer.classList.remove('active');
         }
+        
+        // Reset microphone button to inactive state
+        this.micBtn.classList.remove('recording', 'listening');
         
         console.log('🎙️ Audio cleanup completed');
     }
