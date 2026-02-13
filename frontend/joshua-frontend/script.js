@@ -868,14 +868,10 @@ class JoshuaChat {
     }
 
     async setupAudioOutputOnly() {
-        console.log('🔊 [AUDIO DEBUG] setupAudioOutputOnly called');
-        
         try {
             // Create audio output processor for TTS playback only (no microphone)
             this.audioProcessor = new AudioWorkletNode(this.audioContext, 'joshua-audio-processor');
-            console.log('🔊 [AUDIO DEBUG] AudioWorkletNode created:', !!this.audioProcessor);
         } catch (workletError) {
-            console.error('🔊 [AUDIO DEBUG] Failed to create AudioWorkletNode:', workletError);
             // Fallback: create a simple audio buffer for playback without WorkletProcessor
             this.setupSimpleAudioOutput();
             return;
@@ -885,20 +881,15 @@ class JoshuaChat {
         this.outputAnalyser = this.audioContext.createAnalyser();
         this.outputAnalyser.fftSize = 256;
         this.outputAnalyser.smoothingTimeConstant = 0.8;
-        console.log('🔊 [AUDIO DEBUG] Output analyser created with fftSize:', this.outputAnalyser.fftSize);
         
         // Créer un GainNode intermédiaire pour s'assurer que l'audio passe par le graph
         this.outputGain = this.audioContext.createGain();
         this.outputGain.gain.value = 1.0;
-        console.log('🔊 [AUDIO DEBUG] Output gain created with value:', this.outputGain.gain.value);
         
         // Connect: audioProcessor -> outputGain -> outputAnalyser -> destination
         this.audioProcessor.connect(this.outputGain);
-        console.log('🔊 [AUDIO DEBUG] audioProcessor connected to outputGain');
         this.outputGain.connect(this.outputAnalyser);
-        console.log('🔊 [AUDIO DEBUG] outputGain connected to outputAnalyser');
         this.outputAnalyser.connect(this.audioContext.destination);
-        console.log('🔊 [AUDIO DEBUG] outputAnalyser connected to destination');
         
         // Ajouter un oscillateur silencieux pour "priming" le graph audio
         this.primeOscillator = this.audioContext.createOscillator();
@@ -907,13 +898,10 @@ class JoshuaChat {
         this.primeOscillator.connect(this.primeGain);
         this.primeGain.connect(this.audioProcessor);
         this.primeOscillator.start();
-        console.log('🔊 [AUDIO DEBUG] Priming oscillator started (silent)');
-        
         console.log('🔊 Audio output setup completed for TTS with primed graph');
     }
     
     setupSimpleAudioOutput() {
-        console.log('🔊 [AUDIO DEBUG] Setting up simple audio output fallback');
         
         // Create a simple gain node for basic audio playback
         this.outputGain = this.audioContext.createGain();
@@ -928,7 +916,6 @@ class JoshuaChat {
         this.outputGain.connect(this.outputAnalyser);
         this.outputAnalyser.connect(this.audioContext.destination);
         
-        console.log('🔊 [AUDIO DEBUG] Simple audio output setup completed');
     }
 
     setupAudioAnalysis() {
@@ -1034,45 +1021,31 @@ class JoshuaChat {
     }
 
     async handleAudioResponse(audioData) {
-        console.log('🎵 [AUDIO DEBUG] handleAudioResponse called with:', typeof audioData, audioData.length || 'no length');
-        console.log('🎵 [AUDIO DEBUG] Is muted:', this.isMuted);
-        console.log('🎵 [AUDIO DEBUG] AudioProcessor exists:', !!this.audioProcessor);
-        console.log('🎵 [AUDIO DEBUG] AudioContext exists:', !!this.audioContext);
-        console.log('🎵 [AUDIO DEBUG] OutputAnalyser exists:', !!this.outputAnalyser);
-        console.log('🎵 [AUDIO DEBUG] OutputVisualizerContainer exists:', !!this.outputVisualizerContainer);
-        console.log('🎵 [AUDIO DEBUG] OutputVisualizerContainer display:', this.outputVisualizerContainer?.style?.display);
         
         // Si le micro est actif, désactiver automatiquement le mute pour éviter le feedback
         if (this.isRecording && this.isMuted) {
             this.isMuted = false;
             this.updateMuteButton();
-            console.log('🎵 [AUDIO DEBUG] Auto-unmuted due to recording');
         }
         
         // Si c'est muted, ne pas jouer l'audio et ne pas afficher le visualiseur
         if (this.isMuted) {
-            console.log('🎵 [AUDIO DEBUG] Skipping audio processing - muted');
             return;
         }
         
         // Initialize audio output automatically if not already done
         if (!this.audioProcessor) {
-            console.log('🎵 [AUDIO DEBUG] Initializing audio output for TTS...');
             try {
                 // Reuse existing AudioContext if available, otherwise create new one
                 if (!this.audioContext) {
                     this.audioContext = new (window.AudioContext || window.webkitAudioContext)({
                         sampleRate: 24000  // Match TTS sample rate to avoid pitch/speed issues
                     });
-                    console.log('🎵 [AUDIO DEBUG] New AudioContext created with sample rate:', this.audioContext.sampleRate);
-                } else {
-                    console.log('🎵 [AUDIO DEBUG] Reusing existing AudioContext with sample rate:', this.audioContext.sampleRate);
                 }
                 
                 // Resume AudioContext if needed (browser policy)
                 if (this.audioContext.state === 'suspended') {
                     await this.audioContext.resume();
-                    console.log('🎵 [AUDIO DEBUG] AudioContext resumed');
                 }
                 
                 // Load audio processor module if not already loaded
@@ -1083,26 +1056,21 @@ class JoshuaChat {
                     const testNode = new AudioWorkletNode(this.audioContext, 'joshua-audio-processor');
                     testNode.disconnect();
                     moduleLoaded = true;
-                    console.log('🎵 [AUDIO DEBUG] AudioWorklet module already loaded');
                 } catch (testError) {
-                    console.log('🎵 [AUDIO DEBUG] AudioWorklet module not loaded, loading now...');
+                    console.log('AudioWorklet module not loaded, loading now...');
                 }
                 
                 if (!moduleLoaded) {
                     try {
                         await this.audioContext.audioWorklet.addModule('./joshua-audio-processor.js');
-                        console.log('🎵 [AUDIO DEBUG] AudioWorklet module loaded successfully');
                     } catch (modError) {
-                        console.error('🎵 [AUDIO DEBUG] AudioWorklet module load failed:', modError);
                         throw modError;
                     }
                 }
                 
                 // Setup audio output for TTS
                 await this.setupAudioOutputOnly();
-                console.log('🎵 [AUDIO DEBUG] Audio output setup completed');
             } catch (error) {
-                console.error('🎵 [AUDIO DEBUG] Failed to initialize audio output for TTS:', error);
                 return;
             }
         }
@@ -1111,12 +1079,10 @@ class JoshuaChat {
         if (this.outputVisualizerContainer && !this.isMuted) {
             this.outputVisualizerContainer.style.display = 'block';
             this.outputVisualizerContainer.classList.add('active');
-            console.log('🎵 [AUDIO DEBUG] Output visualizer container shown and activated');
         }
 
         // Start visualization if not already running
         if (!this.animationFrames.output && this.outputAnalyser) {
-            console.log('🎵 [AUDIO DEBUG] Starting output visualization animation');
             this.startAudioVisualization();
         }
 
@@ -1127,7 +1093,6 @@ class JoshuaChat {
             for (let i = 0; i < binaryString.length; i++) {
                 bytes[i] = binaryString.charCodeAt(i);
             }
-            console.log('🎵 [AUDIO DEBUG] Decoded audio bytes length:', bytes.length);
 
             // Convert to Float32Array for AudioWorklet
             const int16Array = new Int16Array(bytes.buffer);
@@ -1135,15 +1100,12 @@ class JoshuaChat {
             for (let i = 0; i < int16Array.length; i++) {
                 float32Array[i] = int16Array[i] / 32767.0;
             }
-            console.log('🎵 [AUDIO DEBUG] Converted to float32 samples:', float32Array.length);
-            console.log('🎵 [AUDIO DEBUG] Sample values (first 10):', Array.from(float32Array.slice(0, 10)));
 
             // Send to audio processor
             this.audioProcessor.port.postMessage({
                 type: 'audio',
                 frame: float32Array
             });
-            console.log('🎵 [AUDIO DEBUG] Audio frame sent to AudioWorklet processor');
 
             // Check if analyser is getting data
             if (this.outputAnalyser) {
@@ -1151,13 +1113,11 @@ class JoshuaChat {
                     const dataArray = new Uint8Array(this.outputAnalyser.frequencyBinCount);
                     this.outputAnalyser.getByteFrequencyData(dataArray);
                     const maxValue = Math.max(...dataArray);
-                    console.log('🎵 [AUDIO DEBUG] Output analyser frequency data max value:', maxValue);
-                    console.log('🎵 [AUDIO DEBUG] Output analyser first 10 values:', Array.from(dataArray.slice(0, 10)));
                 }, 100); // Check after 100ms
             }
             
         } catch (error) {
-            console.error('🎵 [AUDIO DEBUG] Error processing audio response:', error);
+            console.error('Error processing audio response:', error);
         }
     }
 
