@@ -47,6 +47,8 @@ class JoshuaChat {
     }
 
     getWebSocketUrl() {
+        // Les WebSockets utiliseront l'authentification par cookie de session
+        // Traefik vérifiera automatiquement les cookies via le middleware vk_hybrid
         return `wss://joshua.caronboulme.fr`;
     }
 
@@ -199,6 +201,8 @@ class JoshuaChat {
     }
 
     connectWebSocket() {
+        // Mettre à jour l'URL WebSocket avec l'API key
+        this.wsUrl = this.getWebSocketUrl();
         console.log(`Connecting to WebSocket: ${this.wsUrl}`);
         
         try {
@@ -529,6 +533,7 @@ class JoshuaChat {
                 this.isAuthenticated = true;
                 this.currentUser = data.user;
                 this.updateAuthUI();
+                console.log('Authentication successful with session cookie for user:', data.user);
                 return true;
             } else {
                 this.isAuthenticated = false;
