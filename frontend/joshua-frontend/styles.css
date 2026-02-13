@@ -460,6 +460,7 @@ kbd {
 
 .center-left-visualizer {
     position: relative;
+    margin-left: 12px;
     margin-right: 8px;
     align-self: center;
 }
