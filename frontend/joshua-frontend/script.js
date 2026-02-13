@@ -582,7 +582,11 @@ class JoshuaChat {
         if (!this.isAudioEnabled) {
             await this.initAudio();
         } else {
-            this.toggleRecording();
+            if (this.isRecording) {
+                this.stopRecording();
+            } else {
+                this.startRecording();
+            }
         }
     }
 
@@ -650,11 +654,7 @@ class JoshuaChat {
             this.setupAudioAnalysis();
 
             this.isAudioEnabled = true;
-            this.inputVisualizerContainer.style.display = 'block';
-            this.outputVisualizerContainer.style.display = 'block';
-            this.inputVisualizerContainer.classList.add('active');
-            this.outputVisualizerContainer.classList.add('active');
-            
+            // Ne pas afficher les visualiseurs lors de l'initialisation
             console.log('🎙️ Audio initialized successfully');
         } catch (error) {
             console.error('❌ Audio initialization failed:', error);
@@ -735,13 +735,6 @@ class JoshuaChat {
         this.startAudioVisualization();
     }
 
-    toggleRecording() {
-        if (!this.isRecording) {
-            this.startRecording();
-        } else {
-            this.stopRecording();
-        }
-    }
 
     startRecording() {
         if (!this.audioContext) {
@@ -751,6 +744,12 @@ class JoshuaChat {
 
         this.isRecording = true;
         this.micBtn.classList.add('recording');
+        
+        // Afficher les visualiseurs quand l'enregistrement commence
+        this.inputVisualizerContainer.style.display = 'block';
+        this.outputVisualizerContainer.style.display = 'block';
+        this.inputVisualizerContainer.classList.add('active');
+        this.outputVisualizerContainer.classList.add('active');
         
         // Start recording in microphone processor
         this.micProcessor.port.postMessage({ command: 'start' });
@@ -763,17 +762,19 @@ class JoshuaChat {
         
         this.isRecording = false;
         this.micBtn.classList.remove('recording');
-        this.micBtn.classList.add('listening');
+        
+        // Masquer les visualiseurs quand l'enregistrement s'arrête
+        this.inputVisualizerContainer.classList.remove('active');
+        this.outputVisualizerContainer.classList.remove('active');
+        setTimeout(() => {
+            this.inputVisualizerContainer.style.display = 'none';
+            this.outputVisualizerContainer.style.display = 'none';
+        }, 300); // Attendre la fin de la transition CSS
         
         // Stop recording in microphone processor
         this.micProcessor.port.postMessage({ command: 'stop' });
         
-        console.log('🎙️ Recording stopped, listening for response...');
-        
-        // Remove listening state after delay
-        setTimeout(() => {
-            this.micBtn.classList.remove('listening');
-        }, 3000);
+        console.log('🎙️ Recording stopped');
     }
 
     handleAudioChunk(chunkData) {
