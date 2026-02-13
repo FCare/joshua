@@ -809,6 +809,13 @@
             }
 
             editUserScopes(userId) {
+                const scopesContainer = document.getElementById(`user-scopes-${userId}`);
+                
+                // Check if already editing - prevent multiple edit interfaces
+                if (scopesContainer.querySelector('.edit-scopes-interface')) {
+                    return;
+                }
+
                 // Find user
                 const user = this.userData.admin_users.find(u => u.id === userId);
                 if (!user) return;
@@ -831,12 +838,11 @@
 
                 servicesHtml += '</div>';
 
-                // Show modal or replace content
-                const scopesContainer = document.getElementById(`user-scopes-${userId}`);
+                // Store original content
                 const originalContent = scopesContainer.innerHTML;
 
                 scopesContainer.innerHTML = `
-                    <div style="background: #f9fafb; padding: 10px; border-radius: 8px; border: 1px solid #e5e7eb;">
+                    <div class="edit-scopes-interface" style="background: #f9fafb; padding: 10px; border-radius: 8px; border: 1px solid #e5e7eb;">
                         <div style="font-weight: 500; margin-bottom: 10px;">Modifier les services autorisés:</div>
                         ${servicesHtml}
                         <div style="margin-top: 10px; display: flex; gap: 8px;">
