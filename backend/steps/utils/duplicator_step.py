@@ -67,15 +67,21 @@ class DuplicatorStep(PipelineStep):
             duplicated_count = 0
             for i, output_queue in enumerate(self.output_queues):
                 try:
-                    # Crée une copie du message pour chaque sortie
-                    if hasattr(input_message, 'data'):
-                        # Message avec data (ex: OutputMessage)
+                    # Crée une copie du message pour chaque sortie en préservant le type original
+                    if isinstance(input_message, InputMessage):
+                        # InputMessage → reste InputMessage
+                        duplicated_message = InputMessage(
+                            data=input_message.data,
+                            metadata=original_metadata.copy()
+                        )
+                    elif isinstance(input_message, OutputMessage):
+                        # OutputMessage → reste OutputMessage
                         duplicated_message = OutputMessage(
-                            result=input_message.data,
-                            metadata=original_metadata
+                            result=input_message.result if hasattr(input_message, 'result') else input_message.data,
+                            metadata=original_metadata.copy()
                         )
                     else:
-                        # Autre type de message
+                        # Autre type de message - copie directe
                         duplicated_message = input_message
                     
                     # Ajoute info de duplication dans metadata
