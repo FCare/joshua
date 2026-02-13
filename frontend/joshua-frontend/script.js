@@ -38,6 +38,10 @@ class JoshuaChat {
         this.bindEvents();
         this.autoResizeTextarea();
         
+        // Initialize mute button state and output visualizer visibility (après initElements)
+        this.updateMuteButton();
+        this.updateOutputVisualizerVisibility();
+        
         // Check authentication before connecting WebSocket
         this.checkAuthentication().then(() => {
             if (this.isAuthenticated) {
@@ -48,9 +52,6 @@ class JoshuaChat {
                 this.redirectToLogin();
             }
         });
-        
-        // Initialize mute button state
-        this.updateMuteButton();
     }
 
     getWebSocketUrl() {
@@ -690,15 +691,23 @@ class JoshuaChat {
     }
 
     updateOutputVisualizerVisibility() {
-        // L'animation output dépend du mute ET si on joue de l'audio
-        // Si muted, ne pas afficher même si on reçoit de l'audio
-        // Si unmuted et qu'on reçoit de l'audio, afficher
-        if (!this.isMuted && this.outputVisualizerContainer) {
-            // Seulement afficher si pas muted (la logique d'audio sera dans handleAudioResponse)
-        } else if (this.outputVisualizerContainer) {
-            // Si muted, cacher immédiatement
-            this.outputVisualizerContainer.style.display = 'none';
-            this.outputVisualizerContainer.classList.remove('active');
+        // Contrôle uniquement la VISIBILITÉ de la zone selon le mute
+        // La zone doit être visible dès qu'on est unmuted
+        if (this.outputVisualizerContainer) {
+            if (this.isMuted) {
+                // Mute : cacher la zone (mais l'animation continue)
+                this.outputVisualizerContainer.style.display = 'none';
+                this.outputVisualizerContainer.classList.remove('active');
+            } else {
+                // Unmute : afficher la zone (même sans audio actuel)
+                this.outputVisualizerContainer.style.display = 'block';
+                this.outputVisualizerContainer.classList.add('active');
+                
+                // Démarrer l'animation si on a un analyser
+                if (this.outputAnalyser && !this.animationFrames.output) {
+                    this.startOutputVisualization();
+                }
+            }
         }
     }
 
