@@ -118,8 +118,9 @@ class MoshiASR:
     ASR implementation using Moshi STT server via synchronous WebSocket.
     """
 
-    def __init__(self, host: str, **params):
+    def __init__(self, host: str, vk_api_key: str = None, **params):
         self.host = host
+        self.vk_api_key = vk_api_key  # API key pour Voight-Kampff/Traefik
         self.name = f"MoshiASR({self.host or 'auto'})"
 
         self.ws = None
@@ -148,7 +149,7 @@ class MoshiASR:
         self.text_buffer = []
         self.current_client_id = None
 
-        logger.debug(f"{self.name}: Initialized")
+        logger.debug(f"{self.name}: Initialized with VK API key: {vk_api_key[:10]}..." if vk_api_key else f"{self.name}: Initialized without VK API key")
 
     def set_output_queue(self, queue):
         self.output_queue = queue
@@ -161,9 +162,19 @@ class MoshiASR:
         ws_url = self._build_websocket_url()
         logger.debug(f"{self.name}: Connecting to {ws_url}")
         
+        # Préparer les headers pour la connexion WebSocket
+        headers = ["kyutai-api-key: public_token"]
+        
+        # Ajouter l'API key Voight-Kampff pour l'authentification Traefik
+        if self.vk_api_key:
+            headers.append(f"X-API-Key: {self.vk_api_key}")
+            logger.debug(f"{self.name}: Using VK API key for Traefik authentication")
+        else:
+            logger.warning(f"{self.name}: No VK API key provided, connection may fail")
+        
         self.ws = websocket.WebSocketApp(
             url=ws_url,
-            header=[f"kyutai-api-key: public_token"],
+            header=headers,
             on_open=self.on_open,
             on_message=self.on_message,
             on_error=self.on_error,
@@ -464,8 +475,8 @@ class KyutaiASRStep(PipelineStep):
         try:
             print(f"Initialisation Kyutai ASR sur {self.host}")
             
-            # Crée l'instance MoshiASR
-            self.moshi_asr = MoshiASR(host=self.host)
+            # Crée l'instance MoshiASR avec l'API key pour Voight-Kampff
+            self.moshi_asr = MoshiASR(host=self.host, vk_api_key=self.api_key)
             
             # Configure MoshiASR pour utiliser l'output_queue du step
             self.moshi_asr.set_output_queue(self.output_queue)
