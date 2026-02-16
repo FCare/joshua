@@ -28,47 +28,51 @@
       "event_type": "string"
     }
   },
-  "configuration": {
-    "host": {
-      "type": "string",
-      "default": "unmute-transcript.caronboulme.fr",
-      "description": "Serveur Kyutai STT"
+  "config_schema": {
+    "type": "object",
+    "properties": {
+      "host": {
+        "type": "string",
+        "default": "unmute-transcript.caronboulme.fr",
+        "description": "Serveur Kyutai STT"
+      },
+      "port": {
+        "type": "integer",
+        "default": 443,
+        "description": "Port du serveur Kyutai"
+      },
+      "api_key": {
+        "type": "string",
+        "default": "your_asr_api_key_here",
+        "description": "Token d'authentification Kyutai (définir ASR_API_KEY dans .env)"
+      },
+      "sample_rate": {
+        "type": "integer",
+        "default": 24000,
+        "description": "Taux d'échantillonnage attendu",
+        "enum": [24000]
+      },
+      "samples_per_frame": {
+        "type": "integer",
+        "default": 1920,
+        "description": "Nombre d'échantillons par frame (80ms à 24kHz)"
+      },
+      "pause_threshold": {
+        "type": "number",
+        "default": 0.9,
+        "description": "Seuil de détection de pause",
+        "minimum": 0.0,
+        "maximum": 1.0
+      },
+      "vad_threshold": {
+        "type": "number",
+        "default": 0.8,
+        "description": "Seuil de détection d'activité vocale",
+        "minimum": 0.0,
+        "maximum": 1.0
+      }
     },
-    "port": {
-      "type": "integer",
-      "default": 443,
-      "description": "Port du serveur Kyutai"
-    },
-    "api_key": {
-      "type": "string",
-      "default": "your_asr_api_key_here",
-      "description": "Token d'authentification Kyutai (définir ASR_API_KEY dans .env)"
-    },
-    "sample_rate": {
-      "type": "integer",
-      "default": 24000,
-      "description": "Taux d'échantillonnage attendu",
-      "values": [24000]
-    },
-    "samples_per_frame": {
-      "type": "integer",
-      "default": 1920,
-      "description": "Nombre d'échantillons par frame (80ms à 24kHz)"
-    },
-    "pause_threshold": {
-      "type": "float",
-      "default": 0.9,
-      "description": "Seuil de détection de pause",
-      "min": 0.0,
-      "max": 1.0
-    },
-    "vad_threshold": {
-      "type": "float",
-      "default": 0.8,
-      "description": "Seuil de détection d'activité vocale",
-      "min": 0.0,
-      "max": 1.0
-    }
+    "additionalProperties": false
   },
   "providers": {
     "kyutai": {

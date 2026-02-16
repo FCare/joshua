@@ -25,35 +25,39 @@
       "chunk_size": "integer"
     }
   },
-  "configuration": {
-    "host": {
-      "type": "string",
-      "default": "0.0.0.0",
-      "description": "Interface d'écoute du serveur WebSocket"
+  "config_schema": {
+    "type": "object",
+    "properties": {
+      "host": {
+        "type": "string",
+        "default": "0.0.0.0",
+        "description": "Interface d'écoute du serveur WebSocket"
+      },
+      "port": {
+        "type": "integer",
+        "default": 8769,
+        "description": "Port d'écoute du serveur WebSocket"
+      },
+      "audio_format": {
+        "type": "string",
+        "default": "pcm16",
+        "description": "Format audio attendu des clients",
+        "enum": ["pcm16", "pcm24", "wav"]
+      },
+      "sample_rate": {
+        "type": "integer",
+        "default": 24000,
+        "description": "Taux d'échantillonnage audio attendu",
+        "enum": [16000, 24000, 44100, 48000]
+      },
+      "mode": {
+        "type": "string",
+        "default": "audio_to_text",
+        "description": "Mode de fonctionnement: audio_to_text ou text_to_audio",
+        "enum": ["audio_to_text", "text_to_audio"]
+      }
     },
-    "port": {
-      "type": "integer",
-      "default": 8769,
-      "description": "Port d'écoute du serveur WebSocket"
-    },
-    "audio_format": {
-      "type": "string",
-      "default": "pcm16",
-      "description": "Format audio attendu des clients",
-      "values": ["pcm16", "pcm24", "wav"]
-    },
-    "sample_rate": {
-      "type": "integer",
-      "default": 24000,
-      "description": "Taux d'échantillonnage audio attendu",
-      "values": [16000, 24000, 44100, 48000]
-    },
-    "mode": {
-      "type": "string",
-      "default": "audio_to_text",
-      "description": "Mode de fonctionnement: audio_to_text ou text_to_audio",
-      "values": ["audio_to_text", "text_to_audio"]
-    }
+    "additionalProperties": false
   },
   "requirements": {
     "cpu": "medium",

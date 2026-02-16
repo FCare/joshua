@@ -7,36 +7,40 @@
   "category": "tts",
   "input_formats": ["text"],
   "output_formats": ["audio_chunk"],
-  "configuration": {
-    "host": {
-      "type": "string",
-      "default": "https://chatterbox.caronboulme.fr/speech",
-      "description": "URL API Chatterbox"
+  "config_schema": {
+    "type": "object",
+    "properties": {
+      "host": {
+        "type": "string",
+        "default": "https://chatterbox.caronboulme.fr/speech",
+        "description": "URL API Chatterbox"
+      },
+      "api_key": {
+        "type": "string",
+        "default": "your_tts_api_key_here",
+        "description": "Clé API Chatterbox TTS (définir TTS_API_KEY dans .env)"
+      },
+      "voice": {
+        "type": "string",
+        "default": "Fip4",
+        "description": "Voix à utiliser"
+      },
+      "language_id": {
+        "type": "string",
+        "default": "fr",
+        "description": "Langue"
+      },
+      "speed": {
+        "type": "number",
+        "default": 1.0,
+        "description": "Vitesse de parole"
+      },
+      "quality_mode": {
+        "type": "string",
+        "default": "quality",
+        "description": "Mode qualité"
+      }
     },
-    "api_key": {
-      "type": "string",
-      "default": "your_tts_api_key_here",
-      "description": "Clé API Chatterbox TTS (définir TTS_API_KEY dans .env)"
-    },
-    "voice": {
-      "type": "string", 
-      "default": "Fip4",
-      "description": "Voix à utiliser"
-    },
-    "language_id": {
-      "type": "string",
-      "default": "fr",
-      "description": "Langue"
-    },
-    "speed": {
-      "type": "float",
-      "default": 1.0,
-      "description": "Vitesse de parole"
-    },
-    "quality_mode": {
-      "type": "string",
-      "default": "quality",
-      "description": "Mode qualité"
-    }
+    "additionalProperties": false
   }
 }

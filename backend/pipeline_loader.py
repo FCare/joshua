@@ -159,10 +159,11 @@ class PipelineLoader:
         # Config par défaut de la step_definition
         config = {}
 
-        if "configuration" in step_definition:
-            # Extraire les valeurs par défaut du schéma de configuration
-            config_schema = step_definition["configuration"]
-            for param_name, param_def in config_schema.items():
+        if "config_schema" in step_definition:
+            # Extraire les valeurs par défaut du format JSON Schema
+            config_schema = step_definition["config_schema"]
+            properties = config_schema.get("properties", {})
+            for param_name, param_def in properties.items():
                 if "default" in param_def:
                     config[param_name] = param_def["default"]
         
