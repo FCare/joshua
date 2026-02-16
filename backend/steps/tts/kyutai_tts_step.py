@@ -7,6 +7,7 @@ import struct
 from typing import Optional, Dict, Any
 from dataclasses import dataclass
 from enum import Enum
+from urllib.parse import quote_plus
 
 from pipeline_framework import PipelineStep
 from messages.base_message import Message, InputMessage, OutputMessage, ErrorMessage, MessageType
