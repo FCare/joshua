@@ -172,8 +172,19 @@ class KyutaiTTS:
                     pcm_data = message_dict.get('pcm', [])
                     logger.info(f"{self.name}: Processing Audio message with {len(pcm_data)} PCM samples")
                     if pcm_data and self.output_queue:
-                        audio_bytes = struct.pack(f'{len(pcm_data)}f', *pcm_data)
-                        logger.info(f"{self.name}: Converted PCM to {len(audio_bytes)} bytes")
+                        # Convertir float32 -> int16 (comme unmute backend fait)
+                        # Clamping des valeurs entre -1.0 et 1.0, puis multiplier par 32767
+                        pcm_int16 = []
+                        for sample in pcm_data:
+                            # Clamp entre -1.0 et 1.0
+                            clamped = max(-1.0, min(1.0, sample))
+                            # Convertir en int16 (-32768 à 32767)
+                            int16_val = int(clamped * 32767)
+                            pcm_int16.append(int16_val)
+                        
+                        # Packer en bytes (format 'h' = signed short int16)
+                        audio_bytes = struct.pack(f'{len(pcm_int16)}h', *pcm_int16)
+                        logger.info(f"{self.name}: Converted {len(pcm_data)} float32 samples to {len(audio_bytes)} bytes (PCM int16)")
                         self._enqueue_audio_chunk(audio_bytes)
                     else:
                         logger.warning(f"{self.name}: No PCM data or no output queue available")
@@ -199,8 +210,8 @@ class KyutaiTTS:
 
     def _enqueue_audio_chunk(self, audio_bytes: bytes):
         if self.output_queue:
-            # Détecter le format audio
-            audio_format = "ogg_vorbis" if audio_bytes.startswith(b'OggS') else "pcm_float32"
+            # Détecter le format audio - maintenant on envoie du PCM int16
+            audio_format = "ogg_vorbis" if audio_bytes.startswith(b'OggS') else "pcm_int16"
             
             message = OutputMessage(
                 data=audio_bytes,
