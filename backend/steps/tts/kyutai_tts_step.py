@@ -63,7 +63,7 @@ class KyutaiTTS:
         self.current_client_id = None
         self.audio_chunks_sent = 0
 
-        logger.debug(f"{self.name}: Initialized")
+        logger.info(f"{self.name}: Initialized")
 
     def set_output_queue(self, queue):
         self.output_queue = queue
@@ -73,13 +73,13 @@ class KyutaiTTS:
             return
         
         ws_url = self._build_websocket_url()
-        logger.debug(f"{self.name}: Connecting to {ws_url}")
+        logger.info(f"{self.name}: Connecting to {ws_url}")
         
         headers = ["kyutai-api-key: public_token"]
         
         if self.api_key:
             headers.append(f"X-API-Key: {self.api_key}")
-            logger.debug(f"{self.name}: Using API key for authentication")
+            logger.info(f"{self.name}: Using API key for authentication")
         else:
             logger.warning(f"{self.name}: No API key provided")
         
@@ -113,7 +113,7 @@ class KyutaiTTS:
 
     def on_open(self, ws):
         self._connected = True
-        logger.debug(f"{self.name}: WebSocket connected")
+        logger.info(f"{self.name}: WebSocket connected")
 
     def on_message(self, ws, message):
         try:
@@ -123,7 +123,7 @@ class KyutaiTTS:
 
             if message_type == 'Ready':
                 self._stream_active = True
-                logger.debug(f"{self.name}: TTS ready")
+                logger.info(f"{self.name}: TTS ready")
                 return
             
             elif message_type == 'Audio':
@@ -154,7 +154,7 @@ class KyutaiTTS:
             )
             self.output_queue.enqueue(message)
             self.audio_chunks_sent += 1
-            logger.debug(f"{self.name}: Audio chunk sent ({len(audio_bytes)} bytes)")
+            logger.info(f"{self.name}: Audio chunk sent ({len(audio_bytes)} bytes)")
 
     def on_error(self, ws, error):
         logger.error(f"{self.name}: WebSocket error: {error}")
@@ -162,7 +162,7 @@ class KyutaiTTS:
     def on_close(self, ws, close_status_code, close_msg):
         self._connected = False
         self._stream_active = False
-        logger.debug(f"{self.name}: WebSocket disconnected")
+        logger.info(f"{self.name}: WebSocket disconnected")
 
     def _send_text(self, text: str):
         if not self._connected or not self.ws:
@@ -175,7 +175,7 @@ class KyutaiTTS:
             
             packed_message = msgpack.packb(message, use_bin_type=True)
             self.ws.send(packed_message, opcode=websocket.ABNF.OPCODE_BINARY)
-            logger.debug(f"{self.name}: Sent text: '{text[:50]}...'")
+            logger.info(f"{self.name}: Sent text: '{text[:50]}...'")
             
         except Exception as e:
             logger.error(f"{self.name}: Error sending text to TTS: {e}")
@@ -187,7 +187,7 @@ class KyutaiTTS:
             message = {"type": "Eos"}
             packed_message = msgpack.packb(message, use_bin_type=True)
             self.ws.send(packed_message, opcode=websocket.ABNF.OPCODE_BINARY)
-            logger.debug(f"{self.name}: Sent EOS")
+            logger.info(f"{self.name}: Sent EOS")
             
         except Exception as e:
             logger.error(f"{self.name}: Error sending EOS to TTS: {e}")
@@ -195,7 +195,7 @@ class KyutaiTTS:
     def process_text(self, text: str, client_id: str = None):
         """Traite le texte avec EOS (méthode originale pour compatibilité)"""
         if not self._connected or not self._stream_active:
-            logger.debug("TTS not active")
+            logger.info("TTS not active")
             return
             
         if client_id:
@@ -211,7 +211,7 @@ class KyutaiTTS:
     def process_text_only(self, text: str, client_id: str = None):
         """Traite le texte SANS envoyer EOS (pour streaming)"""
         if not self._connected:
-            logger.debug("TTS not connected")
+            logger.error("TTS not connected")
             return
             
         if client_id:
@@ -219,13 +219,13 @@ class KyutaiTTS:
             
         try:
             self._send_text(text)
-            logger.debug(f"{self.name}: Sent text without EOS: '{text[:50]}...'")
+            logger.info(f"{self.name}: Sent text without EOS: '{text[:50]}...'")
             
         except Exception as e:
             logger.error(f"{self.name}: Error processing text only: {e}")
 
     def disconnect(self):
-        logger.debug(f"{self.name}: Disconnecting...")
+        logger.info(f"{self.name}: Disconnecting...")
         
         try:
             if self.ws:
@@ -240,12 +240,12 @@ class KyutaiTTS:
             self._connected = False
             self._stream_active = False
             self.audio_chunks_sent = 0
-            logger.debug(f"{self.name}: Disconnected")
+            logger.info(f"{self.name}: Disconnected")
 
     def reset(self):
         try:
             self.audio_chunks_sent = 0
-            logger.debug(f"{self.name}: Reset completed")
+            logger.info(f"{self.name}: Reset completed")
             
         except Exception as e:
             logger.error(f"{self.name}: Reset error: {e}")
@@ -314,7 +314,7 @@ class KyutaiTTSStep(PipelineStep):
             
             if is_finish_signal:
                 logger.info(f"TTS: Received finish signal from chat for client: {self.current_client_id}")
-                #self._handle_finish_signal()
+                self._handle_finish_signal()
                 return
             
             if not self.kyutai_tts:
