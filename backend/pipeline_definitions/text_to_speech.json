@@ -10,7 +10,7 @@
       "processing": ["text-to-speech"]
     },
     "features": ["streaming", "french-voice"],
-    "models": ["chatterbox-tts"]
+    "models": ["kyutai-tts"]
   },
   "step_instances": [
     {
@@ -22,18 +22,18 @@
       }
     },
     {
-      "instance_id": "chatterbox_tts",
-      "step_definition": "chatterbox_tts",
+      "instance_id": "kyutai_tts",
+      "step_definition": "kyutai_tts",
       "config_overrides": {}
     }
   ],
   "connections": [
     {
       "from": "websocket_server",
-      "to": "chatterbox_tts"
+      "to": "kyutai_tts"
     },
     {
-      "from": "chatterbox_tts",
+      "from": "kyutai_tts",
       "to": "websocket_server"
     }
   ]

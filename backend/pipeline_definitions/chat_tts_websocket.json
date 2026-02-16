@@ -10,7 +10,7 @@
       "processing": ["speech-to-text", "conversation", "llm", "vision", "text-to-speech"]
     },
     "features": ["streaming", "conversational", "voice", "real-time", "vision"],
-    "models": ["kyutai-asr", "qwen3-vl-8b-instruct", "chatterbox-tts"]
+    "models": ["kyutai-asr", "qwen3-vl-8b-instruct", "kyutai-tts"]
   },
   "step_instances": [
     {

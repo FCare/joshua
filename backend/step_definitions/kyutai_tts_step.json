@@ -1,0 +1,34 @@
+{
+  "name": "kyutai_tts",
+  "class_name": "KyutaiTTSStep",
+  "module_path": "steps.tts.kyutai_tts_step",
+  "description": "TTS Kyutai pour synthèse vocale française",
+  "version": "1.0",
+  "category": "tts",
+  "input_formats": ["text"],
+  "output_formats": ["audio_chunk"],
+  "configuration": {
+    "host": {
+      "type": "string",
+      "default": "unmute-talk.caronboulme.fr",
+      "description": "URL API Chatterbox"
+    },
+    "port": {
+      "type": "integer",
+      "default": 443,
+      "description": "Port du serveur Kyutai"
+    },
+    "api_key": {
+      "type": "string",
+      "default": "your_tts_api_key_here",
+      "description": "Clé API Kyutai TTS (définir TTS_API_KEY dans .env)"
+    },
+    "sample_rate": {
+      "type": "integer",
+      "default": 24000,
+      "description": "Taux d'échantillonnage attendu",
+      "values": [24000]
+    },
+
+  }
+}
