@@ -374,6 +374,16 @@ class KyutaiTTSStep(PipelineStep):
                 self.current_client_id = message.metadata.get("client_id") or message.metadata.get("original_client_id")
                 logger.info(f"TTS: Client ID: {self.current_client_id}")
             
+            # 🎯 IGNORER LES CHUNKS TEXTE DIRECTS DU CHAT (via duplicator)
+            # Traiter seulement les phrases normalisées du sentence_normalizer
+            source = metadata.get('source', '')
+            chunk_type = metadata.get('chunk_type', '')
+            
+            # Si c'est un chunk partial du chat (pas passé par le normalizer), l'ignorer
+            if chunk_type == 'partial' and source != 'SentenceNormalizerStep':
+                print(f"🔄 TTS ignore chunk partial direct du chat, attend sentence normalizer")
+                return
+            
             # 🎯 DÉTECTER LE SIGNAL FINISH DU CHAT
             is_finish_signal = (
                 metadata.get('chunk_type') == 'finish' or
