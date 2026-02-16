@@ -67,7 +67,7 @@
     },
     {
       "instance_id": "tts_step",
-      "step_definition": "chatterbox_tts",
+      "step_definition": "kyutai_tts",
       "config_overrides": {}
     }
   ],
