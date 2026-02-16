@@ -140,17 +140,26 @@ class KyutaiTTS:
 
     def on_message(self, ws, message):
         try:
-            # Vérifier si c'est des données OGG (audio direct)
-            if isinstance(message, bytes) and message.startswith(b'OggS'):
-                logger.debug(f"{self.name}: Received OGG audio data ({len(message)} bytes)")
-                self._enqueue_audio_chunk(message)
-                return
+            # Log détaillé du message reçu
+            if isinstance(message, bytes):
+                logger.info(f"{self.name}: Received bytes message, length={len(message)}")
+                # Afficher les premiers bytes en hexa pour diagnostic
+                hex_preview = message[:16].hex() if len(message) >= 16 else message.hex()
+                logger.info(f"{self.name}: Hex preview: {hex_preview}")
+                
+                # Vérifier si c'est des données OGG (audio direct)
+                if message.startswith(b'OggS'):
+                    logger.info(f"{self.name}: Detected OGG Vorbis audio data ({len(message)} bytes)")
+                    self._enqueue_audio_chunk(message)
+                    return
+            else:
+                logger.info(f"{self.name}: Received non-bytes message: {type(message)} - {message}")
                 
             # Essayer de décoder comme msgpack (messages de contrôle)
             try:
                 logger.debug(f"receive {message}")
                 message_dict = msgpack.unpackb(message)
-                logger.debug(f"decoded {message_dict}")
+                logger.info(f"{self.name}: Successfully decoded msgpack: {message_dict}")
                 
                 message_type = message_dict.get('type', 'unknown')
 
