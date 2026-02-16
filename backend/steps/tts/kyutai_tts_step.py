@@ -48,7 +48,7 @@ class TTSEvent:
             self.timestamp = time.time()
 
 
-class KyutaiTTSStep:
+class KyutaiTTS:
     def __init__(self, host: str, port: int = 443, api_key: str = None, **params):
         self.host = host
         self.port = port
