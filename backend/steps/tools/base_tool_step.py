@@ -34,14 +34,22 @@ class BaseToolStep(PipelineStep, ABC):
     def _handle_messages(self, message):
         """Gère les messages entrants (tool calls et connexions)"""
         try:
+            # Vérifier si c'est un message de connexion utilisateur (depuis WebSocketStep)
+            if hasattr(message, 'data') and isinstance(message.data, dict):
+                message_type = message.data.get('type')
+                if message_type == 'user_connected':
+                    self._handle_user_connection(message)
+                    return
+            
+            # Vérifier si c'est un message avec metadata
             if hasattr(message, 'metadata') and message.metadata:
                 message_type = message.metadata.get('message_type')
-                
                 if message_type == 'user_connection':
                     self._handle_user_connection(message)
-                elif isinstance(message, ToolCallMessage):
-                    self._handle_tool_call(message)
-            elif isinstance(message, ToolCallMessage):
+                    return
+            
+            # Vérifier si c'est un appel d'outil
+            if isinstance(message, ToolCallMessage):
                 self._handle_tool_call(message)
                 
         except Exception as e:
@@ -50,8 +58,15 @@ class BaseToolStep(PipelineStep, ABC):
     def _handle_user_connection(self, connection_message):
         """Traite les nouvelles connexions d'utilisateurs"""
         try:
-            username = connection_message.metadata.get('username')
-            client_id = connection_message.metadata.get('client_id')
+            # Extraire les données selon le format du message
+            if hasattr(connection_message, 'data') and isinstance(connection_message.data, dict):
+                # Format WebSocketStep: data contient les infos de connexion
+                username = connection_message.data.get('username')
+                client_id = connection_message.data.get('client_id')
+            else:
+                # Format metadata classique
+                username = connection_message.metadata.get('username') if connection_message.metadata else None
+                client_id = connection_message.metadata.get('client_id') if connection_message.metadata else None
             
             logger.info(f"🔌 Tool '{self.name}': nouvelle connexion utilisateur {username}")
             
