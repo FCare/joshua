@@ -79,6 +79,12 @@ class WebSocketStep(PipelineStep):
         try:
             logger.info(f"WebSocket received message from ChatStep: type={type(message_data).__name__}")
             
+            # Filtrer les messages d'outils qui ne doivent PAS aller au frontend
+            from messages.base_message import ToolCallMessage, ToolResponseMessage
+            if isinstance(message_data, (ToolCallMessage, ToolResponseMessage)):
+                logger.info(f"🚫 Filtering tool message from frontend: {type(message_data).__name__}")
+                return
+            
             # Gestion spéciale pour les messages de contrôle (comme audio_finished)
             if isinstance(message_data, dict) and message_data.get('type') == 'audio_finished':
                 # Message de fin d'audio - le routage se fait via le duplicateur

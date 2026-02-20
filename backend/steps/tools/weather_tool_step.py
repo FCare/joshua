@@ -99,24 +99,37 @@ class WeatherToolStep(BaseToolStep):
                 "format": "json"
             }
             
+            logger.info(f"🌍 GEOCODING - Requête: {url}")
+            logger.info(f"🌍 GEOCODING - Paramètres: {params}")
+            
             response = requests.get(url, params=params, timeout=10)
+            
+            logger.info(f"🌍 GEOCODING - Réponse HTTP {response.status_code}")
+            logger.info(f"🌍 GEOCODING - URL finale: {response.url}")
             
             if response.status_code == 200:
                 data = response.json()
+                logger.info(f"🌍 GEOCODING - Données JSON reçues: {data}")
+                
                 if data.get("results") and len(data["results"]) > 0:
                     result = data["results"][0]
-                    return {
+                    final_result = {
                         "lat": result["latitude"],
                         "lon": result["longitude"],
                         "name": result["name"],
                         "country": result.get("country", "")
                     }
+                    logger.info(f"🌍 GEOCODING - Résultat final: {final_result}")
+                    return final_result
                 else:
+                    logger.warning(f"🌍 GEOCODING - Aucun résultat pour: {location}")
                     return {"error": f"Ville '{location}' non trouvée"}
             else:
+                logger.error(f"🌍 GEOCODING - Erreur HTTP {response.status_code}: {response.text}")
                 return {"error": f"Erreur géocodage: {response.status_code}"}
                 
         except Exception as e:
+            logger.error(f"🌍 GEOCODING - Exception: {str(e)}")
             return {"error": f"Erreur géocodage: {str(e)}"}
     
     def _get_weather_data(self, lat: float, lon: float, include_forecast: bool, temperature_unit: str) -> Dict:
@@ -138,10 +151,17 @@ class WeatherToolStep(BaseToolStep):
                 params["daily"] = "weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max"
                 params["forecast_days"] = 7
             
+            logger.info(f"🌤️ WEATHER API - Requête: {url}")
+            logger.info(f"🌤️ WEATHER API - Paramètres: {params}")
+            
             response = requests.get(url, params=params, timeout=10)
+            
+            logger.info(f"🌤️ WEATHER API - Réponse HTTP {response.status_code}")
+            logger.info(f"🌤️ WEATHER API - URL finale: {response.url}")
             
             if response.status_code == 200:
                 data = response.json()
+                logger.info(f"🌤️ WEATHER API - Données JSON reçues: {data}")
                 
                 # Formater les données actuelles
                 current = data.get("current", {})
@@ -157,6 +177,8 @@ class WeatherToolStep(BaseToolStep):
                         "description": self._get_weather_description(current.get("weather_code", 0))
                     }
                 }
+                
+                logger.info(f"🌤️ WEATHER API - Données actuelles formatées: {result['current']}")
                 
                 # Ajouter les prévisions si demandées
                 if include_forecast and "daily" in data:
