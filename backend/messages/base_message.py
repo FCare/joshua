@@ -38,12 +38,8 @@ class ErrorMessage(Message):
         super().__init__(MessageType.ERROR, data, metadata)
 
 
-@dataclass
 class ToolCallMessage(Message):
     """Message émis par le LLM pour appeler un outil"""
-    tool_name: str
-    tool_call_id: str
-    parameters: Dict[str, Any]
     
     def __init__(self, tool_name: str, tool_call_id: str, parameters: Dict[str, Any], metadata: Optional[Dict] = None):
         self.tool_name = tool_name
@@ -57,13 +53,8 @@ class ToolCallMessage(Message):
         super().__init__(MessageType.TOOL_CALL, data, metadata)
 
 
-@dataclass
 class ToolResponseMessage(Message):
     """Message de réponse d'un outil vers le LLM"""
-    tool_call_id: str
-    tool_name: str
-    result: Any
-    error: Optional[str] = None
     
     def __init__(self, tool_call_id: str, tool_name: str, result: Any = None, error: Optional[str] = None, metadata: Optional[Dict] = None):
         self.tool_call_id = tool_call_id
@@ -79,11 +70,8 @@ class ToolResponseMessage(Message):
         super().__init__(MessageType.TOOL_RESPONSE, data, metadata)
 
 
-@dataclass
 class ToolRegistrationMessage(Message):
     """Message pour enregistrer un outil auprès du LLM"""
-    tool_definition: Dict[str, Any]
-    source_step: str
     
     def __init__(self, tool_definition: Dict[str, Any], source_step: str, metadata: Optional[Dict] = None):
         self.tool_definition = tool_definition
