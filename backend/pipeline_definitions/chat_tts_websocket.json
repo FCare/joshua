@@ -32,7 +32,7 @@
     },
     {
       "instance_id": "tool_registry",
-      "step_definition": "tool_registry_step",
+      "step_definition": "Tool Registry Step",
       "config_overrides": {
         "expected_tools": ["weather_tool"],
         "registration_timeout": 5.0,
@@ -41,7 +41,7 @@
     },
     {
       "instance_id": "weather_tool",
-      "step_definition": "weather_tool_step",
+      "step_definition": "Weather Tool Step",
       "config_overrides": {
         "user_permissions": {
           "allowed_users": [],
