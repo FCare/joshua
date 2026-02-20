@@ -1,0 +1,33 @@
+{
+    "id": "tool_registry_step",
+    "name": "Tool Registry Step",
+    "description": "Registry centralisé qui coordonne l'enregistrement des outils auprès du LLM",
+    "class_name": "ToolRegistryStep",
+    "module_path": "steps.tools.tool_registry_step", 
+    "config_schema": {
+        "type": "object",
+        "properties": {
+            "expected_tools": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "Liste des noms de steps d'outils attendus",
+                "default": []
+            },
+            "registration_timeout": {
+                "type": "number",
+                "description": "Timeout en secondes pour l'enregistrement des outils",
+                "minimum": 0,
+                "maximum": 30,
+                "default": 5.0
+            },
+            "llm_step_name": {
+                "type": "string", 
+                "description": "Nom du step LLM cible pour les outils",
+                "default": "chat_step"
+            }
+        }
+    },
+    "inputs": ["user_connection", "tool_registration"],
+    "outputs": ["user_connection", "tools_ready"],
+    "capabilities": ["tool_coordination", "timeout_management"]
+}

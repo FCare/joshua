@@ -6,9 +6,9 @@
         "modalities": {
             "input": ["text", "image"],
             "output": ["text"],
-            "processing": ["conversation", "llm", "vision"]
+            "processing": ["conversation", "llm", "vision", "function_calling"]
         },
-        "features": ["streaming", "conversational", "stateful", "vision"],
+        "features": ["streaming", "conversational", "stateful", "vision", "tools"],
         "models": ["qwen3-vl-8b-instruct"]
     },
     "step_instances": [
@@ -19,6 +19,25 @@
                 "host": "0.0.0.0",
                 "port": 8768,
                 "mode": "text_to_text"
+            }
+        },
+        {
+            "instance_id": "tool_registry",
+            "step_definition": "tool_registry_step",
+            "config_overrides": {
+                "expected_tools": ["weather_tool"],
+                "registration_timeout": 5.0,
+                "llm_step_name": "openai_chat"
+            }
+        },
+        {
+            "instance_id": "weather_tool",
+            "step_definition": "weather_tool_step",
+            "config_overrides": {
+                "user_permissions": {
+                    "allowed_users": [],
+                    "denied_users": []
+                }
             }
         },
         {
@@ -33,7 +52,27 @@
     "connections": [
         {
             "from": "websocket_server",
+            "to": "tool_registry"
+        },
+        {
+            "from": "tool_registry",
+            "to": "weather_tool"
+        },
+        {
+            "from": "weather_tool",
+            "to": "tool_registry"
+        },
+        {
+            "from": "tool_registry",
             "to": "openai_chat"
+        },
+        {
+            "from": "websocket_server",
+            "to": "openai_chat"
+        },
+        {
+            "from": "openai_chat",
+            "to": "weather_tool"
         },
         {
             "from": "openai_chat",

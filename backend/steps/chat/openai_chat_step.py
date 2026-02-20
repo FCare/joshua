@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from enum import Enum
 
 from pipeline_framework import PipelineStep
-from messages.base_message import Message, InputMessage, OutputMessage, ErrorMessage, MessageType
+from messages.base_message import Message, InputMessage, OutputMessage, ErrorMessage, MessageType, ToolCallMessage, ToolResponseMessage, ToolRegistrationMessage
 
 try:
     import openai
@@ -120,6 +120,10 @@ class OpenAIChatStep(PipelineStep):
         self.accumulated_text = ""  # Pour accumuler le texte reçu en plusieurs fois
         self.current_client_id = None
         
+        # Tools management - nouveau
+        self.client_tools = {}  # {client_id: [tool_definitions]}
+        self.client_prompts = {}  # {client_id: enhanced_prompt} - prompts enrichis par client
+        
         # Thread safety
         self._lock = threading.Lock()
         
@@ -173,6 +177,18 @@ class OpenAIChatStep(PipelineStep):
                     input_message.metadata and
                     input_message.metadata.get('type') == 'system_prompt_update'):
                     self._handle_system_prompt_update(input_message)
+                    return
+                
+                # Gestion des messages tools_ready - nouveau
+                if (hasattr(input_message, 'metadata') and
+                    input_message.metadata and
+                    input_message.metadata.get('message_type') == 'tools_ready'):
+                    self._handle_tools_ready(input_message)
+                    return
+                
+                # Gestion des réponses d'outils - nouveau
+                if isinstance(input_message, ToolResponseMessage):
+                    self._handle_tool_response(input_message)
                     return
                 
                 # FILTRER: Ignorer les messages audio et transcript_chunk, ne traiter que text et transcript_done
@@ -282,11 +298,16 @@ class OpenAIChatStep(PipelineStep):
         """Prépare les messages pour l'API OpenAI"""
         messages = []
         
-        # Message système
-        if self.system_prompt:
+        # Message système - utiliser le prompt enrichi si disponible pour ce client
+        system_prompt = self.system_prompt
+        if (self.current_client_id and
+            self.current_client_id in self.client_prompts):
+            system_prompt = self.client_prompts[self.current_client_id]
+        
+        if system_prompt:
             messages.append({
                 "role": "system",
-                "content": self.system_prompt
+                "content": system_prompt
             })
         
         # Ajoute l'heure actuelle
@@ -304,21 +325,42 @@ class OpenAIChatStep(PipelineStep):
         return messages
     
     def _call_openai_streaming(self, messages):
-        """Appel OpenAI en mode streaming"""
+        """Appel OpenAI en mode streaming avec support des tools"""
         try:
             logger.info(f"💬 Calling OpenAI API with model {self.model}")
             logger.info(f"💬 Messages to send: {len(messages)} messages")
             
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=messages,
-                temperature=self.temperature,
-                max_tokens=self.max_tokens,
-                stream=True
-            )
+            # Paramètres de base
+            call_params = {
+                "model": self.model,
+                "messages": messages,
+                "temperature": self.temperature,
+                "max_tokens": self.max_tokens,
+                "stream": True
+            }
             
+            # Ajouter les outils spécifiques au client actuel
+            if (self.current_client_id and
+                self.current_client_id in self.client_tools):
+                call_params["tools"] = self.client_tools[self.current_client_id]
+                logger.info(f"🔧 Using {len(call_params['tools'])} tools for client {self.current_client_id}")
+            
+            response = self.client.chat.completions.create(**call_params)
+            
+            # Gestion du streaming avec support des tool calls
+            self._handle_streaming_response(response)
+            
+        except Exception as e:
+            logger.error(f"Erreur appel OpenAI: {e}")
+            self._send_error_response(str(e))
+    
+    def _handle_streaming_response(self, response):
+        """Gère la réponse streaming avec support des tool calls"""
+        try:
             logger.info(f"💬 API response received, starting streaming...")
             assistant_response = ""
+            tool_calls = []
+            current_tool_call = None
             chunk_count = 0
             
             for chunk in response:
@@ -328,10 +370,13 @@ class OpenAIChatStep(PipelineStep):
                     continue
                     
                 choice = chunk.choices[0]
-                if hasattr(choice, 'delta') and choice.delta and choice.delta.content is not None:
-                    content = choice.delta.content
+                delta = choice.delta
+                
+                # Gestion du contenu texte
+                if delta and delta.content:
+                    content = delta.content
                     assistant_response += content
-                    logger.info(f"OpenAI stream chunk: '{content[:50]}{'...' if len(content) > 50 else ''}'")
+                    logger.debug(f"OpenAI stream chunk: '{content[:50]}{'...' if len(content) > 50 else ''}'")
                     
                     # Envoie directement vers l'output_queue
                     if self.output_queue:
@@ -345,31 +390,55 @@ class OpenAIChatStep(PipelineStep):
                         )
                         self.output_queue.enqueue(output_message)
                 
+                # Gestion des tool calls
+                if delta and delta.tool_calls:
+                    for tool_call_delta in delta.tool_calls:
+                        if tool_call_delta.index >= len(tool_calls):
+                            # Nouveau tool call
+                            tool_calls.append({
+                                "id": tool_call_delta.id,
+                                "function": {
+                                    "name": tool_call_delta.function.name,
+                                    "arguments": tool_call_delta.function.arguments or ""
+                                }
+                            })
+                        else:
+                            # Continuer un tool call existant
+                            if tool_call_delta.function and tool_call_delta.function.arguments:
+                                tool_calls[tool_call_delta.index]["function"]["arguments"] += tool_call_delta.function.arguments
+                
                 # Vérifie si c'est la fin
-                if hasattr(choice, 'finish_reason') and choice.finish_reason == "stop":
-                    # Ajoute la réponse complète à l'historique
-                    if assistant_response:
-                        self.conversation_history.append({
-                            "role": "assistant", 
-                            "content": assistant_response
-                        })
-                    
-                    # Envoie un marqueur de fin (optionnel)
-                    if self.output_queue:
-                        finish_message = OutputMessage(
-                            data="",
-                            metadata={
-                                "original_client_id": self.current_client_id,
-                                "chunk_type": "finish",
-                                "timestamp": time.time()
-                            }
-                        )
-                        self.output_queue.enqueue(finish_message)
-                    break
+                if hasattr(choice, 'finish_reason'):
+                    if choice.finish_reason == "tool_calls":
+                        logger.info(f"🛠️ Tool calls detected, processing {len(tool_calls)} calls")
+                        self._handle_tool_calls(tool_calls, assistant_response)
+                        break
+                    elif choice.finish_reason == "stop":
+                        # Fin normale
+                        if assistant_response:
+                            self.conversation_history.append({
+                                "role": "assistant",
+                                "content": assistant_response
+                            })
+                        self._send_finish_message()
+                        break
             
         except Exception as e:
-            logger.error(f"Erreur appel OpenAI: {e}")
+            logger.error(f"Erreur handling streaming response: {e}")
             self._send_error_response(str(e))
+    
+    def _send_finish_message(self):
+        """Envoie un marqueur de fin de réponse"""
+        if self.output_queue:
+            finish_message = OutputMessage(
+                data="",
+                metadata={
+                    "original_client_id": self.current_client_id,
+                    "chunk_type": "finish",
+                    "timestamp": time.time()
+                }
+            )
+            self.output_queue.enqueue(finish_message)
     
     def _handle_system_prompt_update(self, prompt_message):
         """Traite une mise à jour du system prompt"""
@@ -471,6 +540,120 @@ class OpenAIChatStep(PipelineStep):
         
         return stats
     
+    def _handle_tools_ready(self, tools_ready_message):
+        """Traite la réception de tous les outils disponibles"""
+        try:
+            data = tools_ready_message.data
+            client_id = data.get('client_id')
+            username = data.get('username')
+            registered_tools = data.get('registered_tools', [])
+            timed_out = data.get('timed_out', False)
+            
+            # Enregistrer les outils pour ce client
+            with self._lock:
+                self.client_tools[client_id] = registered_tools
+                # Générer le prompt enrichi avec les descriptions d'outils
+                self.client_prompts[client_id] = self._generate_enhanced_prompt(registered_tools)
+            
+            status = "avec timeout" if timed_out else "complet"
+            logger.info(f"🛠️ Tools registration {status} pour {username}: {len(registered_tools)} outils")
+            
+            # Log des outils disponibles
+            for tool_def in registered_tools:
+                tool_name = tool_def['function']['name']
+                logger.info(f"  - {tool_name}")
+            
+            # Log du prompt enrichi
+            if registered_tools:
+                logger.info(f"📝 Prompt enrichi généré pour {username}")
+            
+        except Exception as e:
+            logger.error(f"Erreur traitement tools_ready: {e}")
+    
+    def _generate_enhanced_prompt(self, tools_definitions):
+        """Génère un prompt enrichi avec les descriptions des outils disponibles"""
+        if not tools_definitions:
+            return self.system_prompt
+        
+        # Construire la section des outils
+        tools_descriptions = ["Tu as accès aux outils suivants :"]
+        
+        for tool_def in tools_definitions:
+            func = tool_def['function']
+            name = func['name']
+            description = func['description']
+            tools_descriptions.append(f"- {name}: {description}")
+        
+        tools_descriptions.append("Utilise ces outils quand cela peut aider à répondre aux questions de l'utilisateur.")
+        
+        # Combiner le prompt de base avec les descriptions d'outils
+        tools_section = "\n".join(tools_descriptions)
+        enhanced_prompt = f"{self.system_prompt}\n\n{tools_section}"
+        
+        logger.debug(f"Prompt enrichi généré: {enhanced_prompt[:100]}...")
+        return enhanced_prompt
+    
+    def _handle_tool_response(self, tool_response: ToolResponseMessage):
+        """Traite la réponse d'un outil"""
+        try:
+            logger.info(f"🔧 Received tool response: {tool_response.tool_name} -> {tool_response.tool_call_id}")
+            
+            # Ajouter à l'historique
+            content = json.dumps(tool_response.result) if not tool_response.error else f"Erreur: {tool_response.error}"
+            self.conversation_history.append({
+                "role": "tool",
+                "content": content,
+                "tool_call_id": tool_response.tool_call_id
+            })
+            
+            # Continuer la conversation avec le résultat de l'outil
+            messages = self._prepare_messages()
+            self._call_openai_streaming(messages)
+            
+        except Exception as e:
+            logger.error(f"Erreur traitement tool response: {e}")
+    
+    def _handle_tool_calls(self, tool_calls, assistant_response):
+        """Gère les appels d'outils demandés par le LLM"""
+        try:
+            # Ajouter à l'historique avec les tool calls
+            self.conversation_history.append({
+                "role": "assistant",
+                "content": assistant_response,
+                "tool_calls": tool_calls
+            })
+            
+            logger.info(f"🛠️ Processing {len(tool_calls)} tool calls")
+            
+            # Envoyer les appels d'outils
+            for tool_call in tool_calls:
+                try:
+                    parameters = json.loads(tool_call["function"]["arguments"])
+                    tool_call_message = ToolCallMessage(
+                        tool_name=tool_call["function"]["name"],
+                        tool_call_id=tool_call["id"],
+                        parameters=parameters,
+                        metadata={"original_client_id": self.current_client_id}
+                    )
+                    
+                    if self.output_queue:
+                        self.output_queue.enqueue(tool_call_message)
+                        logger.info(f"📤 Tool call sent: {tool_call['function']['name']}")
+                        
+                except json.JSONDecodeError as e:
+                    logger.error(f"Erreur parsing arguments tool call: {e}")
+                    # Envoyer une réponse d'erreur pour ce tool call
+                    error_response = ToolResponseMessage(
+                        tool_call_id=tool_call["id"],
+                        tool_name=tool_call["function"]["name"],
+                        result=None,
+                        error=f"Arguments invalides: {e}"
+                    )
+                    self._handle_tool_response(error_response)
+                    
+        except Exception as e:
+            logger.error(f"Erreur handling tool calls: {e}")
+    
     def cleanup(self):
         """Nettoie les ressources du chat"""
         print(f"Nettoyage OpenAI Chat {self.name}")
@@ -483,5 +666,7 @@ class OpenAIChatStep(PipelineStep):
             self.conversation_history = []
             self.accumulated_text = ""
             self.current_client_id = None
+            self.client_tools = {}  # Nettoyer les outils clients
+            self.client_prompts = {}  # Nettoyer les prompts enrichis
         
         print(f"OpenAI Chat {self.name} nettoyé")

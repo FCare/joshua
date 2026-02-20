@@ -1,0 +1,34 @@
+{
+    "id": "weather_tool_step",
+    "name": "Weather Tool Step",
+    "description": "Outil météo utilisant l'API Open-Meteo (gratuite) avec support des function calls",
+    "class_name": "WeatherToolStep", 
+    "module_path": "steps.tools.weather_tool_step",
+    "config_schema": {
+        "type": "object",
+        "properties": {
+            "user_permissions": {
+                "type": "object",
+                "description": "Permissions d'accès par utilisateur",
+                "properties": {
+                    "allowed_users": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Utilisateurs autorisés (si vide = tous)",
+                        "default": []
+                    },
+                    "denied_users": {
+                        "type": "array", 
+                        "items": {"type": "string"},
+                        "description": "Utilisateurs interdits",
+                        "default": []
+                    }
+                },
+                "default": {}
+            }
+        }
+    },
+    "inputs": ["user_connection", "tool_call"],
+    "outputs": ["tool_registration", "tool_response"],
+    "capabilities": ["weather", "forecast", "geolocation", "function_calling"]
+}

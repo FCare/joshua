@@ -7,9 +7,9 @@
     "modalities": {
       "input": ["audio", "text", "image"],
       "output": ["audio", "text"],
-      "processing": ["speech-to-text", "conversation", "llm", "vision", "text-to-speech"]
+      "processing": ["speech-to-text", "conversation", "llm", "vision", "text-to-speech", "function_calling"]
     },
-    "features": ["streaming", "conversational", "voice", "real-time", "vision"],
+    "features": ["streaming", "conversational", "voice", "real-time", "vision", "tools"],
     "models": ["kyutai-asr", "qwen3-vl-8b-instruct", "kyutai-tts"]
   },
   "step_instances": [
@@ -28,6 +28,25 @@
         "mode": "audio_text_to_text_audio",
         "audio_format": "pcm16",
         "sample_rate": 24000
+      }
+    },
+    {
+      "instance_id": "tool_registry",
+      "step_definition": "tool_registry_step",
+      "config_overrides": {
+        "expected_tools": ["weather_tool"],
+        "registration_timeout": 5.0,
+        "llm_step_name": "openai_chat"
+      }
+    },
+    {
+      "instance_id": "weather_tool",
+      "step_definition": "weather_tool_step",
+      "config_overrides": {
+        "user_permissions": {
+          "allowed_users": [],
+          "denied_users": []
+        }
       }
     },
     {
@@ -82,7 +101,19 @@
     },
     {
       "from": "websocket_duplicator",
-      "to": ["asr_step", "openai_chat"]
+      "to": ["asr_step", "openai_chat", "tool_registry"]
+    },
+    {
+      "from": "tool_registry",
+      "to": "weather_tool"
+    },
+    {
+      "from": "weather_tool",
+      "to": "tool_registry"
+    },
+    {
+      "from": "tool_registry",
+      "to": "openai_chat"
     },
     {
       "from": "asr_step",
@@ -98,7 +129,7 @@
     },
     {
       "from": "duplicator",
-      "to": ["websocket_server", "sentence_normalizer", "tts_step"]
+      "to": ["websocket_server", "sentence_normalizer", "tts_step", "weather_tool"]
     },
     {
       "from": "sentence_normalizer",

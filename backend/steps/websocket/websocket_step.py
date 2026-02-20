@@ -272,6 +272,24 @@ class WebSocketStep(PipelineStep):
             }
             await websocket.send(json.dumps(connection_message))
             
+            # 🚀 NOUVEAU : Notifier le pipeline de la nouvelle connexion
+            if self.output_queue:
+                user_connection_message = InputMessage(
+                    data={
+                        "type": "user_connected",
+                        "client_id": client_id,
+                        "username": username,
+                        "timestamp": time.time()
+                    },
+                    metadata={
+                        "message_type": "user_connection",
+                        "client_id": client_id,
+                        "username": username
+                    }
+                )
+                self.output_queue.enqueue(user_connection_message)
+                logger.info(f"🔌 User connection notification sent for {username}")
+            
             async for message in websocket:
                 logger.info(f"Received message from {client_id}: type={type(message).__name__}, length={len(str(message)) if isinstance(message, str) else len(message) if isinstance(message, bytes) else 'unknown'}")
                 
