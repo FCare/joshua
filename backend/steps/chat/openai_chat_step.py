@@ -411,6 +411,7 @@ class OpenAIChatStep(PipelineStep):
                             # Nouveau tool call
                             tool_calls.append({
                                 "id": tool_call_delta.id,
+                                "type": "function",
                                 "function": {
                                     "name": tool_call_delta.function.name,
                                     "arguments": tool_call_delta.function.arguments or ""
