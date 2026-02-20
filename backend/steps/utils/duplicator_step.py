@@ -92,9 +92,10 @@ class DuplicatorStep(PipelineStep):
                         duplicated_message.metadata['duplicated_at'] = time.time()
                     
                     # Envoie vers la queue de sortie
+                    logger.info(f"🐛 DEBUG: Duplicator about to enqueue to branch {i}, queue: {output_queue}")
                     output_queue.enqueue(duplicated_message)
                     duplicated_count += 1
-                    logger.debug(f"Message dupliqué vers branche {i}")
+                    logger.info(f"🐛 DEBUG: Message successfully duplicated to branch {i}")
                     
                 except Exception as e:
                     logger.error(f"Erreur duplication vers branche {i}: {e}")
