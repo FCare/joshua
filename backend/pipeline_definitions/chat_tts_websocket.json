@@ -93,6 +93,11 @@
       "instance_id": "tool_registry_duplicator",
       "step_definition": "Duplicator Step",
       "config_overrides": {}
+    },
+    {
+      "instance_id": "weather_tool_duplicator",
+      "step_definition": "Duplicator Step",
+      "config_overrides": {}
     }
   ],
   "connections": [
@@ -118,11 +123,11 @@
     },
     {
       "from": "weather_tool",
-      "to": "tool_registry"
+      "to": "weather_tool_duplicator"
     },
     {
-      "from": "weather_tool",
-      "to": "openai_chat"
+      "from": "weather_tool_duplicator",
+      "to": ["tool_registry", "openai_chat"]
     },
     {
       "from": "asr_step",
