@@ -113,7 +113,8 @@ class JoshuaChat {
         // Auth button
         this.authBtn.addEventListener('click', () => {
             if (this.isAuthenticated) {
-                window.location.href = '/profile.html';
+                // Redirect to centralized Voight-Kampff dashboard
+                window.location.href = 'https://auth.caronboulme.fr/auth/dashboard';
             } else {
                 this.redirectToLogin();
             }
@@ -671,7 +672,11 @@ class JoshuaChat {
     }
 
     redirectToLogin() {
-        window.location.href = '/login.html';
+        // Redirect to centralized Voight-Kampff authentication
+        const currentUrl = window.location.href;
+        const serviceName = 'Joshua Assistant';
+        const authUrl = `https://auth.caronboulme.fr/auth/login?redirect_after=${encodeURIComponent(currentUrl)}&service_name=${encodeURIComponent(serviceName)}`;
+        window.location.href = authUrl;
     }
 
     async logout() {
