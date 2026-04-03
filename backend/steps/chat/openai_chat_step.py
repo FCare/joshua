@@ -637,7 +637,7 @@ class OpenAIChatStep(PipelineStep):
         logger.debug(f"Prompt enrichi généré: {enhanced_prompt[:100]}...")
         return enhanced_prompt
     
-    def _handle_tool_response(self, tool_response: Message):
+    def _handle_tool_response(self, tool_response: BaseMessage):
         """Traite la réponse d'un outil"""
         try:
             logger.info(f"🔧 Received tool response: {tool_response.tool_name} -> {tool_response.tool_call_id}")
