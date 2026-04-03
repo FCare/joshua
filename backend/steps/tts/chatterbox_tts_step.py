@@ -55,9 +55,8 @@ class ChatterboxTTSStep(PipelineStep):
     def _handle_input_message(self, input_message):
         # Validation des types de messages autorisés - accepte tous les messages de sortie
         from messages.chat_message import ChatResponseMessage
-        from messages.duplicator_message import OutputMessage
         
-        allowed_classes = (ChatResponseMessage, OutputMessage)
+        allowed_classes = (ChatResponseMessage)
         if not isinstance(input_message, allowed_classes):
             logger.warning(f"🔊 ChatterboxTTS: Type de message non autorisé: {type(input_message).__name__}")
             return

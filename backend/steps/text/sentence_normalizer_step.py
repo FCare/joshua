@@ -90,9 +90,8 @@ class SentenceNormalizerStep(PipelineStep):
         """
         # Validation des types de messages autorisés - accepte tous les messages de sortie
         from messages.chat_message import ChatResponseMessage
-        from messages.duplicator_message import OutputMessage
         
-        allowed_classes = (ChatResponseMessage, OutputMessage)
+        allowed_classes = (ChatResponseMessage)
         if not isinstance(message, allowed_classes):
             logger.warning(f"📝 SentenceNormalizer: Type de message non autorisé: {type(message).__name__}")
             return

@@ -79,9 +79,8 @@ class WebSocketStep(PipelineStep):
         # Validation des types de messages autorisés - accepte tous les messages de sortie
         from messages.chat_message import ChatResponseMessage
         from messages.tts_message import AudioChunkOutputMessage, AudioFinishedMessage
-        from messages.duplicator_message import OutputMessage
         
-        allowed_classes = (ChatResponseMessage, AudioChunkOutputMessage, AudioFinishedMessage, OutputMessage)
+        allowed_classes = (ChatResponseMessage, AudioChunkOutputMessage, AudioFinishedMessage)
         if not isinstance(message_data, allowed_classes):
             logger.warning(f"🌐 WebSocket: Type de message non autorisé: {type(message_data).__name__}")
             return
