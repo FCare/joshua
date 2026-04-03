@@ -57,7 +57,7 @@ class ToolRegistryStep(PipelineStep):
         """Démarre le processus d'enregistrement pour un nouveau client"""
         try:
             # Extraire les données selon le format du message
-            if hasattr(connection_message, 'data') and isinstance(connection_message.data, dict):
+            if isinstance(connection_message.data, dict):
                 # Format WebSocketStep: data contient les infos de connexion
                 username = connection_message.data.get('username')
                 client_id = connection_message.data.get('client_id')

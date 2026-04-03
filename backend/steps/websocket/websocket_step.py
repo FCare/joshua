@@ -119,8 +119,7 @@ class WebSocketStep(PipelineStep):
             data = None
             metadata = getattr(message_data, 'metadata', {})
             
-            if hasattr(message_data, 'data'):
-                data = message_data.data
+            data = message_data.data
             # Tous les messages utilisent .data
                 
             if data is None:

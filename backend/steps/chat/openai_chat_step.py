@@ -242,12 +242,7 @@ class OpenAIChatStep(PipelineStep):
         """Traite les mises à jour de system prompt"""
         try:
             # Extraire le nouveau system prompt
-            if hasattr(input_message, 'data'):
-                new_system_prompt = str(input_message.data)
-            elif hasattr(input_message, 'text'):
-                new_system_prompt = input_message.text
-            else:
-                new_system_prompt = str(input_message)
+            new_system_prompt = str(input_message.data)
             
             # Mettre à jour le system prompt
             self.system_prompt = new_system_prompt

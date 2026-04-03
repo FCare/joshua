@@ -97,13 +97,13 @@ class SentenceNormalizerStep(PipelineStep):
             return
             
         try:
-            if (hasattr(message, 'metadata') and message.metadata and
+            if (message.metadata and
                 message.metadata.get('chunk_type') == 'finish'):
                 return
             
             # Vérifier à la fois 'data' et 'result' (OutputMessage vs InputMessage)
             text_chunk = None
-            if hasattr(message, 'data') and message.data:
+            if message.data:
                 text_chunk = message.data
             # Tous les messages utilisent .data
             
@@ -138,7 +138,7 @@ class SentenceNormalizerStep(PipelineStep):
             
             # 🎯 CORRECTIF: Obtenir les données source depuis data OU result
             original_source_data = ""
-            if hasattr(source_message, 'data') and source_message.data:
+            if source_message.data:
                 original_source_data = source_message.data
             # Tous les messages utilisent .data
             
@@ -150,7 +150,7 @@ class SentenceNormalizerStep(PipelineStep):
                 "is_last_phrase": is_last_phrase  # 🎯 MÉTADONNÉE CLÉ pour le TTS
             }
             
-            if hasattr(source_message, 'metadata') and source_message.metadata:
+            if source_message.metadata:
                 # Préserver l'original_client_id du message source
                 if 'original_client_id' in source_message.metadata:
                     new_metadata['original_client_id'] = source_message.metadata['original_client_id']

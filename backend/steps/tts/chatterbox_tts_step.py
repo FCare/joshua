@@ -64,7 +64,7 @@ class ChatterboxTTSStep(PipelineStep):
         try:
             # Préserver les métadonnées pour le routage (client_id)
             original_metadata = {}
-            if hasattr(input_message, 'metadata') and input_message.metadata:
+            if input_message.metadata:
                 original_metadata = input_message.metadata.copy()
             
             # 🎯 DÉTECTER LE SIGNAL FINISH DU CHAT (vient du duplicator)
@@ -84,10 +84,7 @@ class ChatterboxTTSStep(PipelineStep):
                 return
             
             # Tous les messages utilisent .data
-            if hasattr(input_message, 'data'):
-                text_data = str(input_message.data)
-            else:
-                text_data = str(input_message)
+            text_data = str(input_message.data)
             
             # Traiter chaque phrase normalisée
             print(f"🔊 TTS reçu phrase normalisée: '{text_data}' from client: {original_metadata.get('original_client_id')}")
@@ -126,7 +123,7 @@ class ChatterboxTTSStep(PipelineStep):
     
     def process_message(self, message) -> Optional[BaseMessage]:
         try:
-            if hasattr(message, 'data') and message.data:
+            if message.data:
                 text = str(message.data)
                 self._synthesize_text(text)
                 return None

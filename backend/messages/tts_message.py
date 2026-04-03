@@ -21,7 +21,7 @@ class AudioChunkOutputMessage(BaseMessage):
             **(metadata or {})
         }
         
-        super().__init__(data=data, metadata=tts_metadata)
+        return cls(data=data, metadata=tts_metadata)
     
     @property
     def audio_data(self) -> bytes:
