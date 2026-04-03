@@ -157,7 +157,7 @@ class SentenceNormalizerStep(PipelineStep):
                     new_metadata['original_client_id'] = source_message.metadata['original_client_id']
             
             from messages.chat_message import ChatResponseMessage
-            output_message = ChatResponseMessage(
+            output_message = ChatResponseMessage.create(
                 text=normalized,
                 is_partial=not is_last_phrase,
                 metadata=new_metadata

@@ -406,7 +406,7 @@ class OpenAIChatStep(PipelineStep):
                     # Envoie directement vers l'output_queue
                     if self.output_queue:
                         from messages.chat_message import ChatResponseMessage
-                        output_message = ChatResponseMessage(
+                        output_message = ChatResponseMessage.create(
                             text=content,
                             is_partial=True,
                             metadata={
@@ -459,7 +459,7 @@ class OpenAIChatStep(PipelineStep):
         """Envoie un marqueur de fin de réponse"""
         if self.output_queue:
             from messages.chat_message import ChatResponseMessage
-            finish_message = ChatResponseMessage(
+            finish_message = ChatResponseMessage.create(
                 text="",
                 is_partial=False,
                 metadata={
@@ -499,7 +499,7 @@ class OpenAIChatStep(PipelineStep):
             if response_event.type == LLMEventType.PARTIAL_RESPONSE:
                 logger.info(f"Handling partial response: '{response_event.data}'")
                 from messages.chat_message import ChatResponseMessage
-                response_message = ChatResponseMessage(
+                response_message = ChatResponseMessage.create(
                     text=response_event.data,
                     is_partial=True,
                     metadata={
@@ -514,7 +514,7 @@ class OpenAIChatStep(PipelineStep):
             elif response_event.type == LLMEventType.FINISH_RESPONSE:
                 logger.info(f"Handling finish response event")
                 from messages.chat_message import ChatResponseMessage
-                finish_message = ChatResponseMessage(
+                finish_message = ChatResponseMessage.create(
                     text="",
                     is_partial=False,
                     metadata={
@@ -540,7 +540,7 @@ class OpenAIChatStep(PipelineStep):
     def _send_error_response(self, error_msg: str):
         """Envoie une réponse d'erreur"""
         from messages.error_message import ErrorMessage
-        error_message = ErrorMessage(
+        error_message = ErrorMessage.create(
             error=error_msg,
             step_name=self.name,
             metadata={
@@ -674,7 +674,7 @@ class OpenAIChatStep(PipelineStep):
                 try:
                     parameters = json.loads(tool_call["function"]["arguments"])
                     from messages.tool_message import ToolCallMessage
-                    tool_call_message = ToolCallMessage(
+                    tool_call_message = ToolCallMessage.create(
                         tool_name=tool_call["function"]["name"],
                         tool_call_id=tool_call["id"],
                         parameters=parameters,
@@ -689,7 +689,7 @@ class OpenAIChatStep(PipelineStep):
                     logger.error(f"Erreur parsing arguments tool call: {e}")
                     # Envoyer une réponse d'erreur pour ce tool call
                     from messages.tool_message import ToolResponseMessage
-                    error_response = ToolResponseMessage(
+                    error_response = ToolResponseMessage.create(
                         tool_call_id=tool_call["id"],
                         tool_name=tool_call["function"]["name"],
                         result=None,

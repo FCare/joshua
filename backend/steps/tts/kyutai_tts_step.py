@@ -194,7 +194,7 @@ class KyutaiTTS:
             audio_format = "ogg_vorbis" if audio_bytes.startswith(b'OggS') else "pcm_int16"
             
             from messages.tts_message import AudioChunkOutputMessage
-            message = AudioChunkOutputMessage(
+            message = AudioChunkOutputMessage.create(
                 audio_data=audio_bytes,
                 chunk_index=self.audio_chunks_sent,
                 total_chunks=1,  # Default value

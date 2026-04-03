@@ -127,7 +127,7 @@ class BaseToolStep(PipelineStep, ABC):
             result = self._execute_tool(parameters)
             
             # Créer le message de réponse
-            response = ToolResponseMessage(
+            response = ToolResponseMessage.create(
                 tool_call_id=tool_call_id,
                 tool_name=tool_name,
                 result=result,
@@ -142,7 +142,7 @@ class BaseToolStep(PipelineStep, ABC):
         except Exception as e:
             logger.error(f"Erreur lors de l'exécution de l'outil {self.name}: {e}")
             # Envoyer une erreur
-            error_response = ToolResponseMessage(
+            error_response = ToolResponseMessage.create(
                 tool_call_id=tool_call_id,
                 tool_name=tool_name,
                 result=None,

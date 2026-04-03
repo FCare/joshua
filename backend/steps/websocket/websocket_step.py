@@ -315,7 +315,7 @@ class WebSocketStep(PipelineStep):
                             metadata = data.get("metadata", {})
                             
                             logger.info(f"Processing JSON audio message from {client_id}: {len(audio_bytes)} bytes")
-                            audio_message = AudioInputMessage(
+                            audio_message = AudioInputMessage.create(
                                 audio_data=audio_bytes,
                                 client_id=client_id,
                                 format=metadata.get("format", self.audio_format),
@@ -339,7 +339,7 @@ class WebSocketStep(PipelineStep):
                         
                 elif self.mode == "audio_to_text" and isinstance(message, bytes):
                     logger.info(f"Processing raw audio message from {client_id}: {len(message)} bytes")
-                    audio_message = AudioInputMessage(
+                    audio_message = AudioInputMessage.create(
                         audio_data=message,
                         client_id=client_id,
                         format=self.audio_format,
@@ -374,7 +374,7 @@ class WebSocketStep(PipelineStep):
                         images = []
                         logger.info(f"Using raw text message: '{text_data}'")
                     
-                    text_message = TextInputMessage(
+                    text_message = TextInputMessage.create(
                         text=text_data,
                         client_id=client_id,
                         images=images,

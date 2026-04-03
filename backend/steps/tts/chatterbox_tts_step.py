@@ -107,7 +107,7 @@ class ChatterboxTTSStep(PipelineStep):
         try:
             # Envoyer directement le signal finish au websocket
             from messages.tts_message import AudioFinishedMessage
-            finish_message = AudioFinishedMessage(
+            finish_message = AudioFinishedMessage.create(
                 total_chunks=0,
                 total_bytes=0,
                 metadata={
@@ -134,7 +134,7 @@ class ChatterboxTTSStep(PipelineStep):
             
         except Exception as e:
             from messages.error_message import ErrorMessage
-            return ErrorMessage(error=str(e), step_name=self.name)
+            return ErrorMessage.create(error=str(e), step_name=self.name)
     
     def _synthesize_text(self, text: str):
         # Métriques de performance
@@ -247,7 +247,7 @@ class ChatterboxTTSStep(PipelineStep):
         
         # Créer et envoyer le message audio
         from messages.tts_message import AudioChunkOutputMessage
-        audio_message = AudioChunkOutputMessage(
+        audio_message = AudioChunkOutputMessage.create(
             audio_data=chunk,
             chunk_index=0,  # Could be set from metadata if needed
             total_chunks=1,  # Could be set from metadata if needed
@@ -284,7 +284,7 @@ class ChatterboxTTSStep(PipelineStep):
         
         # Créer et envoyer le message de fin
         from messages.tts_message import AudioFinishedMessage
-        finish_message = AudioFinishedMessage(
+        finish_message = AudioFinishedMessage.create(
             total_chunks=0,
             total_bytes=0,
             metadata=finish_metadata

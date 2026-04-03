@@ -317,7 +317,7 @@ class MoshiASR:
                 
                 # Message transcript_chunk pour streaming
                 from messages.asr_message import TranscriptionMessage
-                message = TranscriptionMessage(
+                message = TranscriptionMessage.create(
                     text=event.text,
                     confidence=1.0,  # Default confidence
                     is_final=False,  # partial transcription
@@ -336,7 +336,7 @@ class MoshiASR:
                 full_text = ' '.join(self.text_buffer).strip()
                 logger.debug(f"{self.name}: Creating transcript_done from buffer: '{full_text}'")
                 from messages.asr_message import TranscriptionMessage
-                message = TranscriptionMessage(
+                message = TranscriptionMessage.create(
                     text=full_text,
                     confidence=1.0,  # Default confidence
                     is_final=True,   # complete transcription
