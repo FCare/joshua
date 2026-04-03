@@ -193,7 +193,7 @@ class KyutaiTTS:
             # Détecter le format audio - maintenant on envoie du PCM int16
             audio_format = "ogg_vorbis" if audio_bytes.startswith(b'OggS') else "pcm_int16"
             
-            from backend.messages.tts_message import AudioChunkOutputMessage
+            from messages.tts_message import AudioChunkOutputMessage
             message = AudioChunkOutputMessage(
                 audio_data=audio_bytes,
                 chunk_index=self.audio_chunks_sent,
@@ -342,8 +342,8 @@ class KyutaiTTSStep(PipelineStep):
     
     def _handle_input_message(self, message: BaseMessage):
         # Validation des types de messages autorisés - accepte tous les messages de sortie
-        from backend.messages.chat_message import ChatResponseMessage
-        from backend.messages.duplicator_message import OutputMessage
+        from messages.chat_message import ChatResponseMessage
+        from messages.duplicator_message import OutputMessage
         
         allowed_classes = (ChatResponseMessage, OutputMessage)
         if not isinstance(message, allowed_classes):

@@ -171,10 +171,10 @@ class OpenAIChatStep(PipelineStep):
     
     def _handle_input_event(self, input_message):
         # Validation des types de messages autorisés
-        from backend.messages.websocket_message import TextInputMessage, AudioInputMessage
-        from backend.messages.tool_message import ToolResponseMessage
-        from backend.messages.chat_message import SystemPromptMessage, ToolsReadyMessage
-        from backend.messages.duplicator_message import InputMessage
+        from messages.websocket_message import TextInputMessage, AudioInputMessage
+        from messages.tool_message import ToolResponseMessage
+        from messages.chat_message import SystemPromptMessage, ToolsReadyMessage
+        from messages.duplicator_message import InputMessage
         
         allowed_classes = (TextInputMessage, AudioInputMessage, ToolResponseMessage, SystemPromptMessage, ToolsReadyMessage, InputMessage)
         if not isinstance(input_message, allowed_classes):
@@ -405,7 +405,7 @@ class OpenAIChatStep(PipelineStep):
                     
                     # Envoie directement vers l'output_queue
                     if self.output_queue:
-                        from backend.messages.chat_message import ChatResponseMessage
+                        from messages.chat_message import ChatResponseMessage
                         output_message = ChatResponseMessage(
                             text=content,
                             is_partial=True,
@@ -458,7 +458,7 @@ class OpenAIChatStep(PipelineStep):
     def _send_finish_message(self):
         """Envoie un marqueur de fin de réponse"""
         if self.output_queue:
-            from backend.messages.chat_message import ChatResponseMessage
+            from messages.chat_message import ChatResponseMessage
             finish_message = ChatResponseMessage(
                 text="",
                 is_partial=False,
@@ -498,7 +498,7 @@ class OpenAIChatStep(PipelineStep):
         try:
             if response_event.type == LLMEventType.PARTIAL_RESPONSE:
                 logger.info(f"Handling partial response: '{response_event.data}'")
-                from backend.messages.chat_message import ChatResponseMessage
+                from messages.chat_message import ChatResponseMessage
                 response_message = ChatResponseMessage(
                     text=response_event.data,
                     is_partial=True,
@@ -513,7 +513,7 @@ class OpenAIChatStep(PipelineStep):
                 
             elif response_event.type == LLMEventType.FINISH_RESPONSE:
                 logger.info(f"Handling finish response event")
-                from backend.messages.chat_message import ChatResponseMessage
+                from messages.chat_message import ChatResponseMessage
                 finish_message = ChatResponseMessage(
                     text="",
                     is_partial=False,
@@ -539,7 +539,7 @@ class OpenAIChatStep(PipelineStep):
     
     def _send_error_response(self, error_msg: str):
         """Envoie une réponse d'erreur"""
-        from backend.messages.error_message import ErrorMessage
+        from messages.error_message import ErrorMessage
         error_message = ErrorMessage(
             error=error_msg,
             step_name=self.name,
@@ -673,7 +673,7 @@ class OpenAIChatStep(PipelineStep):
             for tool_call in tool_calls:
                 try:
                     parameters = json.loads(tool_call["function"]["arguments"])
-                    from backend.messages.tool_message import ToolCallMessage
+                    from messages.tool_message import ToolCallMessage
                     tool_call_message = ToolCallMessage(
                         tool_name=tool_call["function"]["name"],
                         tool_call_id=tool_call["id"],
@@ -688,7 +688,7 @@ class OpenAIChatStep(PipelineStep):
                 except json.JSONDecodeError as e:
                     logger.error(f"Erreur parsing arguments tool call: {e}")
                     # Envoyer une réponse d'erreur pour ce tool call
-                    from backend.messages.tool_message import ToolResponseMessage
+                    from messages.tool_message import ToolResponseMessage
                     error_response = ToolResponseMessage(
                         tool_call_id=tool_call["id"],
                         tool_name=tool_call["function"]["name"],

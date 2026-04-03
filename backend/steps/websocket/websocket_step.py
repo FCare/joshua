@@ -77,9 +77,9 @@ class WebSocketStep(PipelineStep):
     async def _handle_input_message_async(self, message_data):
         """Handler ASYNC pour traiter les réponses du ChatStep - ChunkQueue gère la boucle !"""
         # Validation des types de messages autorisés - accepte tous les messages de sortie
-        from backend.messages.chat_message import ChatResponseMessage
-        from backend.messages.tts_message import AudioChunkOutputMessage, AudioFinishedMessage
-        from backend.messages.duplicator_message import OutputMessage
+        from messages.chat_message import ChatResponseMessage
+        from messages.tts_message import AudioChunkOutputMessage, AudioFinishedMessage
+        from messages.duplicator_message import OutputMessage
         
         allowed_classes = (ChatResponseMessage, AudioChunkOutputMessage, AudioFinishedMessage, OutputMessage)
         if not isinstance(message_data, allowed_classes):

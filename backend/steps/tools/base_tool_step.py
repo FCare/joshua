@@ -71,7 +71,7 @@ class BaseToolStep(PipelineStep, ABC):
             # Vérifier si cet utilisateur a accès à cet outil
             if self._user_has_access(username):
                 # Envoyer la déclaration d'outil
-                registration_message = ToolRegistrationMessage(
+                registration_message = ToolRegistrationMessage.create(
                     tool_definition=self.tool_definition,
                     source_step=self.name,
                     metadata={

@@ -89,8 +89,8 @@ class SentenceNormalizerStep(PipelineStep):
         Handler ChunkQueue : traite les chunks de texte et produit des phrases normalisées
         """
         # Validation des types de messages autorisés - accepte tous les messages de sortie
-        from backend.messages.chat_message import ChatResponseMessage
-        from backend.messages.duplicator_message import OutputMessage
+        from messages.chat_message import ChatResponseMessage
+        from messages.duplicator_message import OutputMessage
         
         allowed_classes = (ChatResponseMessage, OutputMessage)
         if not isinstance(message, allowed_classes):
@@ -156,7 +156,7 @@ class SentenceNormalizerStep(PipelineStep):
                 if 'original_client_id' in source_message.metadata:
                     new_metadata['original_client_id'] = source_message.metadata['original_client_id']
             
-            from backend.messages.chat_message import ChatResponseMessage
+            from messages.chat_message import ChatResponseMessage
             output_message = ChatResponseMessage(
                 text=normalized,
                 is_partial=not is_last_phrase,

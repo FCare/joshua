@@ -54,8 +54,8 @@ class ChatterboxTTSStep(PipelineStep):
     
     def _handle_input_message(self, input_message):
         # Validation des types de messages autorisés - accepte tous les messages de sortie
-        from backend.messages.chat_message import ChatResponseMessage
-        from backend.messages.duplicator_message import OutputMessage
+        from messages.chat_message import ChatResponseMessage
+        from messages.duplicator_message import OutputMessage
         
         allowed_classes = (ChatResponseMessage, OutputMessage)
         if not isinstance(input_message, allowed_classes):
@@ -106,7 +106,7 @@ class ChatterboxTTSStep(PipelineStep):
         """
         try:
             # Envoyer directement le signal finish au websocket
-            from backend.messages.tts_message import AudioFinishedMessage
+            from messages.tts_message import AudioFinishedMessage
             finish_message = AudioFinishedMessage(
                 total_chunks=0,
                 total_bytes=0,
@@ -133,7 +133,7 @@ class ChatterboxTTSStep(PipelineStep):
                 return None
             
         except Exception as e:
-            from backend.messages.error_message import ErrorMessage
+            from messages.error_message import ErrorMessage
             return ErrorMessage(error=str(e), step_name=self.name)
     
     def _synthesize_text(self, text: str):
@@ -246,7 +246,7 @@ class ChatterboxTTSStep(PipelineStep):
             audio_metadata["type"] = "audio_chunk"
         
         # Créer et envoyer le message audio
-        from backend.messages.tts_message import AudioChunkOutputMessage
+        from messages.tts_message import AudioChunkOutputMessage
         audio_message = AudioChunkOutputMessage(
             audio_data=chunk,
             chunk_index=0,  # Could be set from metadata if needed
@@ -283,7 +283,7 @@ class ChatterboxTTSStep(PipelineStep):
             print(f"🏁 TTS finished phrase for client: {finish_metadata.get('original_client_id')}")
         
         # Créer et envoyer le message de fin
-        from backend.messages.tts_message import AudioFinishedMessage
+        from messages.tts_message import AudioFinishedMessage
         finish_message = AudioFinishedMessage(
             total_chunks=0,
             total_bytes=0,

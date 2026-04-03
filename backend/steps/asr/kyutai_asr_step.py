@@ -316,7 +316,7 @@ class MoshiASR:
                 logger.debug(f"{self.name}: Added word '{event.text}' to buffer, buffer now: {self.text_buffer}")
                 
                 # Message transcript_chunk pour streaming
-                from backend.messages.asr_message import TranscriptionMessage
+                from messages.asr_message import TranscriptionMessage
                 message = TranscriptionMessage(
                     text=event.text,
                     confidence=1.0,  # Default confidence
@@ -335,7 +335,7 @@ class MoshiASR:
                 # Message transcript_done pour LLM
                 full_text = ' '.join(self.text_buffer).strip()
                 logger.debug(f"{self.name}: Creating transcript_done from buffer: '{full_text}'")
-                from backend.messages.asr_message import TranscriptionMessage
+                from messages.asr_message import TranscriptionMessage
                 message = TranscriptionMessage(
                     text=full_text,
                     confidence=1.0,  # Default confidence
@@ -559,8 +559,8 @@ class KyutaiASRStep(PipelineStep):
     
     def _handle_input_message(self, message: BaseMessage):
         # Validation des types de messages autorisés - accepte tous les messages d'entrée audio
-        from backend.messages.websocket_message import AudioInputMessage
-        from backend.messages.duplicator_message import InputMessage
+        from messages.websocket_message import AudioInputMessage
+        from messages.duplicator_message import InputMessage
         
         allowed_classes = (AudioInputMessage, InputMessage)
         if not isinstance(message, allowed_classes):

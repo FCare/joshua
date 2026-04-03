@@ -64,13 +64,14 @@ class ToolResponseMessage(BaseMessage):
 class ToolRegistrationMessage(BaseMessage):
     """Message d'enregistrement d'un outil"""
     
-    def __init__(self, tool_definition: Dict[str, Any], source_step: str, metadata: Optional[Dict] = None):
+    @classmethod
+    def create(cls, tool_definition: Dict[str, Any], source_step: str, metadata: Optional[Dict] = None):
         # Créer data comme dict avec les informations d'enregistrement
         data = {
             "tool_definition": tool_definition,
             "source_step": source_step
         }
-        super().__init__(data=data, metadata=metadata)
+        return cls(data=data, metadata=metadata)
     
     @property
     def tool_definition(self) -> Dict[str, Any]:
