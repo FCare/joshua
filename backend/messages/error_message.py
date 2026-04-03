@@ -7,14 +7,15 @@ from messages.base_message import BaseMessage
 class ErrorMessage(BaseMessage):
     """Message d'erreur avec informations de debug"""
     
-    def __init__(self, error: str, step_name: str, metadata: Optional[Dict] = None):
+    @classmethod
+    def create(cls, error: str, step_name: str, metadata: Optional[Dict] = None):
         # Créer data comme dict avec les informations d'erreur
         data = {
             "error": error,
             "step_name": step_name,
             "type": "error"
         }
-        super().__init__(data=data, metadata=metadata)
+        return cls(data=data, metadata=metadata)
     
     @property
     def error(self) -> str:

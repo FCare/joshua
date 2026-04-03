@@ -7,7 +7,8 @@ from messages.base_message import BaseMessage
 class AudioChunkOutputMessage(BaseMessage):
     """Message de chunk audio émis par le TTS"""
     
-    def __init__(self, audio_data: bytes, chunk_index: int = 0, total_chunks: int = 1,
+    @classmethod
+    def create(cls, audio_data: bytes, chunk_index: int = 0, total_chunks: int = 1,
                  metadata: Optional[Dict] = None):
         # Créer data avec les données audio
         data = audio_data  # Les données audio restent en bytes
@@ -39,7 +40,8 @@ class AudioChunkOutputMessage(BaseMessage):
 class AudioFinishedMessage(BaseMessage):
     """Message de fin d'audio émis par le TTS"""
     
-    def __init__(self, total_chunks: int, total_bytes: int, duration_seconds: float = 0.0,
+    @classmethod
+    def create(cls, total_chunks: int, total_bytes: int, duration_seconds: float = 0.0,
                  metadata: Optional[Dict] = None):
         # Créer data avec les statistiques audio
         data = {
@@ -49,7 +51,7 @@ class AudioFinishedMessage(BaseMessage):
             "duration_seconds": duration_seconds
         }
         
-        super().__init__(data=data, metadata=metadata)
+        return cls(data=data, metadata=metadata)
     
     @property
     def total_chunks(self) -> int:

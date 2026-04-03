@@ -7,13 +7,15 @@ from messages.base_message import BaseMessage
 class InputMessage(BaseMessage):
     """Message d'entrée générique (utilisé par DuplicatorStep)"""
     
-    def __init__(self, data: Any, metadata: Optional[Dict] = None):
-        super().__init__(data=data, metadata=metadata)
+    @classmethod
+    def create(cls, data: Any, metadata: Optional[Dict] = None):
+        return cls(data=data, metadata=metadata)
 
 
 @dataclass(frozen=True)
 class OutputMessage(BaseMessage):
     """Message de sortie générique (utilisé par DuplicatorStep)"""
     
-    def __init__(self, data: Any, metadata: Optional[Dict] = None):
-        super().__init__(data=data, metadata=metadata)
+    @classmethod
+    def create(cls, data: Any, metadata: Optional[Dict] = None):
+        return cls(data=data, metadata=metadata)

@@ -6,16 +6,15 @@ from messages.base_message import BaseMessage
 @dataclass(frozen=True)
 class SystemPromptMessage(BaseMessage):
     """Message de mise à jour du system prompt"""
-    prompt: str
     
-    def __init__(self, prompt: str, metadata: Optional[Dict] = None):
+    @classmethod
+    def create(cls, prompt: str, metadata: Optional[Dict] = None):
         # Créer data comme dict avec les informations du prompt
         data = {
             "prompt": prompt,
             "type": "system_prompt"
         }
-        super().__init__(data=data, metadata=metadata)
-        object.__setattr__(self, 'prompt', prompt)
+        return cls(data=data, metadata=metadata)
     
     @property
     def prompt(self) -> str:
@@ -25,19 +24,16 @@ class SystemPromptMessage(BaseMessage):
 @dataclass(frozen=True)
 class ChatResponseMessage(BaseMessage):
     """Message de réponse de chat"""
-    text: str
-    is_partial: bool
     
-    def __init__(self, text: str, is_partial: bool = False, metadata: Optional[Dict] = None):
+    @classmethod
+    def create(cls, text: str, is_partial: bool = False, metadata: Optional[Dict] = None):
         # Créer data comme dict avec les informations de la réponse
         data = {
             "text": text,
             "is_partial": is_partial,
             "type": "chat_response"
         }
-        super().__init__(data=data, metadata=metadata)
-        object.__setattr__(self, 'text', text)
-        object.__setattr__(self, 'is_partial', is_partial)
+        return cls(data=data, metadata=metadata)
     
     @property
     def text(self) -> str:

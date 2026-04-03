@@ -30,7 +30,8 @@ class UserConnectionMessage(BaseMessage):
 class AudioInputMessage(BaseMessage):
     """Message audio reçu via WebSocket"""
     
-    def __init__(self, audio_data: bytes, client_id: str, format: str = "pcm16",
+    @classmethod
+    def create(cls, audio_data: bytes, client_id: str, format: str = "pcm16",
                  sample_rate: int = 24000, metadata: Optional[Dict] = None):
         # Créer data avec les données audio
         data = audio_data  # Les données audio restent en bytes
@@ -45,7 +46,7 @@ class AudioInputMessage(BaseMessage):
             **(metadata or {})
         }
         
-        super().__init__(data=data, metadata=audio_metadata)
+        return cls(data=data, metadata=audio_metadata)
     
     @property
     def audio_data(self) -> bytes:
@@ -68,7 +69,8 @@ class AudioInputMessage(BaseMessage):
 class TextInputMessage(BaseMessage):
     """Message texte reçu via WebSocket (avec support images)"""
     
-    def __init__(self, text: str, client_id: str, images: Optional[List[str]] = None,
+    @classmethod
+    def create(cls, text: str, client_id: str, images: Optional[List[str]] = None,
                  metadata: Optional[Dict] = None):
         # Créer data comme dict avec texte et images
         data = {
@@ -85,7 +87,7 @@ class TextInputMessage(BaseMessage):
             **(metadata or {})
         }
         
-        super().__init__(data=data, metadata=text_metadata)
+        return cls(data=data, metadata=text_metadata)
     
     @property
     def text(self) -> str:
