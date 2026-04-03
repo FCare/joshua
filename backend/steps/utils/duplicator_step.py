@@ -2,7 +2,8 @@ import logging
 import time
 from typing import Optional, Dict, List
 from pipeline_framework import PipelineStep
-from messages.base_message import Message, InputMessage, OutputMessage
+from messages.base_message import BaseMessage
+from messages.duplicator_message import InputMessage, OutputMessage
 from utils.chunk_queue import ChunkQueue
 
 logger = logging.getLogger(__name__)
@@ -49,47 +50,30 @@ class DuplicatorStep(PipelineStep):
         logger.info(f"Output queue ajoutée au duplicator. Total: {len(self.output_queues)}")
     
     def _handle_input_message(self, input_message):
-        """Handler pour traiter et dupliquer les messages via ChunkQueue"""
+        """Handler pour traiter et dupliquer les messages via ChunkQueue - accepte tous types"""
         try:
-            logger.info(f"Duplicator received message: {type(input_message).__name__}")
+            logger.info(f"🔄 Duplicator received message: {type(input_message).__name__}")
             
             # Vérifie qu'on a des queues de sortie
             if not self.output_queues:
                 logger.warning("Aucune output queue configurée pour le duplicator")
                 return
             
-            # Préserve les métadonnées originales
-            original_metadata = {}
-            if hasattr(input_message, 'metadata') and input_message.metadata:
-                original_metadata = input_message.metadata.copy()
-            
             # Duplique le message vers toutes les output_queues
             duplicated_count = 0
             for i, output_queue in enumerate(self.output_queues):
                 try:
-                    # Crée une copie du message pour chaque sortie en préservant le type original
-                    if isinstance(input_message, InputMessage):
-                        # InputMessage → reste InputMessage
-                        duplicated_message = InputMessage(
-                            data=input_message.data,
-                            metadata=original_metadata.copy()
-                        )
-                    elif isinstance(input_message, OutputMessage):
-                        # OutputMessage → reste OutputMessage
-                        duplicated_message = OutputMessage(
-                            data=input_message.data,
-                            metadata=original_metadata.copy()
-                        )
-                    else:
-                        # Autre type de message - copie directe
-                        duplicated_message = input_message
+                    # Utiliser la méthode copy() héritée avec ajout des infos de duplication
+                    duplication_metadata = {
+                        'duplicator_branch': i,
+                        'duplicated_at': time.time()
+                    }
                     
-                    # Ajoute info de duplication dans metadata
-                    if hasattr(duplicated_message, 'metadata'):
-                        if duplicated_message.metadata is None:
-                            duplicated_message.metadata = {}
-                        duplicated_message.metadata['duplicator_branch'] = i
-                        duplicated_message.metadata['duplicated_at'] = time.time()
+                    # Fusionner avec les métadonnées existantes
+                    if input_message.metadata:
+                        duplication_metadata.update(input_message.metadata)
+                    
+                    duplicated_message = input_message.copy(new_metadata=duplication_metadata)
                     
                     # Envoie vers la queue de sortie
                     logger.info(f"🐛 DEBUG: Duplicator about to enqueue to branch {i}, queue: {output_queue}")

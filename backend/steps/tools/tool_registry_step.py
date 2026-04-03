@@ -3,7 +3,9 @@ import threading
 import logging
 from typing import Dict, Set, Optional
 from pipeline_framework import PipelineStep
-from messages.base_message import Message, InputMessage, OutputMessage, ToolRegistrationMessage
+from messages.websocket_message import UserConnectionMessage
+from messages.tool_message import ToolRegistrationMessage
+from messages.chat_message import ToolsReadyMessage
 
 logger = logging.getLogger(__name__)
 
@@ -32,20 +34,17 @@ class ToolRegistryStep(PipelineStep):
     
     def _handle_message(self, message):
         """Gère les messages entrants"""
-        try:
-            # Vérifier si c'est un message de connexion utilisateur (depuis WebSocketStep)
-            if hasattr(message, 'data') and isinstance(message.data, dict):
-                message_type = message.data.get('type')
-                if message_type == 'user_connected':
-                    self._handle_user_connection(message)
-                    return
+        # Validation des types de messages autorisés
+        allowed_classes = (UserConnectionMessage, ToolRegistrationMessage)
+        if not isinstance(message, allowed_classes):
+            logger.warning(f"🏗️ ToolRegistry: Type de message non autorisé: {type(message).__name__}")
+            return
             
-            # Vérifier si c'est un message avec metadata
-            if hasattr(message, 'metadata') and message.metadata:
-                message_type = message.metadata.get('message_type')
-                if message_type == 'user_connection':
-                    self._handle_user_connection(message)
-                    return
+        try:
+            # Vérifier si c'est un message de connexion utilisateur
+            if isinstance(message, UserConnectionMessage):
+                self._handle_user_connection(message)
+                return
             
             # Vérifier si c'est un message d'enregistrement d'outil
             if isinstance(message, ToolRegistrationMessage):
@@ -95,8 +94,9 @@ class ToolRegistryStep(PipelineStep):
         """Traite l'enregistrement d'un outil"""
         try:
             target_client_id = registration_message.metadata.get('target_client_id')
-            tool_name = registration_message.tool_definition['function']['name']
-            source_step = registration_message.source_step
+            tool_definition = registration_message.data.get('tool_definition')
+            tool_name = tool_definition['function']['name'] if tool_definition else 'unknown'
+            source_step = registration_message.data.get('source_step', 'unknown')
             
             if not target_client_id:
                 logger.warning("⚠️ Tool registration without target_client_id")
@@ -159,19 +159,20 @@ class ToolRegistryStep(PipelineStep):
                 logger.info(f"✅ All tools registered for {username}")
             
             # Envoyer le message de tools_ready au LLM
-            tools_ready_message = OutputMessage(
-                data={
-                    "type": "tools_ready",
-                    "registered_tools": [tool.tool_definition for tool in registered_tools],
-                    "client_id": client_id,
+            tools_definitions = {}
+            for tool in registered_tools:
+                tool_def = tool.data.get('tool_definition') if tool.data else {}
+                if tool_def and 'function' in tool_def:
+                    tools_definitions[tool_def['function']['name']] = tool_def
+            
+            tools_ready_message = ToolsReadyMessage(
+                tools_definitions=tools_definitions,
+                metadata={
+                    "target_client_id": client_id,
+                    "target_step": self.llm_step_name,
                     "username": username,
                     "timed_out": timed_out,
                     "registration_time": time.time() - client_info["start_time"]
-                },
-                metadata={
-                    "message_type": "tools_ready",
-                    "target_client_id": client_id,
-                    "target_step": self.llm_step_name
                 }
             )
             

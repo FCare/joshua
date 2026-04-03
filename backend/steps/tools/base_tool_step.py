@@ -2,7 +2,8 @@ import logging
 from abc import ABC, abstractmethod
 from typing import Dict, Any, Optional
 from pipeline_framework import PipelineStep
-from messages.base_message import ToolCallMessage, ToolResponseMessage, ToolRegistrationMessage
+from messages.websocket_message import UserConnectionMessage
+from messages.tool_message import ToolRegistrationMessage, ToolResponseMessage, ToolCallMessage
 
 logger = logging.getLogger(__name__)
 
@@ -33,20 +34,17 @@ class BaseToolStep(PipelineStep, ABC):
     
     def _handle_messages(self, message):
         """Gère les messages entrants (tool calls et connexions)"""
-        try:
-            # Vérifier si c'est un message de connexion utilisateur (depuis WebSocketStep)
-            if hasattr(message, 'data') and isinstance(message.data, dict):
-                message_type = message.data.get('type')
-                if message_type == 'user_connected':
-                    self._handle_user_connection(message)
-                    return
+        # Validation des types de messages autorisés
+        allowed_message_classes = (UserConnectionMessage, ToolCallMessage)
+        if not isinstance(message, allowed_message_classes):
+            logger.warning(f"🔧 Tool: Type de message non autorisé: {type(message).__name__}")
+            return
             
-            # Vérifier si c'est un message avec metadata
-            if hasattr(message, 'metadata') and message.metadata:
-                message_type = message.metadata.get('message_type')
-                if message_type == 'user_connection':
-                    self._handle_user_connection(message)
-                    return
+        try:
+            # Vérifier si c'est un message de connexion utilisateur
+            if isinstance(message, UserConnectionMessage):
+                self._handle_user_connection(message)
+                return
             
             # Vérifier si c'est un appel d'outil
             if isinstance(message, ToolCallMessage):
@@ -115,19 +113,23 @@ class BaseToolStep(PipelineStep, ABC):
             return
         
         # Vérifier si cet outil est concerné
-        if message.tool_name != self.tool_definition["function"]["name"]:
+        tool_name = message.data.get('tool_name')
+        if tool_name != self.tool_definition["function"]["name"]:
             return
         
-        logger.info(f"🛠️ Tool '{self.name}' processing call: {message.tool_call_id}")
+        tool_call_id = message.data.get('tool_call_id')
+        parameters = message.data.get('parameters', {})
+        
+        logger.info(f"🛠️ Tool '{self.name}' processing call: {tool_call_id}")
         
         try:
             # Exécuter l'outil
-            result = self._execute_tool(message.parameters)
+            result = self._execute_tool(parameters)
             
             # Créer le message de réponse
             response = ToolResponseMessage(
-                tool_call_id=message.tool_call_id,
-                tool_name=message.tool_name,
+                tool_call_id=tool_call_id,
+                tool_name=tool_name,
                 result=result,
                 metadata={"source_step": self.name}
             )
@@ -135,14 +137,14 @@ class BaseToolStep(PipelineStep, ABC):
             # Envoyer la réponse
             if self.output_queue:
                 self.output_queue.enqueue(response)
-                logger.info(f"✅ Tool '{self.name}' response sent for call {message.tool_call_id}")
+                logger.info(f"✅ Tool '{self.name}' response sent for call {tool_call_id}")
                 
         except Exception as e:
             logger.error(f"Erreur lors de l'exécution de l'outil {self.name}: {e}")
             # Envoyer une erreur
             error_response = ToolResponseMessage(
-                tool_call_id=message.tool_call_id,
-                tool_name=message.tool_name,
+                tool_call_id=tool_call_id,
+                tool_name=tool_name,
                 result=None,
                 error=str(e),
                 metadata={"source_step": self.name}

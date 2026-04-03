@@ -5,7 +5,7 @@ import os
 from typing import Optional, Dict, Any
 
 from pipeline_framework import PipelineStep
-from messages.base_message import Message, InputMessage, OutputMessage, ErrorMessage, MessageType
+from messages.base_message import Message
 
 
 class ChatterboxTTSStep(PipelineStep):
@@ -53,6 +53,15 @@ class ChatterboxTTSStep(PipelineStep):
         return True
     
     def _handle_input_message(self, input_message):
+        # Validation des types de messages autorisés - accepte tous les messages de sortie
+        from backend.messages.chat_message import ChatResponseMessage
+        from backend.messages.duplicator_message import OutputMessage
+        
+        allowed_classes = (ChatResponseMessage, OutputMessage)
+        if not isinstance(input_message, allowed_classes):
+            logger.warning(f"🔊 ChatterboxTTS: Type de message non autorisé: {type(input_message).__name__}")
+            return
+            
         try:
             # Préserver les métadonnées pour le routage (client_id)
             original_metadata = {}
@@ -75,7 +84,7 @@ class ChatterboxTTSStep(PipelineStep):
                 print(f"🔄 TTS ignore chunk partial direct du chat, attend sentence normalizer")
                 return
             
-            # Avec MessageType.DATA unifié, tous les messages utilisent .data
+            # Tous les messages utilisent .data
             if hasattr(input_message, 'data'):
                 text_data = str(input_message.data)
             else:
@@ -97,7 +106,7 @@ class ChatterboxTTSStep(PipelineStep):
         """
         try:
             # Envoyer directement le signal finish au websocket
-            finish_message = OutputMessage(
+            finish_message = Message.create_output(
                 data="",  # Signal finish sans contenu
                 metadata={
                     "type": "chat_finished",
@@ -116,13 +125,13 @@ class ChatterboxTTSStep(PipelineStep):
     
     def process_message(self, message) -> Optional[OutputMessage]:
         try:
-            if message.type == MessageType.DATA:
+            if hasattr(message, 'data') and message.data:
                 text = str(message.data)
                 self._synthesize_text(text)
                 return None
             
         except Exception as e:
-            return ErrorMessage(error=str(e), step_name=self.name)
+            return Message.create_error(error=str(e), step_name=self.name)
     
     def _synthesize_text(self, text: str):
         # Métriques de performance
@@ -234,7 +243,7 @@ class ChatterboxTTSStep(PipelineStep):
             audio_metadata["type"] = "audio_chunk"
         
         # Créer et envoyer le message audio
-        audio_message = OutputMessage(
+        audio_message = Message.create_output(
             data=chunk,
             metadata=audio_metadata
         )
@@ -268,7 +277,7 @@ class ChatterboxTTSStep(PipelineStep):
             print(f"🏁 TTS finished phrase for client: {finish_metadata.get('original_client_id')}")
         
         # Créer et envoyer le message de fin
-        finish_message = OutputMessage(
+        finish_message = Message.create_output(
             data="",  # Pas de données, juste un signal de fin
             metadata=finish_metadata
         )

@@ -4,7 +4,7 @@ from typing import Optional, Dict
 from datetime import datetime
 
 from pipeline_framework import PipelineStep
-from messages.base_message import Message, OutputMessage, MessageType
+from messages.base_message import Message
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +27,8 @@ class SystemPromptStep(PipelineStep):
         logger.info(f"SystemPromptStep '{self.name}' configuré")
     
     def _handle_input_event(self, input_message):
-        """Handler vide - ce step ignore les messages entrants"""
+        """Handler vide - ce step ignore volontairement tous les messages entrants"""
+        logger.debug(f"📝 SystemPrompt: Message ignoré volontairement: {input_message.message_type}")
         pass
     
     def init(self) -> bool:
@@ -48,7 +49,7 @@ class SystemPromptStep(PipelineStep):
             system_prompt = self.prompt_template or "Tu es un assistant virtuel intelligent et bienveillant."
             
             # Créer le message de mise à jour
-            prompt_message = OutputMessage(
+            prompt_message = Message.create_output(
                 data=system_prompt,
                 metadata={
                     "type": "system_prompt_update",

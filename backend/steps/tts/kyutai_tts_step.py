@@ -10,7 +10,7 @@ from enum import Enum
 from urllib.parse import quote_plus
 
 from pipeline_framework import PipelineStep
-from messages.base_message import Message, InputMessage, OutputMessage, ErrorMessage, MessageType
+from messages.base_message import Message
 
 try:
     import websocket
@@ -193,7 +193,7 @@ class KyutaiTTS:
             # Détecter le format audio - maintenant on envoie du PCM int16
             audio_format = "ogg_vorbis" if audio_bytes.startswith(b'OggS') else "pcm_int16"
             
-            message = OutputMessage(
+            message = Message.create_output(
                 data=audio_bytes,
                 metadata={
                     "original_client_id": self.current_client_id,
@@ -339,11 +339,17 @@ class KyutaiTTSStep(PipelineStep):
             return False
     
     def _handle_input_message(self, message: Message):
+        # Validation des types de messages autorisés - accepte tous les messages de sortie
+        from backend.messages.chat_message import ChatResponseMessage
+        from backend.messages.duplicator_message import OutputMessage
+        
+        allowed_classes = (ChatResponseMessage, OutputMessage)
+        if not isinstance(message, allowed_classes):
+            logger.warning(f"🔊 TTS: Type de message non autorisé: {type(message).__name__}")
+            return
+            
         try:
-            logger.info(f"TTS: _handle_input_message called with type={message.type}")
-            if message.type != MessageType.DATA:
-                logger.warning(f"TTS: Unsupported message type: {message.type}")
-                return
+            logger.info(f"TTS: _handle_input_message called with type={message.message_type}")
             
             # Extraire les métadonnées pour détecter les finish signals
             metadata = message.metadata or {}

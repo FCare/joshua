@@ -88,6 +88,15 @@ class SentenceNormalizerStep(PipelineStep):
         """
         Handler ChunkQueue : traite les chunks de texte et produit des phrases normalisées
         """
+        # Validation des types de messages autorisés - accepte tous les messages de sortie
+        from backend.messages.chat_message import ChatResponseMessage
+        from backend.messages.duplicator_message import OutputMessage
+        
+        allowed_classes = (ChatResponseMessage, OutputMessage)
+        if not isinstance(message, allowed_classes):
+            logger.warning(f"📝 SentenceNormalizer: Type de message non autorisé: {type(message).__name__}")
+            return
+            
         try:
             if (hasattr(message, 'metadata') and message.metadata and
                 message.metadata.get('chunk_type') == 'finish'):
@@ -97,7 +106,7 @@ class SentenceNormalizerStep(PipelineStep):
             text_chunk = None
             if hasattr(message, 'data') and message.data:
                 text_chunk = message.data
-            # Avec MessageType.DATA unifié, tous les messages utilisent .data
+            # Tous les messages utilisent .data
             
             if not text_chunk:
                 return
@@ -132,7 +141,7 @@ class SentenceNormalizerStep(PipelineStep):
             original_source_data = ""
             if hasattr(source_message, 'data') and source_message.data:
                 original_source_data = source_message.data
-            # Avec MessageType.DATA unifié, tous les messages utilisent .data
+            # Tous les messages utilisent .data
             
             # Créer message de sortie avec le texte normalisé
             # Préserver l'original_client_id pour le routage WebSocket
@@ -147,8 +156,7 @@ class SentenceNormalizerStep(PipelineStep):
                 if 'original_client_id' in source_message.metadata:
                     new_metadata['original_client_id'] = source_message.metadata['original_client_id']
             
-            output_message = Message(
-                type=source_message.type,
+            output_message = Message.create_output(
                 data=normalized,
                 metadata=new_metadata
             )

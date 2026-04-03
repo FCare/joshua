@@ -8,7 +8,7 @@ import aiohttp
 from typing import Optional, Dict, Any
 
 from pipeline_framework import PipelineStep
-from messages.base_message import Message, InputMessage, OutputMessage, ErrorMessage, MessageType
+from messages.websocket_message import UserConnectionMessage, AudioInputMessage, TextInputMessage
 from utils.chunk_queue import ChunkQueue
 
 logger = logging.getLogger(__name__)
@@ -76,6 +76,16 @@ class WebSocketStep(PipelineStep):
     
     async def _handle_input_message_async(self, message_data):
         """Handler ASYNC pour traiter les réponses du ChatStep - ChunkQueue gère la boucle !"""
+        # Validation des types de messages autorisés - accepte tous les messages de sortie
+        from backend.messages.chat_message import ChatResponseMessage
+        from backend.messages.tts_message import AudioChunkOutputMessage, AudioFinishedMessage
+        from backend.messages.duplicator_message import OutputMessage
+        
+        allowed_classes = (ChatResponseMessage, AudioChunkOutputMessage, AudioFinishedMessage, OutputMessage)
+        if not isinstance(message_data, allowed_classes):
+            logger.warning(f"🌐 WebSocket: Type de message non autorisé: {type(message_data).__name__}")
+            return
+            
         try:
             logger.info(f"WebSocket received message from ChatStep: type={type(message_data).__name__}")
             
@@ -112,7 +122,7 @@ class WebSocketStep(PipelineStep):
             
             if hasattr(message_data, 'data'):
                 data = message_data.data
-            # Avec MessageType.DATA unifié, tous les messages utilisent .data
+            # Tous les messages utilisent .data
                 
             if data is None:
                 logger.warning(f"Message without data or result: {message_data}")
@@ -280,17 +290,12 @@ class WebSocketStep(PipelineStep):
             
             # 🚀 NOUVEAU : Notifier le pipeline de la nouvelle connexion
             if self.output_queue:
-                user_connection_message = InputMessage(
-                    data={
-                        "type": "user_connected",
-                        "client_id": client_id,
-                        "username": username,
-                        "timestamp": time.time()
-                    },
+                user_connection_message = UserConnectionMessage(
+                    client_id=client_id,
+                    username=username,
                     metadata={
                         "message_type": "user_connection",
-                        "client_id": client_id,
-                        "username": username
+                        "timestamp": time.time()
                     }
                 )
                 self.output_queue.enqueue(user_connection_message)
@@ -310,13 +315,12 @@ class WebSocketStep(PipelineStep):
                             metadata = data.get("metadata", {})
                             
                             logger.info(f"Processing JSON audio message from {client_id}: {len(audio_bytes)} bytes")
-                            audio_message = InputMessage(
-                                data=audio_bytes,
+                            audio_message = AudioInputMessage(
+                                audio_data=audio_bytes,
+                                client_id=client_id,
+                                format=metadata.get("format", self.audio_format),
+                                sample_rate=metadata.get("sample_rate", self.sample_rate),
                                 metadata={
-                                    "client_id": client_id,
-                                    "message_type": "audio",  # ✅ Marquer comme message audio
-                                    "format": metadata.get("format", self.audio_format),
-                                    "sample_rate": metadata.get("sample_rate", self.sample_rate),
                                     "channels": metadata.get("channels", 1),
                                     "chunk_index": metadata.get("chunk_index", 0),
                                     "timestamp": time.time()
@@ -335,13 +339,12 @@ class WebSocketStep(PipelineStep):
                         
                 elif self.mode == "audio_to_text" and isinstance(message, bytes):
                     logger.info(f"Processing raw audio message from {client_id}: {len(message)} bytes")
-                    audio_message = InputMessage(
-                        data=message,
+                    audio_message = AudioInputMessage(
+                        audio_data=message,
+                        client_id=client_id,
+                        format=self.audio_format,
+                        sample_rate=self.sample_rate,
                         metadata={
-                            "client_id": client_id,
-                            "message_type": "audio",  # ✅ Marquer comme message audio
-                            "format": self.audio_format,
-                            "sample_rate": self.sample_rate,
                             "timestamp": time.time()
                         }
                     )
@@ -371,17 +374,12 @@ class WebSocketStep(PipelineStep):
                         images = []
                         logger.info(f"Using raw text message: '{text_data}'")
                     
-                    text_message = InputMessage(
-                        data={
-                            "text": text_data,
-                            "images": images
-                        },
+                    text_message = TextInputMessage(
+                        text=text_data,
+                        client_id=client_id,
+                        images=images,
                         metadata={
-                            "client_id": client_id,
-                            "message_type": "text",  # ✅ Marquer comme message text
-                            "timestamp": time.time(),
-                            "has_images": len(images) > 0,
-                            "image_count": len(images)
+                            "timestamp": time.time()
                         }
                     )
                     self.output_queue.enqueue(text_message)

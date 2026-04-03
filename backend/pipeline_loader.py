@@ -5,8 +5,6 @@ from typing import Dict, List, Optional, Any
 from pathlib import Path
 
 from pipeline_framework import Pipeline, PipelineStep
-from messages.base_message import InputMessage, OutputMessage
-
 
 class PipelineLoader:
     

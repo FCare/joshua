@@ -12,7 +12,7 @@ from enum import Enum
 from typing import Optional, Dict, Any
 
 from pipeline_framework import PipelineStep
-from messages.base_message import Message, InputMessage, OutputMessage, ErrorMessage, MessageType
+from messages.base_message import Message
 
 try:
     import websocket
@@ -316,8 +316,8 @@ class MoshiASR:
                 logger.debug(f"{self.name}: Added word '{event.text}' to buffer, buffer now: {self.text_buffer}")
                 
                 # Message transcript_chunk pour streaming
-                message = OutputMessage(
-                    data=event.text,  # Utilise 'data' avec MessageType.DATA unifié
+                message = Message.create_output(
+                    data=event.text,  # Utilise 'data'
                     metadata={
                         "client_id": self.current_client_id,
                         "transcription_type": "partial",
@@ -332,8 +332,8 @@ class MoshiASR:
                 # Message transcript_done pour LLM
                 full_text = ' '.join(self.text_buffer).strip()
                 logger.debug(f"{self.name}: Creating transcript_done from buffer: '{full_text}'")
-                message = OutputMessage(
-                    data=full_text,  # Utilise 'data' avec MessageType.DATA unifié
+                message = Message.create_output(
+                    data=full_text,  # Utilise 'data'
                     metadata={
                         "client_id": self.current_client_id,
                         "transcription_type": "complete",
@@ -552,11 +552,17 @@ class KyutaiASRStep(PipelineStep):
             return False
     
     def _handle_input_message(self, message: Message):
+        # Validation des types de messages autorisés - accepte tous les messages d'entrée audio
+        from backend.messages.websocket_message import AudioInputMessage
+        from backend.messages.duplicator_message import InputMessage
+        
+        allowed_classes = (AudioInputMessage, InputMessage)
+        if not isinstance(message, allowed_classes):
+            logger.warning(f"🎤 ASR: Type de message non autorisé: {type(message).__name__}")
+            return
+            
         try:
-            logger.debug(f"🎤 ASR: _handle_input_message called with type={message.type}")
-            if message.type != MessageType.DATA:
-                logger.debug(f"🎤 ASR: Type de message non supporté, ignoré: {message.type}")
-                return
+            logger.debug(f"🎤 ASR: _handle_input_message called with type={message.message_type}")
             
             # Récupère les données audio
             audio_data = message.data

@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from enum import Enum
 
 from pipeline_framework import PipelineStep
-from messages.base_message import Message, InputMessage, OutputMessage, ErrorMessage, MessageType, ToolCallMessage, ToolResponseMessage, ToolRegistrationMessage
+from messages.base_message import Message
 
 try:
     import openai
@@ -170,6 +170,17 @@ class OpenAIChatStep(PipelineStep):
     
     
     def _handle_input_event(self, input_message):
+        # Validation des types de messages autorisés
+        from backend.messages.websocket_message import TextInputMessage, AudioInputMessage
+        from backend.messages.tool_message import ToolResponseMessage
+        from backend.messages.chat_message import SystemPromptMessage, ToolsReadyMessage
+        from backend.messages.duplicator_message import InputMessage
+        
+        allowed_classes = (TextInputMessage, AudioInputMessage, ToolResponseMessage, SystemPromptMessage, ToolsReadyMessage, InputMessage)
+        if not isinstance(input_message, allowed_classes):
+            logger.warning(f"💬 Chat: Type de message non autorisé: {type(input_message).__name__}")
+            return
+            
         try:
             # DEBUG: Logger au tout début pour identifier le problème
             logger.info(f"🐛 DEBUG: openai_chat._handle_input_event called with message type: {type(input_message)}")
@@ -394,7 +405,7 @@ class OpenAIChatStep(PipelineStep):
                     
                     # Envoie directement vers l'output_queue
                     if self.output_queue:
-                        output_message = OutputMessage(
+                        output_message = Message.create_output(
                             data=content,
                             metadata={
                                 "original_client_id": self.current_client_id,
@@ -445,7 +456,7 @@ class OpenAIChatStep(PipelineStep):
     def _send_finish_message(self):
         """Envoie un marqueur de fin de réponse"""
         if self.output_queue:
-            finish_message = OutputMessage(
+            finish_message = Message.create_output(
                 data="",
                 metadata={
                     "original_client_id": self.current_client_id,
@@ -483,7 +494,7 @@ class OpenAIChatStep(PipelineStep):
         try:
             if response_event.type == LLMEventType.PARTIAL_RESPONSE:
                 logger.info(f"Handling partial response: '{response_event.data}'")
-                response_message = OutputMessage(
+                response_message = Message.create_output(
                     data=response_event.data,
                     metadata={
                         "original_client_id": self.current_client_id,
@@ -496,7 +507,7 @@ class OpenAIChatStep(PipelineStep):
                 
             elif response_event.type == LLMEventType.FINISH_RESPONSE:
                 logger.info(f"Handling finish response event")
-                finish_message = OutputMessage(
+                finish_message = Message.create_output(
                     data="",
                     metadata={
                         "original_client_id": self.current_client_id,
@@ -520,7 +531,7 @@ class OpenAIChatStep(PipelineStep):
     
     def _send_error_response(self, error_msg: str):
         """Envoie une réponse d'erreur"""
-        error_message = OutputMessage(
+        error_message = Message.create_output(
             data=f"Erreur: {error_msg}",
             metadata={
                 "original_client_id": self.current_client_id,
@@ -616,7 +627,7 @@ class OpenAIChatStep(PipelineStep):
         logger.debug(f"Prompt enrichi généré: {enhanced_prompt[:100]}...")
         return enhanced_prompt
     
-    def _handle_tool_response(self, tool_response: ToolResponseMessage):
+    def _handle_tool_response(self, tool_response: Message):
         """Traite la réponse d'un outil"""
         try:
             logger.info(f"🔧 Received tool response: {tool_response.tool_name} -> {tool_response.tool_call_id}")
@@ -652,7 +663,7 @@ class OpenAIChatStep(PipelineStep):
             for tool_call in tool_calls:
                 try:
                     parameters = json.loads(tool_call["function"]["arguments"])
-                    tool_call_message = ToolCallMessage(
+                    tool_call_message = Message.create_tool_call(
                         tool_name=tool_call["function"]["name"],
                         tool_call_id=tool_call["id"],
                         parameters=parameters,
@@ -666,7 +677,7 @@ class OpenAIChatStep(PipelineStep):
                 except json.JSONDecodeError as e:
                     logger.error(f"Erreur parsing arguments tool call: {e}")
                     # Envoyer une réponse d'erreur pour ce tool call
-                    error_response = ToolResponseMessage(
+                    error_response = Message.create_tool_response(
                         tool_call_id=tool_call["id"],
                         tool_name=tool_call["function"]["name"],
                         result=None,
