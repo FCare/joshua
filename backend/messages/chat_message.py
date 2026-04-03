@@ -52,13 +52,14 @@ class ChatResponseMessage(BaseMessage):
 class ToolsReadyMessage(BaseMessage):
     """Message indiquant que tous les outils sont prêts"""
     
-    def __init__(self, tools_definitions: Dict[str, Any], metadata: Optional[Dict] = None):
+    @classmethod
+    def create(cls, tools_definitions: Dict[str, Any], metadata: Optional[Dict] = None):
         # Créer data comme dict avec les définitions d'outils
         data = {
             "tools_definitions": tools_definitions,
             "type": "tools_ready"
         }
-        super().__init__(data=data, metadata=metadata)
+        return cls(data=data, metadata=metadata)
     
     @property
     def tools_definitions(self) -> Dict[str, Any]:
