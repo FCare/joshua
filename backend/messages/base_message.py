@@ -35,5 +35,6 @@ class BaseMessage(ABC):
         if new_metadata:
             updated_metadata.update(new_metadata)
         
-        # Créer une nouvelle instance de la même classe
-        return self.__class__(data=self.data, metadata=updated_metadata)
+        # Utiliser dataclasses.replace pour créer une copie avec les nouvelles métadonnées
+        from dataclasses import replace
+        return replace(self, metadata=updated_metadata)
