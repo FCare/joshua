@@ -7,15 +7,15 @@ from messages.base_message import BaseMessage
 class UserConnectionMessage(BaseMessage):
     """Message de connexion d'un utilisateur via WebSocket"""
     
-    def __init__(self, client_id: str, username: str, metadata: Optional[Dict] = None):
-        # Créer data comme dict avec les informations de connexion
+    @classmethod
+    def create(cls, client_id: str, username: str, metadata: Optional[Dict] = None):
         data = {
             "type": "user_connected",
             "client_id": client_id,
             "username": username,
             "timestamp": metadata.get("timestamp") if metadata else None
         }
-        super().__init__(data=data, metadata=metadata)
+        return cls(data=data, metadata=metadata)
     
     @property
     def client_id(self) -> str:
