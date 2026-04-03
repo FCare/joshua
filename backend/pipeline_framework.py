@@ -3,7 +3,7 @@ import threading
 import queue
 from abc import ABC, abstractmethod
 from typing import Optional, Dict, Any, List
-from messages.base_message import Message
+from messages.base_message import BaseMessage
 from utils.chunk_queue import ChunkQueue
 
 
@@ -76,6 +76,6 @@ class Pipeline:
     def get_step(self, step_name: str) -> Optional[PipelineStep]:
         return self.steps.get(step_name)
     
-    async def send_message(self, step_name: str, message: Message):
+    async def send_message(self, step_name: str, message: BaseMessage):
         if step_name in self.steps:
             self.steps[step_name].input_queue.enqueue(message)

@@ -7,7 +7,7 @@ normalise les nombres et convertit les abréviations pour la TTS.
 import logging
 import re
 import asyncio
-from messages.base_message import Message
+from messages.base_message import BaseMessage
 from .number_converter import NumberToWordsConverter
 from pipeline_framework import PipelineStep
 

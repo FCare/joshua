@@ -4,7 +4,7 @@ from typing import Optional, Dict
 from datetime import datetime
 
 from pipeline_framework import PipelineStep
-from messages.base_message import Message
+from messages.base_message import BaseMessage
 
 logger = logging.getLogger(__name__)
 

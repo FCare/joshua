@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from enum import Enum
 
 from pipeline_framework import PipelineStep
-from messages.base_message import Message
+from messages.base_message import BaseMessage
 
 try:
     import openai

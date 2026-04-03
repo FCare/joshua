@@ -12,7 +12,7 @@ from enum import Enum
 from typing import Optional, Dict, Any
 
 from pipeline_framework import PipelineStep
-from messages.base_message import Message
+from messages.base_message import BaseMessage
 
 try:
     import websocket
