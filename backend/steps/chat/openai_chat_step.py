@@ -9,6 +9,9 @@ from enum import Enum
 
 from pipeline_framework import PipelineStep
 from messages.base_message import BaseMessage
+from messages.websocket_message import TextInputMessage, AudioInputMessage
+from messages.tool_message import ToolResponseMessage
+from messages.chat_message import SystemPromptMessage, ToolsReadyMessage
 
 try:
     import openai
@@ -94,7 +97,7 @@ class OpenAIChatStep(PipelineStep):
     """
     
     def __init__(self, name: str = "OpenAIChat", config: Optional[Dict] = None):
-        super().__init__(name, config, handler=self._handle_input_event)
+        super().__init__(name, config, handler=self._handle_input_message)
         
         # Charge le fichier .env
         if OPENAI_DEPENDENCIES_AVAILABLE and dotenv:
@@ -169,97 +172,71 @@ class OpenAIChatStep(PipelineStep):
             return False
     
     
-    def _handle_input_event(self, input_message):
-        # Validation des types de messages autorisés
-        from messages.websocket_message import TextInputMessage, AudioInputMessage
-        from messages.tool_message import ToolResponseMessage
-        from messages.chat_message import SystemPromptMessage, ToolsReadyMessage
-        from messages.duplicator_message import InputMessage
-        
-        allowed_classes = (TextInputMessage, AudioInputMessage, ToolResponseMessage, SystemPromptMessage, ToolsReadyMessage, InputMessage)
-        if not isinstance(input_message, allowed_classes):
-            logger.warning(f"💬 Chat: Type de message non autorisé: {type(input_message).__name__}")
-            return
-            
+    def _handle_input_message(self, input_message):
+        """Dispatcher propre basé uniquement sur isinstance()"""
         try:
-            # DEBUG: Logger au tout début pour identifier le problème
-            logger.info(f"🐛 DEBUG: openai_chat._handle_input_event called with message type: {type(input_message)}")
-            logger.info(f"🐛 DEBUG: message data: {getattr(input_message, 'data', 'NO_DATA')}")
-            logger.info(f"🐛 DEBUG: message metadata: {getattr(input_message, 'metadata', 'NO_METADATA')}")
-            
             with self._lock:
-                # Vérifier si c'est une mise à jour de system prompt
-                if (hasattr(input_message, 'metadata') and
-                    input_message.metadata and
-                    input_message.metadata.get('type') == 'system_prompt_update'):
-                    self._handle_system_prompt_update(input_message)
-                    return
-                
-                # Gestion des messages tools_ready - nouveau
-                if (hasattr(input_message, 'metadata') and
-                    input_message.metadata and
-                    input_message.metadata.get('message_type') == 'tools_ready'):
-                    try:
-                        logger.info(f"🔧 AVANT _handle_tools_ready call")
-                        self._handle_tools_ready(input_message)
-                        logger.info(f"🔧 APRES _handle_tools_ready call - SUCCESS")
-                        return
-                    except Exception as e:
-                        logger.error(f"🔧 EXCEPTION dans _handle_tools_ready: {e}")
-                        logger.error(f"🔧 Exception type: {type(e).__name__}")
-                        import traceback
-                        logger.error(f"🔧 Stack trace: {traceback.format_exc()}")
-                        return  # Continue même en cas d'erreur pour éviter de tuer le worker
-                
-                # Gestion des réponses d'outils - nouveau
-                if isinstance(input_message, ToolResponseMessage):
+                # Switch case propre basé sur le type
+                if isinstance(input_message, TextInputMessage):
+                    self._handle_text_input(input_message)
+                elif isinstance(input_message, AudioInputMessage):
+                    self._handle_audio_input(input_message)
+                elif isinstance(input_message, ToolResponseMessage):
                     self._handle_tool_response(input_message)
-                    return
-                
-                # FILTRER: Ignorer les messages audio et transcript_chunk, ne traiter que text et transcript_done
-                if (hasattr(input_message, 'metadata') and
-                    input_message.metadata):
-                    message_type = input_message.metadata.get('message_type')
-                    if message_type == 'audio':
-                        logger.debug(f"💬 Chat: Ignoring audio message, should be handled by ASR")
-                        return
-                    elif message_type == 'transcript_chunk':
-                        logger.debug(f"💬 Chat: Ignoring transcript_chunk (streaming), waiting for transcript_done")
-                        return
-                    elif message_type == 'transcript_done':
-                        logger.info(f"💬 Chat: Processing transcript_done - starting chat generation")
-                    elif message_type == 'text':
-                        logger.info(f"💬 Chat: Processing text message from frontend")
-                    
-                # Extraire le client_id des métadonnées du message entrant
-                if hasattr(input_message, 'metadata') and input_message.metadata:
-                    self.current_client_id = input_message.metadata.get('original_client_id') or input_message.metadata.get('client_id')
-                
-                # Extraire le contenu (texte + images éventuelles)
-                if hasattr(input_message, 'data'):
-                    if isinstance(input_message.data, dict):
-                        # Nouveau format avec support d'images
-                        text_data = input_message.data.get('text', '')
-                        images = input_message.data.get('images', [])
-                    else:
-                        # Format existant : texte simple
-                        text_data = str(input_message.data)
-                        images = []
-                elif hasattr(input_message, 'text'):
-                    text_data = input_message.text
-                    images = []
+                elif isinstance(input_message, SystemPromptMessage):
+                    self._handle_system_prompt_message(input_message)
+                elif isinstance(input_message, ToolsReadyMessage):
+                    self._handle_tools_ready(input_message)
                 else:
-                    text_data = str(input_message)
-                    images = []
-                
-                logger.info(f"💬 Chat received input: '{text_data}' with {len(images)} images from client: {self.current_client_id}")
-                
-                # Traiter la requête avec texte et/ou images
-                if text_data.strip() or images:
-                    self._process_chat_request(text_data.strip(), images)
-        
+                    logger.warning(f"💬 Chat: Type de message non géré: {type(input_message).__name__}")
+                    
         except Exception as e:
             logger.error(f"Erreur handling input event: {e}")
+
+    def _handle_text_input(self, message: TextInputMessage):
+        """Traite les messages texte du frontend"""
+        logger.info(f"💬 Chat: Processing text message from frontend")
+        self.current_client_id = message.client_id
+        
+        text_data = message.text
+        images = message.images
+        
+        logger.info(f"💬 Chat received text: '{text_data}' with {len(images)} images from client: {self.current_client_id}")
+        
+        if text_data.strip() or images:
+            self._process_chat_request(text_data.strip(), images)
+
+    def _handle_audio_input(self, message: AudioInputMessage):
+        """Traite les messages audio transcrits"""
+        # Filtrer selon le type de message audio
+        message_type = message.metadata.get('message_type', '') if message.metadata else ''
+        
+        if message_type == 'audio':
+            logger.debug(f"💬 Chat: Ignoring raw audio, should be handled by ASR")
+            return
+        elif message_type == 'transcript_chunk':
+            logger.debug(f"💬 Chat: Ignoring transcript chunk (streaming)")
+            return
+        elif message_type == 'transcript_done':
+            logger.info(f"💬 Chat: Processing transcript_done - starting chat generation")
+            
+        self.current_client_id = message.client_id
+        
+        # Extraire le texte transcrit
+        if isinstance(message.data, dict):
+            text_data = message.data.get('text', '')
+        else:
+            text_data = str(message.data) if message.data else ""
+            
+        if text_data.strip():
+            self._process_chat_request(text_data.strip(), [])
+
+    def _handle_system_prompt_message(self, message: SystemPromptMessage):
+        """Traite les mises à jour de system prompt"""
+        logger.info(f"💬 Chat: Processing system prompt update")
+        new_prompt = str(message.data) if message.data else ""
+        self.system_prompt = new_prompt
+        logger.info(f"System prompt updated: {new_prompt[:100]}...")
     
     def _handle_system_prompt_update(self, input_message):
         """Traite les mises à jour de system prompt"""
@@ -470,29 +447,6 @@ class OpenAIChatStep(PipelineStep):
             )
             self.output_queue.enqueue(finish_message)
     
-    def _handle_system_prompt_update(self, prompt_message):
-        """Traite une mise à jour du system prompt"""
-        try:
-            new_system_prompt = prompt_message.data
-            prompt_id = prompt_message.metadata.get('prompt_id', 0)
-            source = prompt_message.metadata.get('source', 'unknown')
-            
-            # Mettre à jour le system prompt
-            old_prompt = self.system_prompt
-            self.system_prompt = new_system_prompt
-            
-            logger.info(f"System prompt mis à jour par {source} (ID: {prompt_id})")
-            logger.debug(f"Ancien prompt: {old_prompt[:50]}...")
-            logger.debug(f"Nouveau prompt: {new_system_prompt[:50]}...")
-            
-            # Optionnel: réinitialiser l'historique de conversation pour un fresh start
-            reset_history = prompt_message.metadata.get('reset_history', False)
-            if reset_history:
-                self.conversation_history = []
-                logger.info("Historique de conversation réinitialisé")
-            
-        except Exception as e:
-            logger.error(f"Erreur mise à jour system prompt: {e}")
     
     def _handle_response_streaming(self, response_event: LLMEvent):
         try:
@@ -588,7 +542,7 @@ class OpenAIChatStep(PipelineStep):
             
             logger.info(f"🔧 Processing tools for client {client_id}: {len(registered_tools)} outils")
             
-            # Enregistrer les outils pour ce client - LOCK DEJA PRIS par _handle_input_event
+            # Enregistrer les outils pour ce client - LOCK DEJA PRIS par _handle_input_message
             self.client_tools[client_id] = registered_tools
             # Générer le prompt enrichi avec les descriptions d'outils
             logger.info(f"🔧 Generating enhanced prompt...")

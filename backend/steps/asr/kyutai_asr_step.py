@@ -560,9 +560,8 @@ class KyutaiASRStep(PipelineStep):
     def _handle_input_message(self, message: BaseMessage):
         # Validation des types de messages autorisés - accepte tous les messages d'entrée audio
         from messages.websocket_message import AudioInputMessage
-        from messages.duplicator_message import InputMessage
         
-        allowed_classes = (AudioInputMessage, InputMessage)
+        allowed_classes = (AudioInputMessage)
         if not isinstance(message, allowed_classes):
             logger.warning(f"🎤 ASR: Type de message non autorisé: {type(message).__name__}")
             return
