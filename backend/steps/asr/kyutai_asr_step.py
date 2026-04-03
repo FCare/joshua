@@ -316,8 +316,11 @@ class MoshiASR:
                 logger.debug(f"{self.name}: Added word '{event.text}' to buffer, buffer now: {self.text_buffer}")
                 
                 # Message transcript_chunk pour streaming
-                message = Message.create_output(
-                    data=event.text,  # Utilise 'data'
+                from backend.messages.asr_message import TranscriptionMessage
+                message = TranscriptionMessage(
+                    text=event.text,
+                    confidence=1.0,  # Default confidence
+                    is_final=False,  # partial transcription
                     metadata={
                         "client_id": self.current_client_id,
                         "transcription_type": "partial",
@@ -332,8 +335,11 @@ class MoshiASR:
                 # Message transcript_done pour LLM
                 full_text = ' '.join(self.text_buffer).strip()
                 logger.debug(f"{self.name}: Creating transcript_done from buffer: '{full_text}'")
-                message = Message.create_output(
-                    data=full_text,  # Utilise 'data'
+                from backend.messages.asr_message import TranscriptionMessage
+                message = TranscriptionMessage(
+                    text=full_text,
+                    confidence=1.0,  # Default confidence
+                    is_final=True,   # complete transcription
                     metadata={
                         "client_id": self.current_client_id,
                         "transcription_type": "complete",
@@ -551,7 +557,7 @@ class KyutaiASRStep(PipelineStep):
             logger.error(f"Kyutai ASR init error: {e}")
             return False
     
-    def _handle_input_message(self, message: Message):
+    def _handle_input_message(self, message: BaseMessage):
         # Validation des types de messages autorisés - accepte tous les messages d'entrée audio
         from backend.messages.websocket_message import AudioInputMessage
         from backend.messages.duplicator_message import InputMessage

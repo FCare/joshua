@@ -106,8 +106,10 @@ class ChatterboxTTSStep(PipelineStep):
         """
         try:
             # Envoyer directement le signal finish au websocket
-            finish_message = Message.create_output(
-                data="",  # Signal finish sans contenu
+            from backend.messages.tts_message import AudioFinishedMessage
+            finish_message = AudioFinishedMessage(
+                total_chunks=0,
+                total_bytes=0,
                 metadata={
                     "type": "chat_finished",
                     "original_client_id": finish_metadata.get('original_client_id'),
@@ -123,7 +125,7 @@ class ChatterboxTTSStep(PipelineStep):
         except Exception as e:
             print(f"❌ Erreur envoi finish signal: {e}")
     
-    def process_message(self, message) -> Optional[OutputMessage]:
+    def process_message(self, message) -> Optional[BaseMessage]:
         try:
             if hasattr(message, 'data') and message.data:
                 text = str(message.data)
@@ -131,7 +133,8 @@ class ChatterboxTTSStep(PipelineStep):
                 return None
             
         except Exception as e:
-            return Message.create_error(error=str(e), step_name=self.name)
+            from backend.messages.error_message import ErrorMessage
+            return ErrorMessage(error=str(e), step_name=self.name)
     
     def _synthesize_text(self, text: str):
         # Métriques de performance
@@ -243,8 +246,11 @@ class ChatterboxTTSStep(PipelineStep):
             audio_metadata["type"] = "audio_chunk"
         
         # Créer et envoyer le message audio
-        audio_message = Message.create_output(
-            data=chunk,
+        from backend.messages.tts_message import AudioChunkOutputMessage
+        audio_message = AudioChunkOutputMessage(
+            audio_data=chunk,
+            chunk_index=0,  # Could be set from metadata if needed
+            total_chunks=1,  # Could be set from metadata if needed
             metadata=audio_metadata
         )
         
@@ -277,8 +283,10 @@ class ChatterboxTTSStep(PipelineStep):
             print(f"🏁 TTS finished phrase for client: {finish_metadata.get('original_client_id')}")
         
         # Créer et envoyer le message de fin
-        finish_message = Message.create_output(
-            data="",  # Pas de données, juste un signal de fin
+        from backend.messages.tts_message import AudioFinishedMessage
+        finish_message = AudioFinishedMessage(
+            total_chunks=0,
+            total_bytes=0,
             metadata=finish_metadata
         )
         

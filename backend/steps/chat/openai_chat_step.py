@@ -405,8 +405,10 @@ class OpenAIChatStep(PipelineStep):
                     
                     # Envoie directement vers l'output_queue
                     if self.output_queue:
-                        output_message = Message.create_output(
-                            data=content,
+                        from backend.messages.chat_message import ChatResponseMessage
+                        output_message = ChatResponseMessage(
+                            text=content,
+                            is_partial=True,
                             metadata={
                                 "original_client_id": self.current_client_id,
                                 "chunk_type": "partial",
@@ -456,8 +458,10 @@ class OpenAIChatStep(PipelineStep):
     def _send_finish_message(self):
         """Envoie un marqueur de fin de réponse"""
         if self.output_queue:
-            finish_message = Message.create_output(
-                data="",
+            from backend.messages.chat_message import ChatResponseMessage
+            finish_message = ChatResponseMessage(
+                text="",
+                is_partial=False,
                 metadata={
                     "original_client_id": self.current_client_id,
                     "chunk_type": "finish",
@@ -494,8 +498,10 @@ class OpenAIChatStep(PipelineStep):
         try:
             if response_event.type == LLMEventType.PARTIAL_RESPONSE:
                 logger.info(f"Handling partial response: '{response_event.data}'")
-                response_message = Message.create_output(
-                    data=response_event.data,
+                from backend.messages.chat_message import ChatResponseMessage
+                response_message = ChatResponseMessage(
+                    text=response_event.data,
+                    is_partial=True,
                     metadata={
                         "original_client_id": self.current_client_id,
                         "response_type": "partial",
@@ -507,8 +513,10 @@ class OpenAIChatStep(PipelineStep):
                 
             elif response_event.type == LLMEventType.FINISH_RESPONSE:
                 logger.info(f"Handling finish response event")
-                finish_message = Message.create_output(
-                    data="",
+                from backend.messages.chat_message import ChatResponseMessage
+                finish_message = ChatResponseMessage(
+                    text="",
+                    is_partial=False,
                     metadata={
                         "original_client_id": self.current_client_id,
                         "response_type": "finish",
@@ -521,7 +529,7 @@ class OpenAIChatStep(PipelineStep):
         except Exception as e:
             logger.error(f"Error handling response streaming: {e}")
     
-    def _send_output_message(self, message: OutputMessage):
+    def _send_output_message(self, message: BaseMessage):
         if self.output_queue:
             try:
                 self.output_queue.enqueue(message)
@@ -531,8 +539,10 @@ class OpenAIChatStep(PipelineStep):
     
     def _send_error_response(self, error_msg: str):
         """Envoie une réponse d'erreur"""
-        error_message = Message.create_output(
-            data=f"Erreur: {error_msg}",
+        from backend.messages.error_message import ErrorMessage
+        error_message = ErrorMessage(
+            error=error_msg,
+            step_name=self.name,
             metadata={
                 "original_client_id": self.current_client_id,
                 "response_type": "error",
@@ -663,7 +673,8 @@ class OpenAIChatStep(PipelineStep):
             for tool_call in tool_calls:
                 try:
                     parameters = json.loads(tool_call["function"]["arguments"])
-                    tool_call_message = Message.create_tool_call(
+                    from backend.messages.tool_message import ToolCallMessage
+                    tool_call_message = ToolCallMessage(
                         tool_name=tool_call["function"]["name"],
                         tool_call_id=tool_call["id"],
                         parameters=parameters,
@@ -677,7 +688,8 @@ class OpenAIChatStep(PipelineStep):
                 except json.JSONDecodeError as e:
                     logger.error(f"Erreur parsing arguments tool call: {e}")
                     # Envoyer une réponse d'erreur pour ce tool call
-                    error_response = Message.create_tool_response(
+                    from backend.messages.tool_message import ToolResponseMessage
+                    error_response = ToolResponseMessage(
                         tool_call_id=tool_call["id"],
                         tool_name=tool_call["function"]["name"],
                         result=None,

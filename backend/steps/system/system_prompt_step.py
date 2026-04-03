@@ -49,8 +49,9 @@ class SystemPromptStep(PipelineStep):
             system_prompt = self.prompt_template or "Tu es un assistant virtuel intelligent et bienveillant."
             
             # Créer le message de mise à jour
-            prompt_message = Message.create_output(
-                data=system_prompt,
+            from backend.messages.chat_message import SystemPromptMessage
+            prompt_message = SystemPromptMessage(
+                prompt=system_prompt,
                 metadata={
                     "type": "system_prompt_update",
                     "source": self.name

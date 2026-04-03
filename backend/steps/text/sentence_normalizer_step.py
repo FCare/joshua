@@ -156,8 +156,10 @@ class SentenceNormalizerStep(PipelineStep):
                 if 'original_client_id' in source_message.metadata:
                     new_metadata['original_client_id'] = source_message.metadata['original_client_id']
             
-            output_message = Message.create_output(
-                data=normalized,
+            from backend.messages.chat_message import ChatResponseMessage
+            output_message = ChatResponseMessage(
+                text=normalized,
+                is_partial=not is_last_phrase,
                 metadata=new_metadata
             )
             

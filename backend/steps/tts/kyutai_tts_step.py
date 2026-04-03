@@ -193,14 +193,16 @@ class KyutaiTTS:
             # Détecter le format audio - maintenant on envoie du PCM int16
             audio_format = "ogg_vorbis" if audio_bytes.startswith(b'OggS') else "pcm_int16"
             
-            message = Message.create_output(
-                data=audio_bytes,
+            from backend.messages.tts_message import AudioChunkOutputMessage
+            message = AudioChunkOutputMessage(
+                audio_data=audio_bytes,
+                chunk_index=self.audio_chunks_sent,
+                total_chunks=1,  # Default value
                 metadata={
                     "original_client_id": self.current_client_id,
                     "type": "audio_chunk",
                     "format": audio_format,
                     "sample_rate": SAMPLE_RATE,
-                    "chunk_index": self.audio_chunks_sent,
                     "timestamp": time.time()
                 }
             )
