@@ -340,7 +340,7 @@ class KyutaiTTSStep(PipelineStep):
             logger.error(f"Kyutai TTS init error: {e}")
             return False
     
-    def _handle_input_message(self, message: Message):
+    def _handle_input_message(self, message: BaseMessage):
         # Validation des types de messages autorisés - accepte tous les messages de sortie
         from backend.messages.chat_message import ChatResponseMessage
         from backend.messages.duplicator_message import OutputMessage

@@ -84,7 +84,7 @@ class SentenceNormalizerStep(PipelineStep):
         logger.info(f"SentenceNormalizer '{self.name}' initialisé")
         return True
     
-    async def _process_text_chunk(self, message: Message):
+    async def _process_text_chunk(self, message: BaseMessage):
         """
         Handler ChunkQueue : traite les chunks de texte et produit des phrases normalisées
         """
@@ -126,7 +126,7 @@ class SentenceNormalizerStep(PipelineStep):
         except Exception as e:
             logger.error(f"Erreur traitement chunk dans SentenceNormalizer: {e}")
     
-    def _send_normalized_sentence(self, sentence: str, source_message: Message, is_last_phrase: bool = False):
+    def _send_normalized_sentence(self, sentence: str, source_message: BaseMessage, is_last_phrase: bool = False):
         """
         Envoie une phrase normalisée avec les métadonnées appropriées
         """
