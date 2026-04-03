@@ -290,7 +290,7 @@ class WebSocketStep(PipelineStep):
             
             # 🚀 NOUVEAU : Notifier le pipeline de la nouvelle connexion
             if self.output_queue:
-                user_connection_message = UserConnectionMessage(
+                user_connection_message = UserConnectionMessage.create(
                     client_id=client_id,
                     username=username,
                     metadata={
