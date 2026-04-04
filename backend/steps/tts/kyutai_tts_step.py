@@ -334,11 +334,11 @@ class KyutaiTTSStep(PipelineStep):
             return False
     
     def _handle_input_message(self, message: BaseMessage):
-        # Validation des types de messages autorisés - accepte tous les messages de sortie
-        from messages.chat_message import ChatResponseMessage
+        from messages.text_message import SentenceMessage
         
-        allowed_classes = (ChatResponseMessage)
+        allowed_classes = (SentenceMessage)
         if not isinstance(message, allowed_classes):
+            logger.warning(f"🔊 TTS: Type de message non autorisé: {type(message).__name__}")
             return
             
         try:

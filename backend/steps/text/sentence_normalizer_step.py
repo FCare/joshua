@@ -151,10 +151,10 @@ class SentenceNormalizerStep(PipelineStep):
             # Note: Métadonnées supprimées de l'architecture dataclass pure
             # Les client IDs sont maintenant gérés directement dans les propriétés de message
             
-            from messages.chat_message import ChatResponseMessage
-            output_message = ChatResponseMessage(
+            from messages.text_message import SentenceMessage
+            output_message = SentenceMessage(
                 text=normalized,
-                is_partial=not is_last_phrase
+                is_last = is_last_phrase
             )
             
             self.output_queue.enqueue(output_message)
