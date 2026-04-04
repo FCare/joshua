@@ -118,6 +118,7 @@ class WebSocketStep(PipelineStep):
             data = None
             metadata = {}  # Plus de metadata dans architecture pure
             if isinstance(message_data, ChatFinishMessage):
+                logger.info("Websocket received ChatFinished")
                 message_type = "chat_finished"
             elif isinstance(message_data, ChatResponseMessage):
                 data = message_data.text

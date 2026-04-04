@@ -114,6 +114,7 @@ class SentenceNormalizerStep(PipelineStep):
             except Exception as e:
                 logger.error(f"Erreur traitement chunk dans SentenceNormalizer: {e}")
         elif isinstance(message, ChatFinishMessage):
+            logger.info(f"SentenceNormalizer End of sentence")
             self._send_endof_sentence()
 
     def _send_endof_sentence(self):
