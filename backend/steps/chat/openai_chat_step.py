@@ -295,7 +295,6 @@ class OpenAIChatStep(PipelineStep):
                 logger.info(f"💬 API response Chunk {chunk}")
                 if not hasattr(chunk, 'choices') or not chunk.choices:
                     continue
-                logger.info(f"💬 API response Chunk valid")
                     
                 choice = chunk.choices[0]
                 delta = choice.delta
@@ -340,7 +339,7 @@ class OpenAIChatStep(PipelineStep):
                         self._handle_tool_calls(tool_calls, assistant_response)
                         break
                     elif choice.finish_reason == "stop":
-                        # Fin normale
+                        logger.info(f"End of response")
                         if assistant_response:
                             self.conversation_history.append({
                                 "role": "assistant",
