@@ -133,10 +133,6 @@ class WebSocketStep(PipelineStep):
                 logger.warning(f"Unknown message type: {type(message_data)}")
                 return
                 
-            if data is None:
-                logger.warning(f"Message without data: {message_data}")
-                return
-                
             # Plus de client_id original dans metadata - diffusion à tous les clients connectés
             # Le routing client spécifique sera géré au niveau du pipeline
             original_client_id = list(self.connections.keys())[0] if self.connections else None
