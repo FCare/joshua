@@ -9,7 +9,7 @@ from enum import Enum
 
 from pipeline_framework import PipelineStep
 from messages.base_message import BaseMessage
-from messages.websocket_message import TextInputMessage, AudioInputMessage
+from messages.websocket_message import TextInputMessage
 from messages.tool_message import ToolResponseMessage
 from messages.chat_message import SystemPromptMessage, ToolsReadyMessage
 from messages.asr_message import TranscriptionMessage
@@ -28,24 +28,6 @@ except ImportError as e:
     dotenv = None
 
 logger = logging.getLogger(__name__)
-
-@dataclass
-class InputEvent(LLMEvent):
-    """Événement input avec texte et outils"""
-    text: str = ""
-    tools: Optional[Dict] = None
-
-
-@dataclass
-class PartialResponseEvent(LLMEvent):
-    """Événement de réponse partielle avec texte uniquement"""
-    text: str = ""
-
-
-@dataclass
-class FinishResponseEvent(LLMEvent):
-    """Événement de fin de réponse sans contenu"""
-
 
 class OpenAIChatStep(PipelineStep):
     """
@@ -382,32 +364,6 @@ class OpenAIChatStep(PipelineStep):
                 is_partial=False
             )
             self.output_queue.enqueue(finish_message)
-    
-    
-    def _handle_response_streaming(self, response_event: LLMEvent):
-        try:
-            if response_event.type == LLMEventType.PARTIAL_RESPONSE:
-                logger.info(f"Handling partial response: '{response_event.data}'")
-                from messages.chat_message import ChatResponseMessage
-                response_message = ChatResponseMessage(
-                    text=response_event.data,
-                    is_partial=True
-                )
-                self._send_output_message(response_message)
-                logger.info(f"Sent partial response to output queue")
-                
-            elif response_event.type == LLMEventType.FINISH_RESPONSE:
-                logger.info(f"Handling finish response event")
-                from messages.chat_message import ChatResponseMessage
-                finish_message = ChatResponseMessage(
-                    text="",
-                    is_partial=False
-                )
-                self._send_output_message(finish_message)
-                logger.info(f"Sent finish response to output queue")
-        
-        except Exception as e:
-            logger.error(f"Error handling response streaming: {e}")
     
     def _send_output_message(self, message: BaseMessage):
         if self.output_queue:
