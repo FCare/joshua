@@ -82,7 +82,6 @@ class WebSocketStep(PipelineStep):
         
         allowed_classes = (ChatResponseMessage, AudioChunkOutputMessage, AudioFinishedMessage)
         if not isinstance(message_data, allowed_classes):
-            logger.warning(f"🌐 WebSocket: Type de message non autorisé: {type(message_data).__name__}")
             return
             
         try:

@@ -339,7 +339,6 @@ class KyutaiTTSStep(PipelineStep):
         
         allowed_classes = (ChatResponseMessage)
         if not isinstance(message, allowed_classes):
-            logger.warning(f"🔊 TTS: Type de message non autorisé: {type(message).__name__}")
             return
             
         try:

@@ -37,7 +37,6 @@ class ToolRegistryStep(PipelineStep):
         # Validation des types de messages autorisés
         allowed_classes = (UserConnectionMessage, ToolRegistrationMessage)
         if not isinstance(message, allowed_classes):
-            logger.warning(f"🏗️ ToolRegistry: Type de message non autorisé: {type(message).__name__}")
             return
             
         try:

@@ -519,7 +519,6 @@ class KyutaiASRStep(PipelineStep):
         
         allowed_classes = (AudioInputMessage)
         if not isinstance(message, allowed_classes):
-            logger.warning(f"🎤 ASR: Type de message non autorisé: {type(message).__name__}")
             return
             
         try:

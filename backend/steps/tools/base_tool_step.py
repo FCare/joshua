@@ -37,7 +37,6 @@ class BaseToolStep(PipelineStep, ABC):
         # Validation des types de messages autorisés
         allowed_message_classes = (UserConnectionMessage, ToolCallMessage)
         if not isinstance(message, allowed_message_classes):
-            logger.warning(f"🔧 Tool: Type de message non autorisé: {type(message).__name__}")
             return
             
         try:

@@ -58,7 +58,6 @@ class ChatterboxTTSStep(PipelineStep):
         
         allowed_classes = (ChatResponseMessage)
         if not isinstance(input_message, allowed_classes):
-            logger.warning(f"🔊 ChatterboxTTS: Type de message non autorisé: {type(input_message).__name__}")
             return
             
         try:

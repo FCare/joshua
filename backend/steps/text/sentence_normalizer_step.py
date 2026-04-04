@@ -93,7 +93,6 @@ class SentenceNormalizerStep(PipelineStep):
         
         allowed_classes = (ChatResponseMessage)
         if not isinstance(message, allowed_classes):
-            logger.warning(f"📝 SentenceNormalizer: Type de message non autorisé: {type(message).__name__}")
             return
             
         try:
