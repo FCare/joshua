@@ -89,32 +89,32 @@ class SentenceNormalizerStep(PipelineStep):
         Handler ChunkQueue : traite les chunks de texte et produit des phrases normalisées
         """
         # Validation des types de messages autorisés - accepte tous les messages de sortie
-        from messages.chat_message import ChatResponseMessage
+        from messages.chat_message import ChatResponseMessage, ChatFinishMessage
         
-        allowed_classes = (ChatResponseMessage)
+        allowed_classes = (ChatResponseMessage, ChatFinishMessage)
         if not isinstance(message, allowed_classes):
             return
             
-        try:
-            
-            if message.text:
-                text_chunk = str(message.text)
-                logger.info(f"SentenceNormalizer reçu chunk: {repr(message.text)}")
-            
-                # Ajouter le chunk au buffer et récupérer les phrases complètes
-                logger.info(f"📝 SentenceNormalizer reçu chunk: {repr(message.text)}")
-                complete_sentences = self._add_chunk(message.text)
-                logger.info(f"🔍 SentenceNormalizer détecté {len(complete_sentences)} phrases complètes: {[repr(s) for s in complete_sentences]}")
-            
-                # Envoyer chaque phrase complète normalisée
-                for sentence in complete_sentences:
-                    self._send_normalized_sentence(sentence, is_last_phrase=False)
-            
-            if not message.is_partial:
-                self._send_normalized_sentence("", is_last_phrase=not message.is_partial)
-            
-        except Exception as e:
-            logger.error(f"Erreur traitement chunk dans SentenceNormalizer: {e}")
+        if isinstance(message, ChatResponseMessage):
+            try:
+                
+                if message.text:
+                    text_chunk = str(message.text)
+                    logger.info(f"SentenceNormalizer reçu chunk: {repr(message.text)}")
+                
+                    # Ajouter le chunk au buffer et récupérer les phrases complètes
+                    logger.info(f"📝 SentenceNormalizer reçu chunk: {repr(message.text)}")
+                    complete_sentences = self._add_chunk(message.text)
+                    logger.info(f"🔍 SentenceNormalizer détecté {len(complete_sentences)} phrases complètes: {[repr(s) for s in complete_sentences]}")
+                
+                    # Envoyer chaque phrase complète normalisée
+                    for sentence in complete_sentences:
+                        self._send_normalized_sentence(sentence, is_last_phrase=False)
+                
+            except Exception as e:
+                logger.error(f"Erreur traitement chunk dans SentenceNormalizer: {e}")
+        if isinstance(ChatFinishMessage):
+            self._send_normalized_sentence("", is_last_phrase=not message.is_partial)
     
     def _send_normalized_sentence(self, sentence: str, is_last_phrase: bool = False):
         """

@@ -13,7 +13,10 @@ class SystemPromptMessage(BaseMessage):
 class ChatResponseMessage(BaseMessage):
     """Message de réponse de chat"""
     text: str
-    is_partial: bool = False
+
+@dataclass(frozen=True)
+class ChatFinishMessage(BaseMessage):
+    pass
 
 
 @dataclass(frozen=True)

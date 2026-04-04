@@ -310,7 +310,6 @@ class OpenAIChatStep(PipelineStep):
                         from messages.chat_message import ChatResponseMessage
                         output_message = ChatResponseMessage(
                             text=content,
-                            is_partial=True
                         )
                         self.output_queue.enqueue(output_message)
                 
@@ -345,21 +344,18 @@ class OpenAIChatStep(PipelineStep):
                                 "role": "assistant",
                                 "content": assistant_response
                             })
-                        self._send_finish_message()
+                        self._send_chat_finish_message()
                         break
             
         except Exception as e:
             logger.error(f"Erreur handling streaming response: {e}")
             self._send_error_response(str(e))
     
-    def _send_finish_message(self):
+    def _send_chat_finish_message(self):
         """Envoie un marqueur de fin de réponse"""
         if self.output_queue:
-            from messages.chat_message import ChatResponseMessage
-            finish_message = ChatResponseMessage(
-                text="",
-                is_partial=False
-            )
+            from messages.chat_message import ChatFinishMessage
+            finish_message = ChatFinishMessage()
             self.output_queue.enqueue(finish_message)
     
     def _send_output_message(self, message: BaseMessage):

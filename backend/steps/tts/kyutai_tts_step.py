@@ -368,8 +368,6 @@ class KyutaiTTSStep(PipelineStep):
                 # Envoyer seulement le texte, EOS sera envoyé au finish signal
                 self.kyutai_tts.process_text(text_data.strip(), self.current_client_id)
                 logger.info(f"TTS: Text processed: '{text_data[:50]}...' for client {self.current_client_id}")
-            else:
-                logger.warning(f"TTS: Invalid text data: {type(text_data)}, content: '{text_data}'")
 
             # 🎯 DÉTECTER LE SIGNAL FINISH DU CHAT
             is_finish_signal = message.is_last
@@ -377,7 +375,7 @@ class KyutaiTTSStep(PipelineStep):
             if is_finish_signal:
                 logger.info(f"TTS: Received finish signal from chat for client: {self.current_client_id}")
                 self._send_eos()
-                self._send_finish_signal()
+                self._send_audio_finish_signal()
                 return
             
         except Exception as e:
@@ -396,7 +394,7 @@ class KyutaiTTSStep(PipelineStep):
         except Exception as e:
             logger.error(f"TTS: Error sending finish EOS: {e}")
 
-    def _send_finish_signal(self):
+    def _send_audio_finish_signal(self):
         """
         Traite le signal finish du chat et l'envoie au websocket
         """
