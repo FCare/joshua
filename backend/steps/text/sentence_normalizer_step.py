@@ -129,7 +129,7 @@ class SentenceNormalizerStep(PipelineStep):
         """
         try:
             normalized = self._normalize_sentence(sentence)
-            if not normalized.strip():
+            if not normalized.strip() and not is_last_phrase:
                 return
             
             logger.info(f"📤 SentenceNormalizer envoie phrase{'(DERNIÈRE)' if is_last_phrase else ''}: {repr(normalized)}")

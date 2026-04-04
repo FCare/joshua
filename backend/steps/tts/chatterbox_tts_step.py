@@ -61,12 +61,10 @@ class ChatterboxTTSStep(PipelineStep):
             return
             
         try:
-            # Architecture dataclass pure - plus de metadata
             # Détection du signal finish basée sur la propriété du message
-            if input_message.is_last and not input_message.text.strip():
+            if input_message.is_last:
                 print(f"🏁 TTS reçu signal FINISH du chat")
                 self._handle_finish_signal({})
-                return
             
             # Dans l'architecture pure, on traite directement le texte des SentenceMessage
             # Plus de distinction source/chunk_type - le routing est géré par les queues
