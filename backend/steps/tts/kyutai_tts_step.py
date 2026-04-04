@@ -349,6 +349,11 @@ class KyutaiTTSStep(PipelineStep):
             # Les finish signals sont maintenant gérés directement par le type de message
             logger.info(f"TTS: Processing ChatResponseMessage")
             
+            # 🎯 IGNORER LES CHUNKS PARTIELS - traiter seulement les messages finaux
+            if message.is_partial:
+                logger.debug(f"TTS: Ignoring partial message: '{message.text[:50]}...'")
+                return
+            
             # 🎯 DÉTECTER LE SIGNAL FINISH DU CHAT
             is_finish_signal = (
                 not message.text or
