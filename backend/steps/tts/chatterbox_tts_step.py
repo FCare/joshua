@@ -54,9 +54,9 @@ class ChatterboxTTSStep(PipelineStep):
     
     def _handle_input_message(self, input_message):
         # Validation des types de messages autorisés - accepte tous les messages de sortie
-        from messages.chat_message import ChatResponseMessage
+        from messages.chat_message import SentenceMessage
         
-        allowed_classes = (ChatResponseMessage)
+        allowed_classes = (SentenceMessage)
         if not isinstance(input_message, allowed_classes):
             return
             
@@ -68,7 +68,7 @@ class ChatterboxTTSStep(PipelineStep):
                 self._handle_finish_signal({})
                 return
             
-            # Dans l'architecture pure, on traite directement le texte des ChatResponseMessage
+            # Dans l'architecture pure, on traite directement le texte des SentenceMessage
             # Plus de distinction source/chunk_type - le routing est géré par les queues
             
             # Utiliser l'accès direct aux propriétés dataclass

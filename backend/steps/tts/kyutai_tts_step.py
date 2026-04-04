@@ -345,7 +345,7 @@ class KyutaiTTSStep(PipelineStep):
             
             # Note: Métadonnées supprimées de l'architecture dataclass pure
             # Les finish signals sont maintenant gérés directement par le type de message
-            logger.info(f"TTS: Processing ChatResponseMessage")
+            logger.info(f"TTS: Processing SentenceMessage")
             
             # 🎯 IGNORER LES CHUNKS PARTIELS - traiter seulement les messages finaux
             if not message.is_last:
