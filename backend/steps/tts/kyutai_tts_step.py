@@ -345,7 +345,6 @@ class KyutaiTTSStep(PipelineStep):
             
             # Note: Métadonnées supprimées de l'architecture dataclass pure
             # Les finish signals sont maintenant gérés directement par le type de message
-            logger.info(f"TTS: Processing SentenceMessage")
             logger.info(f"Message is {message.text},{message.is_last}")
             
             if not self.kyutai_tts:
