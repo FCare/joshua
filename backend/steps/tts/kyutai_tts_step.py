@@ -345,11 +345,9 @@ class KyutaiTTSStep(PipelineStep):
         try:
             logger.info(f"TTS: _handle_input_message called with type={message.message_type}")
             
-            # Extraire les métadonnées pour détecter les finish signals
-            metadata = message.metadata or {}
-            if message.metadata:
-                self.current_client_id = message.metadata.get("client_id") or message.metadata.get("original_client_id")
-                logger.info(f"TTS: Client ID: {self.current_client_id}")
+            # Note: Métadonnées supprimées de l'architecture dataclass pure
+            # Les finish signals sont maintenant gérés directement par le type de message
+            logger.info(f"TTS: Processing ChatResponseMessage")
             
             # 🎯 IGNORER LES CHUNKS TEXTE DIRECTS DU CHAT (via duplicator)
             # Traiter seulement les phrases normalisées du sentence_normalizer
@@ -363,9 +361,9 @@ class KyutaiTTSStep(PipelineStep):
             
             # 🎯 DÉTECTER LE SIGNAL FINISH DU CHAT
             is_finish_signal = (
-                metadata.get('chunk_type') == 'finish' or
-                not message.data or
-                (isinstance(message.data, str) and message.data.strip() == "")
+                # Note: finish signals maintenant gérés par type de message
+                not message.text or
+                (isinstance(message.text, str) and message.text.strip() == "")
             )
             
             if is_finish_signal:
@@ -389,7 +387,7 @@ class KyutaiTTSStep(PipelineStep):
             
             logger.info(f"TTS: KyutaiTTS connected: {self.kyutai_tts._connected}, active: {self.kyutai_tts._stream_active}")
             
-            text_data = message.data
+            text_data = message.text
             if isinstance(text_data, str) and text_data.strip():
                 # Envoyer seulement le texte, EOS sera envoyé au finish signal
                 self.kyutai_tts.process_text(text_data.strip(), self.current_client_id)

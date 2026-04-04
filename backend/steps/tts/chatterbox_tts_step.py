@@ -62,34 +62,23 @@ class ChatterboxTTSStep(PipelineStep):
             return
             
         try:
-            # Préserver les métadonnées pour le routage (client_id)
-            original_metadata = {}
-            if input_message.metadata:
-                original_metadata = input_message.metadata.copy()
-            
-            # 🎯 DÉTECTER LE SIGNAL FINISH DU CHAT (vient du duplicator)
-            if (original_metadata.get('chunk_type') == 'finish'):
-                print(f"🏁 TTS reçu signal FINISH du chat pour client: {original_metadata.get('original_client_id')}")
-                self._handle_finish_signal(original_metadata)
+            # Architecture dataclass pure - plus de metadata
+            # Détection du signal finish basée sur la propriété du message
+            if input_message.is_partial == False and not input_message.text.strip():
+                print(f"🏁 TTS reçu signal FINISH du chat")
+                self._handle_finish_signal({})
                 return
             
-            # 🎯 IGNORER LES CHUNKS TEXTE DIRECTS DU CHAT (via duplicator)
-            # Traiter seulement les phrases normalisées du sentence_normalizer
-            source = original_metadata.get('source', '')
-            chunk_type = original_metadata.get('chunk_type', '')
+            # Dans l'architecture pure, on traite directement le texte des ChatResponseMessage
+            # Plus de distinction source/chunk_type - le routing est géré par les queues
             
-            # Si c'est un chunk partial du chat (pas passé par le normalizer), l'ignorer
-            if chunk_type == 'partial' and source != 'SentenceNormalizerStep':
-                print(f"🔄 TTS ignore chunk partial direct du chat, attend sentence normalizer")
-                return
-            
-            # Tous les messages utilisent .data
-            text_data = str(input_message.data)
+            # Utiliser l'accès direct aux propriétés dataclass
+            text_data = input_message.text
             
             # Traiter chaque phrase normalisée
-            print(f"🔊 TTS reçu phrase normalisée: '{text_data}' from client: {original_metadata.get('original_client_id')}")
+            print(f"🔊 TTS reçu texte: '{text_data}'")
             
-            self._current_metadata = original_metadata
+            self._current_metadata = {}  # Plus de metadata dans architecture pure
             if text_data.strip():
                 self._synthesize_text(text_data.strip())
         
@@ -117,8 +106,8 @@ class ChatterboxTTSStep(PipelineStep):
     
     def process_message(self, message) -> Optional[BaseMessage]:
         try:
-            if message.data:
-                text = str(message.data)
+            if hasattr(message, 'text') and message.text:
+                text = message.text
                 self._synthesize_text(text)
                 return None
             

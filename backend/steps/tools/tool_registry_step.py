@@ -87,10 +87,11 @@ class ToolRegistryStep(PipelineStep):
     def _handle_tool_registration(self, registration_message):
         """Traite l'enregistrement d'un outil"""
         try:
-            target_client_id = registration_message.metadata.get('target_client_id')
-            tool_definition = registration_message.data.get('tool_definition')
+            # Utiliser les propriétés directes de ToolRegistrationMessage (architecture dataclass pure)
+            tool_definition = registration_message.tool_definition
+            source_step = registration_message.source_step
+            target_client_id = None  # Plus de metadata dans architecture pure
             tool_name = tool_definition['function']['name'] if tool_definition else 'unknown'
-            source_step = registration_message.data.get('source_step', 'unknown')
             
             if not target_client_id:
                 logger.warning("⚠️ Tool registration without target_client_id")
@@ -155,7 +156,7 @@ class ToolRegistryStep(PipelineStep):
             # Envoyer le message de tools_ready au LLM
             tools_definitions = {}
             for tool in registered_tools:
-                tool_def = tool.data.get('tool_definition') if tool.data else {}
+                tool_def = tool.tool_definition
                 if tool_def and 'function' in tool_def:
                     tools_definitions[tool_def['function']['name']] = tool_def
             

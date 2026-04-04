@@ -56,15 +56,9 @@ class BaseToolStep(PipelineStep, ABC):
     def _handle_user_connection(self, connection_message):
         """Traite les nouvelles connexions d'utilisateurs"""
         try:
-            # Extraire les données selon le format du message
-            if isinstance(connection_message.data, dict):
-                # Format WebSocketStep: data contient les infos de connexion
-                username = connection_message.data.get('username')
-                client_id = connection_message.data.get('client_id')
-            else:
-                # Format metadata classique
-                username = connection_message.metadata.get('username') if connection_message.metadata else None
-                client_id = connection_message.metadata.get('client_id') if connection_message.metadata else None
+            # Utiliser les propriétés directes de UserConnectionMessage (architecture dataclass pure)
+            username = connection_message.username
+            client_id = connection_message.client_id
             
             logger.info(f"🔌 Tool '{self.name}': nouvelle connexion utilisateur {username}")
             
@@ -109,12 +103,12 @@ class BaseToolStep(PipelineStep, ABC):
             return
         
         # Vérifier si cet outil est concerné
-        tool_name = message.data.get('tool_name')
+        tool_name = message.tool_name
         if tool_name != self.tool_definition["function"]["name"]:
             return
         
-        tool_call_id = message.data.get('tool_call_id')
-        parameters = message.data.get('parameters', {})
+        tool_call_id = message.tool_call_id
+        parameters = message.parameters
         
         logger.info(f"🛠️ Tool '{self.name}' processing call: {tool_call_id}")
         

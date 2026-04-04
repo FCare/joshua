@@ -115,26 +115,34 @@ class WebSocketStep(PipelineStep):
                         logger.error(f"❌ Failed to send audio_finished to {client_id}: {e}")
                 return
             
-            # Essayer d'abord 'data', puis 'result' pour compatibilité avec différents steps
+            # Architecture dataclass pure - accès direct aux propriétés selon le type
             data = None
-            metadata = getattr(message_data, 'metadata', {})
+            metadata = {}  # Plus de metadata dans architecture pure
             
-            data = message_data.data
-            # Tous les messages utilisent .data
+            if isinstance(message_data, ChatResponseMessage):
+                data = message_data.text
+                message_type = "chat_response"
+            elif isinstance(message_data, AudioChunkOutputMessage):
+                data = message_data.audio_data
+                message_type = "audio_chunk"
+            elif isinstance(message_data, AudioFinishedMessage):
+                data = {"type": "audio_finished"}
+                message_type = "audio_finished"
+            else:
+                logger.warning(f"Unknown message type: {type(message_data)}")
+                return
                 
             if data is None:
-                logger.warning(f"Message without data or result: {message_data}")
+                logger.warning(f"Message without data: {message_data}")
                 return
                 
-            # Extraire le client_id original de la métadonnée
-            original_client_id = metadata.get('original_client_id')
+            # Plus de client_id original dans metadata - diffusion à tous les clients connectés
+            # Le routing client spécifique sera géré au niveau du pipeline
+            original_client_id = list(self.connections.keys())[0] if self.connections else None
             
             if not original_client_id:
-                logger.warning(f"No original_client_id in metadata, cannot route response: {metadata}")
+                logger.warning(f"No connected clients to send message to")
                 return
-            
-            # Différencier texte vs audio selon le type de données et metadata
-            message_type = metadata.get('type', 'unknown')
             
             if message_type == 'audio_chunk' and isinstance(data, bytes):
                 # Message audio - envoyer comme JSON avec base64

@@ -97,15 +97,14 @@ class SentenceNormalizerStep(PipelineStep):
             return
             
         try:
-            if (message.metadata and
-                message.metadata.get('chunk_type') == 'finish'):
-                return
+            # Note: Métadonnées supprimées de l'architecture dataclass pure
+            # Les finish signals sont maintenant gérés par type de message spécialisé
             
             # Vérifier à la fois 'data' et 'result' (OutputMessage vs InputMessage)
             text_chunk = None
-            if message.data:
-                text_chunk = message.data
-            # Tous les messages utilisent .data
+            if message.text:
+                text_chunk = message.text
+            # Architecture dataclass pure: accès direct aux propriétés
             
             if not text_chunk:
                 return
@@ -138,9 +137,9 @@ class SentenceNormalizerStep(PipelineStep):
             
             # 🎯 CORRECTIF: Obtenir les données source depuis data OU result
             original_source_data = ""
-            if source_message.data:
-                original_source_data = source_message.data
-            # Tous les messages utilisent .data
+            if source_message.text:
+                original_source_data = source_message.text
+            # Architecture dataclass pure: accès direct aux propriétés
             
             # Créer message de sortie avec le texte normalisé
             # Préserver l'original_client_id pour le routage WebSocket
@@ -150,10 +149,8 @@ class SentenceNormalizerStep(PipelineStep):
                 "is_last_phrase": is_last_phrase  # 🎯 MÉTADONNÉE CLÉ pour le TTS
             }
             
-            if source_message.metadata:
-                # Préserver l'original_client_id du message source
-                if 'original_client_id' in source_message.metadata:
-                    new_metadata['original_client_id'] = source_message.metadata['original_client_id']
+            # Note: Métadonnées supprimées de l'architecture dataclass pure
+            # Les client IDs sont maintenant gérés directement dans les propriétés de message
             
             from messages.chat_message import ChatResponseMessage
             output_message = ChatResponseMessage(

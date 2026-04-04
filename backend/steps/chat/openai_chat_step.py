@@ -147,19 +147,15 @@ class OpenAIChatStep(PipelineStep):
 
     def _handle_transcription(self, message: TranscriptionMessage):
         """Traite les messages de transcription de l'ASR"""
-        transcription_type = message.metadata.get('transcription_type', '') if message.metadata else ''
+        # Dans l'architecture dataclass pure, les messages de transcription sont finals par défaut
+        # Plus de distinction partial/complete via metadata
+        logger.info(f"💬 Chat: Processing transcription - starting chat generation")
         
-        if transcription_type == 'partial':
-            logger.debug(f"💬 Chat: Ignoring partial transcription (streaming)")
-            return
-        elif transcription_type == 'complete':
-            logger.info(f"💬 Chat: Processing complete transcription - starting chat generation")
-            
-        # Extraire client_id depuis les métadonnées
-        self.current_client_id = message.metadata.get('client_id') if message.metadata else None
+        # Plus de client_id dans les métadonnées - sera géré par le routing des queues
+        self.current_client_id = None
         
-        # Extraire le texte transcrit directement du data
-        text_data = message.data.get('text', '') if isinstance(message.data, dict) else str(message.data)
+        # Utiliser l'accès direct aux propriétés dataclass
+        text_data = message.text
             
         if text_data.strip():
             self._process_chat_request(text_data.strip(), [])
@@ -167,15 +163,15 @@ class OpenAIChatStep(PipelineStep):
     def _handle_system_prompt_message(self, message: SystemPromptMessage):
         """Traite les mises à jour de system prompt"""
         logger.info(f"💬 Chat: Processing system prompt update")
-        new_prompt = str(message.data) if message.data else ""
+        new_prompt = message.text
         self.system_prompt = new_prompt
         logger.info(f"System prompt updated: {new_prompt[:100]}...")
     
     def _handle_system_prompt_update(self, input_message):
         """Traite les mises à jour de system prompt"""
         try:
-            # Extraire le nouveau system prompt
-            new_system_prompt = str(input_message.data)
+            # Utiliser l'accès direct aux propriétés dataclass
+            new_system_prompt = input_message.text
             
             # Mettre à jour le system prompt
             self.system_prompt = new_system_prompt
@@ -411,13 +407,14 @@ class OpenAIChatStep(PipelineStep):
         """Traite la réception de tous les outils disponibles"""
         try:
             logger.info(f"🔧 DEBUT _handle_tools_ready")
-            data = tools_ready_message.data
-            client_id = data.get('client_id')
-            username = data.get('username')
-            registered_tools = data.get('registered_tools', [])
-            timed_out = data.get('timed_out', False)
+            # Utiliser les propriétés directes de ToolsReadyMessage (architecture dataclass pure)
+            tools_definitions = tools_ready_message.tools_definitions
+            registered_tools = list(tools_definitions.values()) if tools_definitions else []
             
-            logger.info(f"🔧 Processing tools for client {client_id}: {len(registered_tools)} outils")
+            # Plus de client_id dans architecture dataclass pure - géré par routing des queues
+            client_id = "global"  # Utiliser un client générique pour l'instant
+            
+            logger.info(f"🔧 Processing tools: {len(registered_tools)} outils")
             
             # Enregistrer les outils pour ce client - LOCK DEJA PRIS par _handle_input_message
             self.client_tools[client_id] = registered_tools
@@ -426,8 +423,7 @@ class OpenAIChatStep(PipelineStep):
             self.client_prompts[client_id] = self._generate_enhanced_prompt(registered_tools)
             logger.info(f"🔧 Enhanced prompt generated successfully")
             
-            status = "avec timeout" if timed_out else "complet"
-            logger.info(f"🛠️ Tools registration {status} pour {username}: {len(registered_tools)} outils")
+            logger.info(f"🛠️ Tools registration complet: {len(registered_tools)} outils")
             
             # Log des outils disponibles
             for tool_def in registered_tools:
@@ -436,7 +432,7 @@ class OpenAIChatStep(PipelineStep):
             
             # Log du prompt enrichi
             if registered_tools:
-                logger.info(f"📝 Prompt enrichi généré pour {username}")
+                logger.info(f"📝 Prompt enrichi généré")
             
             logger.info(f"🔧 FIN _handle_tools_ready - SUCCESS")
             

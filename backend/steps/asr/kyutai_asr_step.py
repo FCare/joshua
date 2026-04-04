@@ -1,5 +1,6 @@
 import time
 import urllib.parse
+from messages.base_message import BaseMessage
 import os
 import sys
 import logging
@@ -12,7 +13,6 @@ from enum import Enum
 from typing import Optional, Dict, Any
 
 from pipeline_framework import PipelineStep
-from messages.base_message import BaseMessage
 
 try:
     import websocket
@@ -54,20 +54,9 @@ class ExponentialMovingAverage:
         self.value = float((1 - alpha) * self.value + alpha * new_value)
         return self.value
 
-
-class ASREventType(Enum):
-    """Types d'événements ASR"""
-    AUDIO = "audio"    # Input: chunk audio
-    TEXT = "text"      # Output: transcription
-    START = "start"    # Output: voice activity
-    END = "end"        # Output: pause détectée
-
-
 @dataclass
 class ASREvent:
     """Événement ASR standardisé pour input/output"""
-    type: ASREventType
-    data: Any = None
     timestamp: Optional[float] = None
     
     def __post_init__(self):
@@ -79,39 +68,18 @@ class ASREvent:
 class TextEvent(ASREvent):
     """Événement output texte"""
     text: str = ""
-    type: ASREventType = None
-    
-    def __post_init__(self):
-        if self.type is None:
-            self.type = ASREventType.TEXT
-        super().__post_init__()
-        self.data = self.text
 
 
 @dataclass
 class StartEvent(ASREvent):
     """Événement voix détectée"""
-    reason: str = "voice_detected"
-    type: ASREventType = None
-    
-    def __post_init__(self):
-        if self.type is None:
-            self.type = ASREventType.START
-        super().__post_init__()
-        self.data = {"reason": self.reason}
+    pass  # Classe vide - juste un signal
 
 
 @dataclass
 class EndEvent(ASREvent):
     """Événement fin/pause détectée"""
-    reason: str = "pause_detected" 
-    type: ASREventType = None
-    
-    def __post_init__(self):
-        if self.type is None:
-            self.type = ASREventType.END
-        super().__post_init__()
-        self.data = {"reason": self.reason}
+    pass  # Classe vide - juste un signal
 
 
 class MoshiASR:
@@ -306,11 +274,11 @@ class MoshiASR:
         except Exception as e:
             logger.error(f"{self.name}: Error processing message: {e}")
 
-    def _enqueue_event(self, event: ASREvent):
-        logger.debug(f"{self.name}: _enqueue_event called with type={event.type}")
+    def _enqueue_event(self, event):
+        """Architecture dataclass pure : utilise isinstance() au lieu de .type"""
+        logger.debug(f"{self.name}: _enqueue_event called with {type(event).__name__}")
         if self.output_queue:
-            # Convertir ASREvent en OutputMessage pour le pipeline
-            if event.type == ASREventType.TEXT:
+            if isinstance(event, TextEvent):
                 # Ajouter le mot au buffer d'abord
                 self.text_buffer.append(event.text)
                 logger.debug(f"{self.name}: Added word '{event.text}' to buffer, buffer now: {self.text_buffer}")
@@ -324,7 +292,7 @@ class MoshiASR:
                 self.output_queue.enqueue(message)
                 logger.info(f"{self.name}: Sent transcript_chunk: '{event.text}' for client {self.current_client_id}")
                 
-            elif event.type == ASREventType.END:
+            elif isinstance(event, EndEvent):
                 # Message transcript_done pour LLM
                 full_text = ' '.join(self.text_buffer).strip()
                 logger.debug(f"{self.name}: Creating transcript_done from buffer: '{full_text}'")
@@ -337,8 +305,10 @@ class MoshiASR:
                 logger.info(f"{self.name}: Sent transcript_done: '{full_text}' for client {self.current_client_id}")
                 # Reset buffer after sending complete transcript
                 self.text_buffer = []
+            elif isinstance(event, StartEvent):
+                logger.debug(f"{self.name}: Voice start detected")
             else:
-                logger.debug(f"{self.name}: Ignoring event type {event.type}")
+                logger.debug(f"{self.name}: Ignoring event type {type(event).__name__}")
         else:
             logger.error(f"{self.name}: No output_queue to send event!")
 
@@ -553,10 +523,10 @@ class KyutaiASRStep(PipelineStep):
             return
             
         try:
-            logger.debug(f"🎤 ASR: _handle_input_message called with type={message.message_type}")
+            logger.debug(f"🎤 ASR: _handle_input_message called with AudioInputMessage")
             
-            # Récupère les données audio
-            audio_data = message.data
+            # Récupère les données audio directement depuis la propriété dataclass
+            audio_data = message.audio_data
             if not audio_data:
                 logger.debug("🎤 ASR: Pas de données dans le message, ignoré")
                 return
@@ -566,10 +536,9 @@ class KyutaiASRStep(PipelineStep):
                 logger.debug(f"🎤 ASR: Données non-audio reçues ({type(audio_data)}), ignorées (probablement du texte pour tools/LLM)")
                 return
             
-            # Récupère l'ID du client pour le routage de retour
-            if message.metadata:
-                self.current_client_id = message.metadata.get("client_id")
-                logger.debug(f"🎤 ASR: Client ID: {self.current_client_id}")
+            # Récupère l'ID du client directement depuis la propriété dataclass
+            self.current_client_id = message.client_id
+            logger.debug(f"🎤 ASR: Client ID: {self.current_client_id}")
             
             # Vérifie que MoshiASR est initialisé
             if not self.moshi_asr:
