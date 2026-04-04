@@ -96,30 +96,21 @@ class SentenceNormalizerStep(PipelineStep):
             return
             
         try:
-            # Note: Métadonnées supprimées de l'architecture dataclass pure
-            # Les finish signals sont maintenant gérés par type de message spécialisé
             
-            # Vérifier à la fois 'data' et 'result' (OutputMessage vs InputMessage)
-            text_chunk = None
             if message.text:
-                text_chunk = message.text
-            # Architecture dataclass pure: accès direct aux propriétés
+                text_chunk = str(message.text)
+                logger.info(f"SentenceNormalizer reçu chunk: {repr(message.text)}")
             
-            if not text_chunk:
-                return
+                # Ajouter le chunk au buffer et récupérer les phrases complètes
+                logger.info(f"📝 SentenceNormalizer reçu chunk: {repr(message.text)}")
+                complete_sentences = self._add_chunk(message.text)
+                logger.info(f"🔍 SentenceNormalizer détecté {len(complete_sentences)} phrases complètes: {[repr(s) for s in complete_sentences]}")
             
-            text_chunk = str(text_chunk)
-            logger.info(f"SentenceNormalizer reçu chunk: {repr(text_chunk)}")
+                # Envoyer chaque phrase complète normalisée
+                for sentence in complete_sentences:
+                    self._send_normalized_sentence(sentence, is_last_phrase=False)
             
-            # Ajouter le chunk au buffer et récupérer les phrases complètes
-            logger.info(f"📝 SentenceNormalizer reçu chunk: {repr(text_chunk)}")
-            complete_sentences = self._add_chunk(text_chunk)
-            logger.info(f"🔍 SentenceNormalizer détecté {len(complete_sentences)} phrases complètes: {[repr(s) for s in complete_sentences]}")
-            
-            # Envoyer chaque phrase complète normalisée
-            for sentence in complete_sentences:
-                self._send_normalized_sentence(sentence, is_last_phrase=not message.is_partial)
-            if not complete_sentences and not message.is_partial:
+            if not message.is_partial:
                 self._send_normalized_sentence("", is_last_phrase=not message.is_partial)
             
         except Exception as e:
