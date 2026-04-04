@@ -343,25 +343,14 @@ class KyutaiTTSStep(PipelineStep):
             return
             
         try:
-            logger.info(f"TTS: _handle_input_message called with type={message.message_type}")
+            logger.info(f"TTS: _handle_input_message called with type={type(message).__name__}")
             
             # Note: Métadonnées supprimées de l'architecture dataclass pure
             # Les finish signals sont maintenant gérés directement par le type de message
             logger.info(f"TTS: Processing ChatResponseMessage")
             
-            # 🎯 IGNORER LES CHUNKS TEXTE DIRECTS DU CHAT (via duplicator)
-            # Traiter seulement les phrases normalisées du sentence_normalizer
-            source = metadata.get('source', '')
-            chunk_type = metadata.get('chunk_type', '')
-            
-            # Si c'est un chunk partial du chat (pas passé par le normalizer), l'ignorer
-            if chunk_type == 'partial' and source != 'SentenceNormalizerStep':
-                print(f"🔄 TTS ignore chunk partial direct du chat, attend sentence normalizer")
-                return
-            
             # 🎯 DÉTECTER LE SIGNAL FINISH DU CHAT
             is_finish_signal = (
-                # Note: finish signals maintenant gérés par type de message
                 not message.text or
                 (isinstance(message.text, str) and message.text.strip() == "")
             )
