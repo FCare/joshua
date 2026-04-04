@@ -114,23 +114,34 @@ class SentenceNormalizerStep(PipelineStep):
             except Exception as e:
                 logger.error(f"Erreur traitement chunk dans SentenceNormalizer: {e}")
         elif isinstance(message, ChatFinishMessage):
-            self._send_normalized_sentence("", is_last_phrase=not message.is_partial)
+            self._send_endof_sentence()
+
+    def _send_endof_sentence(self):
+        try:
+            from messages.text_message import SentenceMessage
+            output_message = SentenceMessage(
+                text="",
+                is_last = True
+            )
+            
+            self.output_queue.enqueue(output_message)
+        
+        except Exception as e:
+            logger.error(f"Erreur envoi phrase normalisée: {e}")
     
-    def _send_normalized_sentence(self, sentence: str, is_last_phrase: bool = False):
+    def _send_normalized_sentence(self, sentence: str):
         """
         Envoie une phrase normalisée avec les métadonnées appropriées
         """
         try:
             normalized = self._normalize_sentence(sentence)
-            if not normalized.strip() and not is_last_phrase:
+            if not normalized.strip():
                 return
-            
-            logger.info(f"📤 SentenceNormalizer envoie phrase{'(DERNIÈRE)' if is_last_phrase else ''}: {repr(normalized)}")
             
             from messages.text_message import SentenceMessage
             output_message = SentenceMessage(
                 text=normalized,
-                is_last = is_last_phrase
+                is_last = False
             )
             
             self.output_queue.enqueue(output_message)
