@@ -62,17 +62,8 @@ class DuplicatorStep(PipelineStep):
             duplicated_count = 0
             for i, output_queue in enumerate(self.output_queues):
                 try:
-                    # Utiliser la méthode copy() héritée avec ajout des infos de duplication
-                    duplication_metadata = {
-                        'duplicator_branch': i,
-                        'duplicated_at': time.time()
-                    }
-                    
-                    # Fusionner avec les métadonnées existantes
-                    if input_message.metadata:
-                        duplication_metadata.update(input_message.metadata)
-                    
-                    duplicated_message = input_message.copy(new_metadata=duplication_metadata)
+                    # Utiliser la méthode copy() simple (architecture dataclass pure)
+                    duplicated_message = input_message.copy()
                     
                     # Envoie vers la queue de sortie
                     logger.info(f"🐛 DEBUG: Duplicator about to enqueue to branch {i}, queue: {output_queue}")
