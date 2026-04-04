@@ -348,14 +348,6 @@ class KyutaiTTSStep(PipelineStep):
             logger.info(f"TTS: Processing SentenceMessage")
             logger.info(f"Message is {message.text},{message.is_last}")
             
-            # 🎯 DÉTECTER LE SIGNAL FINISH DU CHAT
-            is_finish_signal = message.is_last_phrase
-            
-            if is_finish_signal:
-                logger.info(f"TTS: Received finish signal from chat for client: {self.current_client_id}")
-                self._handle_finish_signal()
-                return
-            
             if not self.kyutai_tts:
                 logger.error("TTS: KyutaiTTS not initialized")
                 return
@@ -379,13 +371,22 @@ class KyutaiTTSStep(PipelineStep):
                 logger.info(f"TTS: Text processed: '{text_data[:50]}...' for client {self.current_client_id}")
             else:
                 logger.warning(f"TTS: Invalid text data: {type(text_data)}, content: '{text_data}'")
+
+            # 🎯 DÉTECTER LE SIGNAL FINISH DU CHAT
+            is_finish_signal = message.is_last
+            
+            if is_finish_signal:
+                logger.info(f"TTS: Received finish signal from chat for client: {self.current_client_id}")
+                self._send_eos()
+                self._send_finish_signal()
+                return
             
         except Exception as e:
             logger.error(f"TTS: Error processing text: {e}")
             import traceback
             logger.error(f"TTS: Traceback: {traceback.format_exc()}")
     
-    def _handle_finish_signal(self):
+    def _send_eos(self):
         """Traite le signal finish du chat en envoyant EOS"""
         try:
             if self.kyutai_tts and self.kyutai_tts._connected:
@@ -395,6 +396,25 @@ class KyutaiTTSStep(PipelineStep):
                 logger.warning("TTS: Cannot send EOS - KyutaiTTS not connected")
         except Exception as e:
             logger.error(f"TTS: Error sending finish EOS: {e}")
+
+    def _send_finish_signal(self):
+        """
+        Traite le signal finish du chat et l'envoie au websocket
+        """
+        try:
+            # Envoyer directement le signal finish au websocket
+            from messages.tts_message import AudioFinishedMessage
+            finish_message = AudioFinishedMessage(
+                total_chunks=0,
+                total_bytes=0
+            )
+            
+            if self.output_queue:
+                self.output_queue.enqueue(finish_message)
+                print(f"🎉 TTS envoyé signal CHAT TERMINÉ")
+        
+        except Exception as e:
+            print(f"❌ Erreur envoi finish signal: {e}")
     
     def reset_tts(self):
         try:
