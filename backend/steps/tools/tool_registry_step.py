@@ -56,15 +56,9 @@ class ToolRegistryStep(PipelineStep):
     def _handle_user_connection(self, connection_message):
         """Démarre le processus d'enregistrement pour un nouveau client"""
         try:
-            # Extraire les données selon le format du message
-            if isinstance(connection_message.data, dict):
-                # Format WebSocketStep: data contient les infos de connexion
-                username = connection_message.data.get('username')
-                client_id = connection_message.data.get('client_id')
-            else:
-                # Format metadata classique
-                username = connection_message.metadata.get('username') if connection_message.metadata else None
-                client_id = connection_message.metadata.get('client_id') if connection_message.metadata else None
+            # Utiliser les propriétés directes de UserConnectionMessage (architecture dataclass pure)
+            username = connection_message.username
+            client_id = connection_message.client_id
             
             logger.info(f"🔌 User {username} connected, starting tool registration process")
             
