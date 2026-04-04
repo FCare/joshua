@@ -71,13 +71,9 @@ class BaseToolStep(PipelineStep, ABC):
             # Vérifier si cet utilisateur a accès à cet outil
             if self._user_has_access(username):
                 # Envoyer la déclaration d'outil
-                registration_message = ToolRegistrationMessage.create(
+                registration_message = ToolRegistrationMessage(
                     tool_definition=self.tool_definition,
-                    source_step=self.name,
-                    metadata={
-                        "target_client_id": client_id,
-                        "target_username": username
-                    }
+                    source_step=self.name
                 )
                 
                 if self.output_queue:
@@ -127,11 +123,10 @@ class BaseToolStep(PipelineStep, ABC):
             result = self._execute_tool(parameters)
             
             # Créer le message de réponse
-            response = ToolResponseMessage.create(
+            response = ToolResponseMessage(
                 tool_call_id=tool_call_id,
                 tool_name=tool_name,
-                result=result,
-                metadata={"source_step": self.name}
+                result=result
             )
             
             # Envoyer la réponse
@@ -142,12 +137,11 @@ class BaseToolStep(PipelineStep, ABC):
         except Exception as e:
             logger.error(f"Erreur lors de l'exécution de l'outil {self.name}: {e}")
             # Envoyer une erreur
-            error_response = ToolResponseMessage.create(
+            error_response = ToolResponseMessage(
                 tool_call_id=tool_call_id,
                 tool_name=tool_name,
                 result=None,
-                error=str(e),
-                metadata={"source_step": self.name}
+                error=str(e)
             )
             
             if self.output_queue:

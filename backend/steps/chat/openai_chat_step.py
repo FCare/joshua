@@ -12,6 +12,7 @@ from messages.base_message import BaseMessage
 from messages.websocket_message import TextInputMessage, AudioInputMessage
 from messages.tool_message import ToolResponseMessage
 from messages.chat_message import SystemPromptMessage, ToolsReadyMessage
+from messages.asr_message import TranscriptionMessage
 
 try:
     import openai
@@ -28,66 +29,22 @@ except ImportError as e:
 
 logger = logging.getLogger(__name__)
 
-
-class LLMEventType(Enum):
-    """Types d'événements LLM"""
-    INPUT = "input"              # Input: text + tools
-    PARTIAL_RESPONSE = "partial_response"  # Partial response chunk
-    FINISH_RESPONSE = "finish_response"    # Final response completion
-
-
-@dataclass
-class LLMEvent:
-    """Événement LLM standardisé pour input/output"""
-    type: LLMEventType
-    data: Any = None
-    timestamp: Optional[float] = None
-    
-    def __post_init__(self):
-        if self.timestamp is None:
-            self.timestamp = time.time()
-
-
 @dataclass
 class InputEvent(LLMEvent):
     """Événement input avec texte et outils"""
     text: str = ""
     tools: Optional[Dict] = None
-    type: LLMEventType = None
-    
-    def __post_init__(self):
-        if self.type is None:
-            self.type = LLMEventType.INPUT
-        super().__post_init__()
-        self.data = {
-            "text": self.text,
-            "tools": self.tools
-        }
 
 
 @dataclass
 class PartialResponseEvent(LLMEvent):
     """Événement de réponse partielle avec texte uniquement"""
     text: str = ""
-    type: LLMEventType = None
-    
-    def __post_init__(self):
-        if self.type is None:
-            self.type = LLMEventType.PARTIAL_RESPONSE
-        super().__post_init__()
-        self.data = self.text
 
 
 @dataclass
 class FinishResponseEvent(LLMEvent):
     """Événement de fin de réponse sans contenu"""
-    type: LLMEventType = None
-    
-    def __post_init__(self):
-        if self.type is None:
-            self.type = LLMEventType.FINISH_RESPONSE
-        super().__post_init__()
-        self.data = None
 
 
 class OpenAIChatStep(PipelineStep):
@@ -179,8 +136,8 @@ class OpenAIChatStep(PipelineStep):
                 # Switch case propre basé sur le type
                 if isinstance(input_message, TextInputMessage):
                     self._handle_text_input(input_message)
-                elif isinstance(input_message, AudioInputMessage):
-                    self._handle_audio_input(input_message)
+                elif isinstance(input_message, TranscriptionMessage):
+                    self._handle_transcription(input_message)
                 elif isinstance(input_message, ToolResponseMessage):
                     self._handle_tool_response(input_message)
                 elif isinstance(input_message, SystemPromptMessage):
@@ -206,27 +163,21 @@ class OpenAIChatStep(PipelineStep):
         if text_data.strip() or images:
             self._process_chat_request(text_data.strip(), images)
 
-    def _handle_audio_input(self, message: AudioInputMessage):
-        """Traite les messages audio transcrits"""
-        # Filtrer selon le type de message audio
-        message_type = message.metadata.get('message_type', '') if message.metadata else ''
+    def _handle_transcription(self, message: TranscriptionMessage):
+        """Traite les messages de transcription de l'ASR"""
+        transcription_type = message.metadata.get('transcription_type', '') if message.metadata else ''
         
-        if message_type == 'audio':
-            logger.debug(f"💬 Chat: Ignoring raw audio, should be handled by ASR")
+        if transcription_type == 'partial':
+            logger.debug(f"💬 Chat: Ignoring partial transcription (streaming)")
             return
-        elif message_type == 'transcript_chunk':
-            logger.debug(f"💬 Chat: Ignoring transcript chunk (streaming)")
-            return
-        elif message_type == 'transcript_done':
-            logger.info(f"💬 Chat: Processing transcript_done - starting chat generation")
+        elif transcription_type == 'complete':
+            logger.info(f"💬 Chat: Processing complete transcription - starting chat generation")
             
-        self.current_client_id = message.client_id
+        # Extraire client_id depuis les métadonnées
+        self.current_client_id = message.metadata.get('client_id') if message.metadata else None
         
-        # Extraire le texte transcrit
-        if isinstance(message.data, dict):
-            text_data = message.data.get('text', '')
-        else:
-            text_data = str(message.data) if message.data else ""
+        # Extraire le texte transcrit directement du data
+        text_data = message.data.get('text', '') if isinstance(message.data, dict) else str(message.data)
             
         if text_data.strip():
             self._process_chat_request(text_data.strip(), [])
@@ -378,14 +329,9 @@ class OpenAIChatStep(PipelineStep):
                     # Envoie directement vers l'output_queue
                     if self.output_queue:
                         from messages.chat_message import ChatResponseMessage
-                        output_message = ChatResponseMessage.create(
+                        output_message = ChatResponseMessage(
                             text=content,
-                            is_partial=True,
-                            metadata={
-                                "original_client_id": self.current_client_id,
-                                "chunk_type": "partial",
-                                "timestamp": time.time()
-                            }
+                            is_partial=True
                         )
                         self.output_queue.enqueue(output_message)
                 
@@ -431,14 +377,9 @@ class OpenAIChatStep(PipelineStep):
         """Envoie un marqueur de fin de réponse"""
         if self.output_queue:
             from messages.chat_message import ChatResponseMessage
-            finish_message = ChatResponseMessage.create(
+            finish_message = ChatResponseMessage(
                 text="",
-                is_partial=False,
-                metadata={
-                    "original_client_id": self.current_client_id,
-                    "chunk_type": "finish",
-                    "timestamp": time.time()
-                }
+                is_partial=False
             )
             self.output_queue.enqueue(finish_message)
     
@@ -448,14 +389,9 @@ class OpenAIChatStep(PipelineStep):
             if response_event.type == LLMEventType.PARTIAL_RESPONSE:
                 logger.info(f"Handling partial response: '{response_event.data}'")
                 from messages.chat_message import ChatResponseMessage
-                response_message = ChatResponseMessage.create(
+                response_message = ChatResponseMessage(
                     text=response_event.data,
-                    is_partial=True,
-                    metadata={
-                        "original_client_id": self.current_client_id,
-                        "response_type": "partial",
-                        "timestamp": time.time()
-                    }
+                    is_partial=True
                 )
                 self._send_output_message(response_message)
                 logger.info(f"Sent partial response to output queue")
@@ -463,14 +399,9 @@ class OpenAIChatStep(PipelineStep):
             elif response_event.type == LLMEventType.FINISH_RESPONSE:
                 logger.info(f"Handling finish response event")
                 from messages.chat_message import ChatResponseMessage
-                finish_message = ChatResponseMessage.create(
+                finish_message = ChatResponseMessage(
                     text="",
-                    is_partial=False,
-                    metadata={
-                        "original_client_id": self.current_client_id,
-                        "response_type": "finish",
-                        "timestamp": time.time()
-                    }
+                    is_partial=False
                 )
                 self._send_output_message(finish_message)
                 logger.info(f"Sent finish response to output queue")
@@ -489,14 +420,9 @@ class OpenAIChatStep(PipelineStep):
     def _send_error_response(self, error_msg: str):
         """Envoie une réponse d'erreur"""
         from messages.error_message import ErrorMessage
-        error_message = ErrorMessage.create(
+        error_message = ErrorMessage(
             error=error_msg,
-            step_name=self.name,
-            metadata={
-                "original_client_id": self.current_client_id,
-                "response_type": "error",
-                "timestamp": time.time()
-            }
+            step_name=self.name
         )
         self._send_output_message(error_message)
     
@@ -623,11 +549,10 @@ class OpenAIChatStep(PipelineStep):
                 try:
                     parameters = json.loads(tool_call["function"]["arguments"])
                     from messages.tool_message import ToolCallMessage
-                    tool_call_message = ToolCallMessage.create(
+                    tool_call_message = ToolCallMessage(
                         tool_name=tool_call["function"]["name"],
                         tool_call_id=tool_call["id"],
-                        parameters=parameters,
-                        metadata={"original_client_id": self.current_client_id}
+                        parameters=parameters
                     )
                     
                     if self.output_queue:
@@ -638,7 +563,7 @@ class OpenAIChatStep(PipelineStep):
                     logger.error(f"Erreur parsing arguments tool call: {e}")
                     # Envoyer une réponse d'erreur pour ce tool call
                     from messages.tool_message import ToolResponseMessage
-                    error_response = ToolResponseMessage.create(
+                    error_response = ToolResponseMessage(
                         tool_call_id=tool_call["id"],
                         tool_name=tool_call["function"]["name"],
                         result=None,

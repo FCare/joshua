@@ -50,12 +50,8 @@ class SystemPromptStep(PipelineStep):
             
             # Créer le message de mise à jour
             from messages.chat_message import SystemPromptMessage
-            prompt_message = SystemPromptMessage.create(
-                prompt=system_prompt,
-                metadata={
-                    "type": "system_prompt_update",
-                    "source": self.name
-                }
+            prompt_message = SystemPromptMessage(
+                prompt=system_prompt
             )
             
             # Envoyer vers l'output_queue (qui sera connectée à l'input_queue du chat)

@@ -317,16 +317,9 @@ class MoshiASR:
                 
                 # Message transcript_chunk pour streaming
                 from messages.asr_message import TranscriptionMessage
-                message = TranscriptionMessage.create(
+                message = TranscriptionMessage(
                     text=event.text,
-                    confidence=1.0,  # Default confidence
-                    is_final=False,  # partial transcription
-                    metadata={
-                        "client_id": self.current_client_id,
-                        "transcription_type": "partial",
-                        "message_type": "transcript_chunk",
-                        "timestamp": event.timestamp
-                    }
+                    is_final=False  # partial transcription
                 )
                 self.output_queue.enqueue(message)
                 logger.info(f"{self.name}: Sent transcript_chunk: '{event.text}' for client {self.current_client_id}")
@@ -336,16 +329,9 @@ class MoshiASR:
                 full_text = ' '.join(self.text_buffer).strip()
                 logger.debug(f"{self.name}: Creating transcript_done from buffer: '{full_text}'")
                 from messages.asr_message import TranscriptionMessage
-                message = TranscriptionMessage.create(
+                message = TranscriptionMessage(
                     text=full_text,
-                    confidence=1.0,  # Default confidence
-                    is_final=True,   # complete transcription
-                    metadata={
-                        "client_id": self.current_client_id,
-                        "transcription_type": "complete",
-                        "message_type": "transcript_done",
-                        "timestamp": event.timestamp
-                    }
+                    is_final=True   # complete transcription
                 )
                 self.output_queue.enqueue(message)
                 logger.info(f"{self.name}: Sent transcript_done: '{full_text}' for client {self.current_client_id}")

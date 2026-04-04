@@ -165,15 +165,8 @@ class ToolRegistryStep(PipelineStep):
                 if tool_def and 'function' in tool_def:
                     tools_definitions[tool_def['function']['name']] = tool_def
             
-            tools_ready_message = ToolsReadyMessage.create(
-                tools_definitions=tools_definitions,
-                metadata={
-                    "target_client_id": client_id,
-                    "target_step": self.llm_step_name,
-                    "username": username,
-                    "timed_out": timed_out,
-                    "registration_time": time.time() - client_info["start_time"]
-                }
+            tools_ready_message = ToolsReadyMessage(
+                tools_definitions=tools_definitions
             )
             
             if self.output_queue:

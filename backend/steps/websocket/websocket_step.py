@@ -288,13 +288,9 @@ class WebSocketStep(PipelineStep):
             
             # 🚀 NOUVEAU : Notifier le pipeline de la nouvelle connexion
             if self.output_queue:
-                user_connection_message = UserConnectionMessage.create(
+                user_connection_message = UserConnectionMessage(
                     client_id=client_id,
-                    username=username,
-                    metadata={
-                        "message_type": "user_connection",
-                        "timestamp": time.time()
-                    }
+                    username=username
                 )
                 self.output_queue.enqueue(user_connection_message)
                 logger.info(f"🔌 User connection notification sent for {username}")
@@ -313,16 +309,11 @@ class WebSocketStep(PipelineStep):
                             metadata = data.get("metadata", {})
                             
                             logger.info(f"Processing JSON audio message from {client_id}: {len(audio_bytes)} bytes")
-                            audio_message = AudioInputMessage.create(
+                            audio_message = AudioInputMessage(
                                 audio_data=audio_bytes,
                                 client_id=client_id,
                                 format=metadata.get("format", self.audio_format),
-                                sample_rate=metadata.get("sample_rate", self.sample_rate),
-                                metadata={
-                                    "channels": metadata.get("channels", 1),
-                                    "chunk_index": metadata.get("chunk_index", 0),
-                                    "timestamp": time.time()
-                                }
+                                sample_rate=metadata.get("sample_rate", self.sample_rate)
                             )
                             self.output_queue.enqueue(audio_message)
                             logger.info(f"Audio message queued for processing")
@@ -337,14 +328,11 @@ class WebSocketStep(PipelineStep):
                         
                 elif self.mode == "audio_to_text" and isinstance(message, bytes):
                     logger.info(f"Processing raw audio message from {client_id}: {len(message)} bytes")
-                    audio_message = AudioInputMessage.create(
+                    audio_message = AudioInputMessage(
                         audio_data=message,
                         client_id=client_id,
                         format=self.audio_format,
-                        sample_rate=self.sample_rate,
-                        metadata={
-                            "timestamp": time.time()
-                        }
+                        sample_rate=self.sample_rate
                     )
                     self.output_queue.enqueue(audio_message)
                     logger.info(f"Audio message queued for processing")
@@ -372,13 +360,10 @@ class WebSocketStep(PipelineStep):
                         images = []
                         logger.info(f"Using raw text message: '{text_data}'")
                     
-                    text_message = TextInputMessage.create(
+                    text_message = TextInputMessage(
                         text=text_data,
                         client_id=client_id,
-                        images=images,
-                        metadata={
-                            "timestamp": time.time()
-                        }
+                        images=images
                     )
                     self.output_queue.enqueue(text_message)
                     logger.info(f"Message queued - text: '{text_data}', images: {len(images)}")

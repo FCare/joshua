@@ -11,8 +11,6 @@ class BaseMessage(ABC):
     Empêche l'instanciation directe et force l'utilisation des sous-classes spécialisées.
     Les instances sont immutables après création.
     """
-    data: Any
-    metadata: Optional[Dict] = None
     
     def __new__(cls, *args, **kwargs):
         # Empêche l'instanciation directe de BaseMessage
@@ -20,21 +18,15 @@ class BaseMessage(ABC):
             raise TypeError("Cannot instantiate BaseMessage directly. Use specialized subclasses instead.")
         return super().__new__(cls)
     
-    def copy(self, new_metadata: Optional[Dict] = None) -> 'BaseMessage':
+    def copy(self) -> 'BaseMessage':
         """
         Crée une copie du message avec des métadonnées mises à jour.
-        
-        Args:
-            new_metadata: Nouvelles métadonnées (fusionnées avec les existantes)
-            
+   
         Returns:
             Nouvelle instance du même type de message
         """
-        # Fusionner les métadonnées
-        updated_metadata = self.metadata.copy() if self.metadata else {}
-        if new_metadata:
-            updated_metadata.update(new_metadata)
+
         
         # Utiliser dataclasses.replace pour créer une copie avec les nouvelles métadonnées
         from dataclasses import replace
-        return replace(self, metadata=updated_metadata)
+        return replace(self)

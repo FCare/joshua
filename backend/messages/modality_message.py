@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from typing import Dict, Any, Optional, List
-from messages.base_message import BaseMessage
+from .base_message import BaseMessage
 
 
 # ============================================
@@ -116,20 +116,17 @@ class ModalityOutputAudio(BaseMessage):
 class ModalityOutputTranscription(BaseMessage):
     """Message de sortie transcription (ASR → Chat)"""
     text: str
-    confidence: float
     is_final: bool
     
-    def __init__(self, text: str, confidence: float = 1.0, is_final: bool = True,
+    def __init__(self, text: str, is_final: bool = True,
                  metadata: Optional[Dict] = None):
         data = {
             "text": text,
-            "confidence": confidence,
             "is_final": is_final,
             "type": "transcription"
         }
         super().__init__(data=data, metadata=metadata)
         object.__setattr__(self, 'text', text)
-        object.__setattr__(self, 'confidence', confidence)
         object.__setattr__(self, 'is_final', is_final)
     
 # ============================================
