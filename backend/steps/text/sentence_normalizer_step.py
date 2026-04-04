@@ -134,23 +134,6 @@ class SentenceNormalizerStep(PipelineStep):
             
             logger.info(f"📤 SentenceNormalizer envoie phrase{'(DERNIÈRE)' if is_last_phrase else ''}: {repr(normalized)}")
             
-            # 🎯 CORRECTIF: Obtenir les données source depuis data OU result
-            original_source_data = ""
-            if source_message.text:
-                original_source_data = source_message.text
-            # Architecture dataclass pure: accès direct aux propriétés
-            
-            # Créer message de sortie avec le texte normalisé
-            # Préserver l'original_client_id pour le routage WebSocket
-            new_metadata = {
-                "source": self.name,
-                "original_data": original_source_data,
-                "is_last_phrase": is_last_phrase  # 🎯 MÉTADONNÉE CLÉ pour le TTS
-            }
-            
-            # Note: Métadonnées supprimées de l'architecture dataclass pure
-            # Les client IDs sont maintenant gérés directement dans les propriétés de message
-            
             from messages.text_message import SentenceMessage
             output_message = SentenceMessage(
                 text=normalized,
