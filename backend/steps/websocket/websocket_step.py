@@ -152,26 +152,29 @@ class WebSocketStep(PipelineStep):
                 finish_message = {
                     "type": "audio_finished",
                     "total_chunks": data.get('total_chunks', 0) if isinstance(data, dict) else 0,
-                    "total_bytes": data.get('total_bytes', 0) if isinstance(data, dict) else 0
+                    "total_bytes": data.get('total_bytes', 0) if isinstance(data, dict) else 0,
+                    "timestamp": time.time()
                 }
-                await self.send_to_specific_client(original_client_id, "audio_finished", json.dumps(finish_message))
+                await self.send_to_specific_client(original_client_id, json.dumps(finish_message))
                 
             elif message_type == 'chat_finished':
                 # 🎯 Signal de fin de chat complet (TTS a terminé)
                 logger.info(f"Sending chat finished signal to client {original_client_id}")
                 chat_finish_message = {
-                    "type": "chat_finished"
+                    "type": "chat_finished",
+                    "timestamp": time.time()
                 }
-                await self.send_to_specific_client(original_client_id, "chat_finished", json.dumps(chat_finish_message))
+                await self.send_to_specific_client(original_client_id, json.dumps(chat_finish_message))
                 
             elif  message_type == "chat_response":
                 # Message texte normal - envoyer comme chat_response
                 logger.info(f"Sending chat response to client {original_client_id}: '{str(data)[:50]}{'...' if len(str(data)) > 50 else ''}'")
                 chat_response_message = {
                     "type": "transcription",
-                    "text": data
+                    "text": data,
+                    "timestamp": time.time(),
                 }
-                await self.send_to_specific_client(original_client_id, "transcription", json.dumps(chat_response_message))
+                await self.send_to_specific_client(original_client_id, json.dumps(chat_response_message))
                 
         except Exception as e:
             logger.error(f"Error in _handle_input_message_async: {e}")
@@ -380,19 +383,13 @@ class WebSocketStep(PipelineStep):
         except Exception as e:
             raise
     
-    async def send_to_specific_client(self, client_id: str, type :str, text: str):
+    async def send_to_specific_client(self, client_id: str, text: str):
         """Envoie un message texte à un client spécifique"""
         if client_id not in self.connections:
             logger.warning(f"❌ Client {client_id} not found in connections")
             return
             
         websocket = self.connections[client_id]
-        
-        message = {
-            "type": type,
-            "text": text,
-            "timestamp": time.time(),
-        }
         
         try:
             # Vérifier l'état de la connexion WebSocket
@@ -402,7 +399,7 @@ class WebSocketStep(PipelineStep):
                     del self.connections[client_id]
                 return
                 
-            await websocket.send(json.dumps(message))
+            await websocket.send(text)
             logger.info(f"✅ Sent to {client_id}: '{text[:30]}{'...' if len(text) > 30 else ''}'")
         except Exception as e:
             logger.warning(f"⚠️  Temporary error sending to {client_id}: {e}")
