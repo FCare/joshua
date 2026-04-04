@@ -250,7 +250,6 @@ class KyutaiTTS:
             
         try:
             self._send_text(text)
-            self._send_eos()
             
         except Exception as e:
             logger.error(f"{self.name}: Error processing text: {e}")
