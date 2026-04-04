@@ -283,7 +283,7 @@ class OpenAIChatStep(PipelineStep):
     def _handle_streaming_response(self, response):
         """Gère la réponse streaming avec support des tool calls"""
         try:
-            logger.info(f"💬 API response received, starting streaming...")
+            logger.info(f"💬 API response received, starting streaming ${response}...")
             assistant_response = ""
             tool_calls = []
             current_tool_call = None
