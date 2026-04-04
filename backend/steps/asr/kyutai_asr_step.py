@@ -122,7 +122,7 @@ class MoshiASR:
         self.pending_audio_queue = deque()
         self.connection_in_progress = False
 
-        logger.debug(f"{self.name}: Initialized with VK API key: {vk_api_key[:10]}..." if vk_api_key else f"{self.name}: Initialized without VK API key")
+        logger.info(f"{self.name}: Initialized with VK API key: {vk_api_key[:10]}..." if vk_api_key else f"{self.name}: Initialized without VK API key")
 
     def set_output_queue(self, queue):
         self.output_queue = queue
@@ -136,7 +136,7 @@ class MoshiASR:
             return
         
         ws_url = self._build_websocket_url()
-        logger.debug(f"{self.name}: Connecting to {ws_url}")
+        logger.info(f"{self.name}: Connecting to {ws_url}")
         
         # Préparer les headers pour la connexion WebSocket
         headers = ["kyutai-api-key: public_token"]
@@ -144,7 +144,7 @@ class MoshiASR:
         # Ajouter l'API key Voight-Kampff pour l'authentification Traefik
         if self.vk_api_key:
             headers.append(f"X-API-Key: {self.vk_api_key}")
-            logger.debug(f"{self.name}: Using VK API key for Traefik authentication")
+            logger.info(f"{self.name}: Using VK API key for Traefik authentication")
         else:
             logger.warning(f"{self.name}: No VK API key provided, connection may fail")
         
@@ -183,11 +183,11 @@ class MoshiASR:
     def on_open(self, ws):
         """WebSocket connection opened callback."""
         self._connected = True
-        logger.debug(f"{self.name}: WebSocket connected successfully")
+        logger.info(f"{self.name}: WebSocket connected successfully")
         
         # Vider la queue des paquets en attente
         if self.pending_audio_queue:
-            logger.debug(f"{self.name}: Processing {len(self.pending_audio_queue)} queued audio packets")
+            logger.info(f"{self.name}: Processing {len(self.pending_audio_queue)} queued audio packets")
             while self.pending_audio_queue:
                 audio_data, client_id, timestamp = self.pending_audio_queue.popleft()
                 try:
@@ -195,7 +195,7 @@ class MoshiASR:
                 except Exception as e:
                     logger.error(f"{self.name}: Error processing queued audio: {e}")
                     break
-            logger.debug(f"{self.name}: Finished processing queued audio packets")
+            logger.info(f"{self.name}: Finished processing queued audio packets")
 
     def on_message(self, ws, message):
         """WebSocket message received callback."""
@@ -213,7 +213,7 @@ class MoshiASR:
                 start_time = message_dict.get('start_time', 0)
                 if self.flushing_mode:
                     self.flushing_mode = False
-                    logger.debug("Cancel flushing mode")
+                    logger.info("Cancel flushing mode")
                     if not self.is_speaking:
                         self._enqueue_event(StartEvent())
                 
@@ -225,15 +225,15 @@ class MoshiASR:
                 self.last_word_time = start_time
                 self.is_speaking = True
                 
-                logger.debug(f"{self.name}: Word: '{word_text}' at {start_time:.2f}s")
+                logger.info(f"{self.name}: Word: '{word_text}' at {start_time:.2f}s")
                 
             elif message_type == 'EndWord':
                 stop_time = message_dict.get('stop_time', 0)
-                logger.debug(f"{self.name}: Word ended at {stop_time:.2f}s")
+                logger.info(f"{self.name}: Word ended at {stop_time:.2f}s")
                 
             elif message_type == 'Marker':
                 marker_id = message_dict.get('id', 0)
-                logger.debug(f"{self.name}: Marker received: {marker_id}")
+                logger.info(f"{self.name}: Marker received: {marker_id}")
                 
             elif message_type == 'Step':
                 step_idx = message_dict.get('step_idx', 0)
@@ -250,24 +250,24 @@ class MoshiASR:
         
                     if self.pause_prediction.value > self.pause_threshold and self.is_speaking:
                         if not self.flushing_mode:
-                            logger.debug("Starting flushing mode")
+                            logger.info("Starting flushing mode")
                             self._enter_flushing_mode()
                     
                     elif self.pause_prediction.value < self.vad_threshold:
                         self.pause_prediction.value = 0.0
                         if self.flushing_mode:
-                            logger.debug("Cancel flushing mode")
+                            logger.info("Cancel flushing mode")
                             self.flushing_mode = False
                         if not self.is_speaking:
                             self._enqueue_event(StartEvent())
                             
             if self.flushing_mode:
                 if self.flushing_limit == self.packets_received:
-                    logger.debug("Flushing Done")
+                    logger.info("Flushing Done")
                     self.is_speaking = False
                     self.flushing_mode = False
                     if self.output_queue:
-                        logger.debug("Flushing Done : Trigger LLM")
+                        logger.info("Flushing Done : Trigger LLM")
                         self._enqueue_event(EndEvent())
                     return
                 
@@ -276,12 +276,12 @@ class MoshiASR:
 
     def _enqueue_event(self, event):
         """Architecture dataclass pure : utilise isinstance() au lieu de .type"""
-        logger.debug(f"{self.name}: _enqueue_event called with {type(event).__name__}")
+        logger.info(f"{self.name}: _enqueue_event called with {type(event).__name__}")
         if self.output_queue:
             if isinstance(event, TextEvent):
                 # Ajouter le mot au buffer d'abord
                 self.text_buffer.append(event.text)
-                logger.debug(f"{self.name}: Added word '{event.text}' to buffer, buffer now: {self.text_buffer}")
+                logger.info(f"{self.name}: Added word '{event.text}' to buffer, buffer now: {self.text_buffer}")
                 
                 # Message transcript_chunk pour streaming
                 from messages.asr_message import TranscriptionMessage
@@ -295,7 +295,7 @@ class MoshiASR:
             elif isinstance(event, EndEvent):
                 # Message transcript_done pour LLM
                 full_text = ' '.join(self.text_buffer).strip()
-                logger.debug(f"{self.name}: Creating transcript_done from buffer: '{full_text}'")
+                logger.info(f"{self.name}: Creating transcript_done from buffer: '{full_text}'")
                 from messages.asr_message import TranscriptionMessage
                 message = TranscriptionMessage(
                     text=full_text,
@@ -306,9 +306,9 @@ class MoshiASR:
                 # Reset buffer after sending complete transcript
                 self.text_buffer = []
             elif isinstance(event, StartEvent):
-                logger.debug(f"{self.name}: Voice start detected")
+                logger.info(f"{self.name}: Voice start detected")
             else:
-                logger.debug(f"{self.name}: Ignoring event type {type(event).__name__}")
+                logger.info(f"{self.name}: Ignoring event type {type(event).__name__}")
         else:
             logger.error(f"{self.name}: No output_queue to send event!")
 
@@ -321,7 +321,7 @@ class MoshiASR:
         self.connection_in_progress = False
         self._connected = False
         self._stream_active = False
-        logger.debug(f"{self.name}: WebSocket disconnected")
+        logger.info(f"{self.name}: WebSocket disconnected")
 
     def _send_audio(self, audio_data: list, timestamp: float):
         """Send audio packet directly to STT server."""
@@ -362,7 +362,7 @@ class MoshiASR:
         timestamp = time.time()
         
         if not self._connected:
-            logger.debug(f"{self.name}: Not connected, queuing audio packet")
+            logger.info(f"{self.name}: Not connected, queuing audio packet")
             self.pending_audio_queue.append((audio_chunk, client_id, timestamp))
             
             # Initier la connexion si pas déjà en cours
@@ -382,7 +382,7 @@ class MoshiASR:
         Receives audio from client → Split into 80ms → Send directly to STT
         """
         if not self._stream_active:
-            logger.debug(f"{self.name}: Stream not active yet")
+            logger.info(f"{self.name}: Stream not active yet")
             
         # Update client_id if provided
         if client_id:
@@ -415,7 +415,7 @@ class MoshiASR:
 
     def disconnect(self):
         """Clean disconnection."""
-        logger.debug(f"{self.name}: Disconnecting...")
+        logger.info(f"{self.name}: Disconnecting...")
         
         try:
             if self.ws:
@@ -433,7 +433,7 @@ class MoshiASR:
             self.flushing_mode = False
             self.packets_sent = 0
             self.packets_received = 0
-            logger.debug(f"{self.name}: Disconnected successfully")
+            logger.info(f"{self.name}: Disconnected successfully")
 
     def reset(self):
         """Reset the user input buffer and transcription state."""
@@ -443,7 +443,7 @@ class MoshiASR:
             self.flushing_limit = 0
             self.flushing_mode = False
             
-            logger.debug(f"{self.name}: Reset completed")
+            logger.info(f"{self.name}: Reset completed")
             # Vider la queue en cas de reset
             self.pending_audio_queue.clear()
             
@@ -522,29 +522,29 @@ class KyutaiASRStep(PipelineStep):
             return
             
         try:
-            logger.debug(f"🎤 ASR: _handle_input_message called with AudioInputMessage")
+            logger.info(f"🎤 ASR: _handle_input_message called with AudioInputMessage")
             
             # Récupère les données audio directement depuis la propriété dataclass
             audio_data = message.audio_data
             if not audio_data:
-                logger.debug("🎤 ASR: Pas de données dans le message, ignoré")
+                logger.info("🎤 ASR: Pas de données dans le message, ignoré")
                 return
             
             # Vérifie que c'est bien des données audio (bytes) - ignore le reste silencieusement
             if not isinstance(audio_data, bytes):
-                logger.debug(f"🎤 ASR: Données non-audio reçues ({type(audio_data)}), ignorées (probablement du texte pour tools/LLM)")
+                logger.info(f"🎤 ASR: Données non-audio reçues ({type(audio_data)}), ignorées (probablement du texte pour tools/LLM)")
                 return
             
             # Récupère l'ID du client directement depuis la propriété dataclass
             self.current_client_id = message.client_id
-            logger.debug(f"🎤 ASR: Client ID: {self.current_client_id}")
+            logger.info(f"🎤 ASR: Client ID: {self.current_client_id}")
             
             # Vérifie que MoshiASR est initialisé
             if not self.moshi_asr:
                 logger.error("🎤 ASR: MoshiASR non initialisé")
                 return
             
-            logger.debug(f"🎤 ASR: MoshiASR connecté: {self.moshi_asr._connected}, actif: {self.moshi_asr._stream_active}")
+            logger.info(f"🎤 ASR: MoshiASR connecté: {self.moshi_asr._connected}, actif: {self.moshi_asr._stream_active}")
             
             # Traite le chunk audio avec MoshiASR
             self.moshi_asr._process_audio_chunk(audio_data, self.current_client_id)

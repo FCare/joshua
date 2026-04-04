@@ -109,10 +109,10 @@ class SentenceNormalizerStep(PipelineStep):
                 return
             
             text_chunk = str(text_chunk)
-            logger.debug(f"SentenceNormalizer reçu chunk: {repr(text_chunk)}")
+            logger.info(f"SentenceNormalizer reçu chunk: {repr(text_chunk)}")
             
             # Ajouter le chunk au buffer et récupérer les phrases complètes
-            logger.debug(f"📝 SentenceNormalizer reçu chunk: {repr(text_chunk)}")
+            logger.info(f"📝 SentenceNormalizer reçu chunk: {repr(text_chunk)}")
             complete_sentences = self._add_chunk(text_chunk)
             logger.info(f"🔍 SentenceNormalizer détecté {len(complete_sentences)} phrases complètes: {[repr(s) for s in complete_sentences]}")
             
@@ -154,12 +154,12 @@ class SentenceNormalizerStep(PipelineStep):
         
         # Ajouter le chunk au buffer
         self.sentence_buffer += chunk
-        logger.debug(f"🔤 Buffer après ajout: {repr(self.sentence_buffer)}")
+        logger.info(f"🔤 Buffer après ajout: {repr(self.sentence_buffer)}")
         
         # Chercher les fins de phrase
         complete_sentences = []
         sentence_endings = list(re.finditer(self.sentence_endings, self.sentence_buffer))
-        logger.debug(f"🎯 Fins de phrase trouvées: {len(sentence_endings)} positions: {[m.span() for m in sentence_endings]}")
+        logger.info(f"🎯 Fins de phrase trouvées: {len(sentence_endings)} positions: {[m.span() for m in sentence_endings]}")
         
         if sentence_endings:
             last_sentence_end = -1
@@ -175,16 +175,16 @@ class SentenceNormalizerStep(PipelineStep):
                         sentence = self.sentence_buffer[last_sentence_end + 1:end_pos].strip()
                     
                     if sentence:
-                        logger.debug(f"✅ Phrase complète ajoutée: {repr(sentence)}")
+                        logger.info(f"✅ Phrase complète ajoutée: {repr(sentence)}")
                         complete_sentences.append(sentence)
                     last_sentence_end = end_pos - 1
             
             # Garder seulement ce qui vient après la dernière phrase complète
             remaining_buffer = self.sentence_buffer[last_sentence_end + 1:]
-            logger.debug(f"🔄 Buffer restant: {repr(remaining_buffer)}")
+            logger.info(f"🔄 Buffer restant: {repr(remaining_buffer)}")
             self.sentence_buffer = remaining_buffer
         
-        logger.debug(f"📊 Retour de _add_chunk: {len(complete_sentences)} phrases: {[repr(s) for s in complete_sentences]}")
+        logger.info(f"📊 Retour de _add_chunk: {len(complete_sentences)} phrases: {[repr(s) for s in complete_sentences]}")
         return complete_sentences
     
     def _is_true_sentence_end(self, text: str, position: int) -> bool:

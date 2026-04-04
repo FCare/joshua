@@ -444,7 +444,7 @@ class WebSocketStep(PipelineStep):
                 return
                 
             await websocket.send(json.dumps(message))
-            logger.debug(f"✅ Sent to {client_id}: '{text[:30]}{'...' if len(text) > 30 else ''}'")
+            logger.info(f"✅ Sent to {client_id}: '{text[:30]}{'...' if len(text) > 30 else ''}'")
         except Exception as e:
             logger.warning(f"⚠️  Temporary error sending to {client_id}: {e}")
             # Ne pas supprimer la connexion immédiatement - elle pourrait être temporairement occupée
@@ -476,7 +476,7 @@ class WebSocketStep(PipelineStep):
             }
             
             await websocket.send(json.dumps(message))
-            logger.debug(f"✅ Sent audio chunk to {client_id}: {len(audio_data)} bytes")
+            logger.info(f"✅ Sent audio chunk to {client_id}: {len(audio_data)} bytes")
         except Exception as e:
             logger.warning(f"⚠️  Temporary error sending audio to {client_id}: {e}")
             # Ne pas supprimer la connexion immédiatement - elle pourrait être temporairement occupée
@@ -512,7 +512,7 @@ class WebSocketStep(PipelineStep):
                     
                 await websocket.send(json.dumps(message))
                 sent_count += 1
-                logger.debug(f"✅ Sent to {client_id}")
+                logger.info(f"✅ Sent to {client_id}")
             except Exception as e:
                 logger.warning(f"⚠️  Temporary error broadcasting to {client_id}: {e}")
                 # Ne pas ajouter à disconnected - erreur temporaire possible

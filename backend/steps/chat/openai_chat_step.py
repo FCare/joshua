@@ -302,7 +302,7 @@ class OpenAIChatStep(PipelineStep):
                 if delta and delta.content:
                     content = delta.content
                     assistant_response += content
-                    logger.debug(f"OpenAI stream chunk: '{content[:50]}{'...' if len(content) > 50 else ''}'")
+                    logger.info(f"OpenAI stream chunk: '{content[:50]}{'...' if len(content) > 50 else ''}'")
                     
                     # Envoie directement vers l'output_queue
                     if self.output_queue:
@@ -461,7 +461,7 @@ class OpenAIChatStep(PipelineStep):
         tools_section = "\n".join(tools_descriptions)
         enhanced_prompt = f"{self.system_prompt}\n\n{tools_section}"
         
-        logger.debug(f"Prompt enrichi généré: {enhanced_prompt[:100]}...")
+        logger.info(f"Prompt enrichi généré: {enhanced_prompt[:100]}...")
         return enhanced_prompt
     
     def _handle_tool_response(self, tool_response: BaseMessage):

@@ -28,7 +28,7 @@ class SystemPromptStep(PipelineStep):
     
     def _handle_input_event(self, input_message):
         """Handler vide - ce step ignore volontairement tous les messages entrants"""
-        logger.debug(f"📝 SystemPrompt: Message ignoré volontairement: {type(input_message).__name__}")
+        logger.info(f"📝 SystemPrompt: Message ignoré volontairement: {type(input_message).__name__}")
         pass
     
     def init(self) -> bool:

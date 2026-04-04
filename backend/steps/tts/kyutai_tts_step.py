@@ -178,11 +178,11 @@ class KyutaiTTS:
                 
         except msgpack.exceptions.ExtraData:
             # Si c'est des données binaires non-msgpack, les traiter comme audio
-            logger.debug(f"{self.name}: Raw binary data ({len(message)} bytes)")
+            logger.info(f"{self.name}: Raw binary data ({len(message)} bytes)")
             self._enqueue_audio_chunk(message)
         except Exception as decode_error:
             # Si ce n'est pas du msgpack valide, traiter comme audio brut
-            logger.debug(f"{self.name}: Could not decode as msgpack, treating as raw audio: {decode_error}")
+            logger.info(f"{self.name}: Could not decode as msgpack, treating as raw audio: {decode_error}")
             if isinstance(message, bytes):
                 self._enqueue_audio_chunk(message)
             else:
@@ -201,7 +201,7 @@ class KyutaiTTS:
             )
             self.output_queue.enqueue(message)
             self.audio_chunks_sent += 1
-            logger.debug(f"{self.name}: Audio chunk sent ({len(audio_bytes)} bytes, format: {audio_format})")
+            logger.info(f"{self.name}: Audio chunk sent ({len(audio_bytes)} bytes, format: {audio_format})")
 
     def on_error(self, ws, error):
         logger.error(f"{self.name}: WebSocket error: {error}")
@@ -349,10 +349,7 @@ class KyutaiTTSStep(PipelineStep):
             logger.info(f"Message is {message.text},{message.is_last}")
             
             # 🎯 DÉTECTER LE SIGNAL FINISH DU CHAT
-            is_finish_signal = (
-                not message.text or
-                (isinstance(message.text, str) and message.text.strip() == "")
-            )
+            is_finish_signal = message.is_last_phrase
             
             if is_finish_signal:
                 logger.info(f"TTS: Received finish signal from chat for client: {self.current_client_id}")
