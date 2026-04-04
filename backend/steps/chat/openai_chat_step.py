@@ -283,7 +283,7 @@ class OpenAIChatStep(PipelineStep):
     def _handle_streaming_response(self, response):
         """Gère la réponse streaming avec support des tool calls"""
         try:
-            logger.info(f"💬 API response received, starting streaming ${response}...")
+            logger.info(f"💬 API response received, starting streaming...")
             assistant_response = ""
             tool_calls = []
             current_tool_call = None
@@ -292,8 +292,10 @@ class OpenAIChatStep(PipelineStep):
             for chunk in response:
                 chunk_count += 1
                 # Vérification de sécurité pour Azure OpenAI
+                logger.info(f"💬 API response Chunk {chunk}")
                 if not hasattr(chunk, 'choices') or not chunk.choices:
                     continue
+                logger.info(f"💬 API response Chunk valid")
                     
                 choice = chunk.choices[0]
                 delta = choice.delta
