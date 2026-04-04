@@ -118,7 +118,7 @@ class SentenceNormalizerStep(PipelineStep):
             
             # Envoyer chaque phrase complète normalisée
             for sentence in complete_sentences:
-                self._send_normalized_sentence(sentence, message, is_last_phrase=False)
+                self._send_normalized_sentence(sentence, message, is_last_phrase=not message.is_partial)
             
         except Exception as e:
             logger.error(f"Erreur traitement chunk dans SentenceNormalizer: {e}")
