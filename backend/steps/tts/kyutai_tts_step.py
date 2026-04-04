@@ -338,7 +338,6 @@ class KyutaiTTSStep(PipelineStep):
         
         allowed_classes = (SentenceMessage)
         if not isinstance(message, allowed_classes):
-            logger.warning(f"🔊 TTS: Type de message non autorisé: {type(message).__name__}")
             return
             
         try:
@@ -349,7 +348,7 @@ class KyutaiTTSStep(PipelineStep):
             logger.info(f"TTS: Processing ChatResponseMessage")
             
             # 🎯 IGNORER LES CHUNKS PARTIELS - traiter seulement les messages finaux
-            if message.is_partial:
+            if not message.is_last:
                 logger.debug(f"TTS: Ignoring partial message: '{message.text[:50]}...'")
                 return
             

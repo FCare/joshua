@@ -63,7 +63,7 @@ class ChatterboxTTSStep(PipelineStep):
         try:
             # Architecture dataclass pure - plus de metadata
             # Détection du signal finish basée sur la propriété du message
-            if input_message.is_partial == False and not input_message.text.strip():
+            if input_message.is_last and not input_message.text.strip():
                 print(f"🏁 TTS reçu signal FINISH du chat")
                 self._handle_finish_signal({})
                 return
