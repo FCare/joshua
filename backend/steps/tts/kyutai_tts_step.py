@@ -351,7 +351,7 @@ class KyutaiTTSStep(PipelineStep):
             if not message.is_last:
                 logger.debug(f"TTS: Ignoring partial message: '{message.text[:50]}...'")
                 return
-            
+            logger.debug(f"Message is {message}")
             # 🎯 DÉTECTER LE SIGNAL FINISH DU CHAT
             is_finish_signal = (
                 not message.text or
