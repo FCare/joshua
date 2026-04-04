@@ -380,7 +380,7 @@ class WebSocketStep(PipelineStep):
         except Exception as e:
             raise
     
-    async def send_to_specific_client(self, client_id: str, : str, text: str):
+    async def send_to_specific_client(self, client_id: str, text: str):
         """Envoie un message texte à un client spécifique"""
         if client_id not in self.connections:
             logger.warning(f"❌ Client {client_id} not found in connections")
