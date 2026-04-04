@@ -146,52 +146,32 @@ class WebSocketStep(PipelineStep):
                 logger.info(f"Sending audio chunk to client {original_client_id}: {len(data)} bytes")
                 await self.send_audio_to_client(original_client_id, data, metadata)
                 
-            elif message_type == 'audio_finished' or (isinstance(data, dict) and data.get('type') == 'audio_finished'):
+            elif message_type == 'audio_finished':
                 # Signal de fin de streaming audio
                 logger.info(f"Sending audio finished signal to client {original_client_id}")
                 finish_message = {
                     "type": "audio_finished",
                     "total_chunks": data.get('total_chunks', 0) if isinstance(data, dict) else 0,
-                    "total_bytes": data.get('total_bytes', 0) if isinstance(data, dict) else 0,
-                    "timestamp": time.time(),
-                    "metadata": metadata
+                    "total_bytes": data.get('total_bytes', 0) if isinstance(data, dict) else 0
                 }
-                await self.send_to_specific_client(original_client_id, json.dumps(finish_message), metadata)
+                await self.send_to_specific_client(original_client_id, "audio_finished", json.dumps(finish_message))
                 
             elif message_type == 'chat_finished':
                 # 🎯 Signal de fin de chat complet (TTS a terminé)
                 logger.info(f"Sending chat finished signal to client {original_client_id}")
                 chat_finish_message = {
-                    "type": "chat_finished",
-                    "timestamp": time.time(),
-                    "metadata": metadata
+                    "type": "chat_finished"
                 }
-                await self.send_to_specific_client(original_client_id, json.dumps(chat_finish_message), metadata)
+                await self.send_to_specific_client(original_client_id, "chat_finished", json.dumps(chat_finish_message))
                 
-            elif isinstance(data, str) and data.strip().startswith('{"type": "audio_finished"'):
-                # Signal de fin audio sérialisé - parser et traiter
-                try:
-                    finish_data = json.loads(data)
-                    if finish_data.get('type') == 'audio_finished':
-                        logger.info(f"Sending parsed audio finished signal to client {original_client_id}")
-                        await self.send_to_specific_client(original_client_id, data, metadata)
-                        return
-                except json.JSONDecodeError:
-                    pass  # Continuer comme texte normal
-                
-                # Si parsing échoue, traiter comme texte normal
-                logger.info(f"Sending chat response to client {original_client_id}: '{str(data)[:50]}{'...' if len(str(data)) > 50 else ''}'")
-                await self.send_to_specific_client(original_client_id, str(data), metadata)
-                
-            elif isinstance(data, (str, int, float)):
+            elif  message_type == "chat_response":
                 # Message texte normal - envoyer comme chat_response
                 logger.info(f"Sending chat response to client {original_client_id}: '{str(data)[:50]}{'...' if len(str(data)) > 50 else ''}'")
-                await self.send_to_specific_client(original_client_id, str(data), metadata)
-                
-            else:
-                # Données inconnues - convertir en string par défaut
-                logger.warning(f"Unknown data type for client {original_client_id}: {type(data)}")
-                await self.send_to_specific_client(original_client_id, str(data), metadata)
+                chat_response_message = {
+                    "type": "transcription",
+                    "text": data
+                }
+                await self.send_to_specific_client(original_client_id, "transcription", json.dumps(chat_response_message))
                 
         except Exception as e:
             logger.error(f"Error in _handle_input_message_async: {e}")
@@ -400,7 +380,7 @@ class WebSocketStep(PipelineStep):
         except Exception as e:
             raise
     
-    async def send_to_specific_client(self, client_id: str, text: str, metadata: dict):
+    async def send_to_specific_client(self, client_id: str, : str, text: str):
         """Envoie un message texte à un client spécifique"""
         if client_id not in self.connections:
             logger.warning(f"❌ Client {client_id} not found in connections")
@@ -408,29 +388,10 @@ class WebSocketStep(PipelineStep):
             
         websocket = self.connections[client_id]
         
-        # Détermine le type de message selon les métadonnées
-        # Vérifier d'abord message_type explicite (pour ASR)
-        explicit_message_type = metadata.get('message_type')
-        if explicit_message_type in ['transcript_chunk', 'transcript_done']:
-            message_type = explicit_message_type
-        else:
-            # Système basé sur response_type ou chunk_type
-            response_type = metadata.get('response_type', 'transcription')
-            chunk_type = metadata.get('chunk_type')
-            
-            # Si on a chunk_type (OpenAI Chat), utiliser ça pour déterminer le type
-            if chunk_type in ['partial', 'finish']:
-                message_type = "chat_response"
-            elif response_type in ['partial', 'finish']:
-                message_type = "chat_response"
-            else:
-                message_type = "transcription"
-        
         message = {
-            "type": message_type,
+            "type": type,
             "text": text,
             "timestamp": time.time(),
-            "metadata": metadata
         }
         
         try:
