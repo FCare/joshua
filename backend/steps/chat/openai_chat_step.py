@@ -132,12 +132,11 @@ class OpenAIChatStep(PipelineStep):
     def _handle_text_input(self, message: TextInputMessage):
         """Traite les messages texte du frontend"""
         logger.info(f"💬 Chat: Processing text message from frontend")
-        self.current_client_id = message.client_id
         
         text_data = message.text
         images = message.images
         
-        logger.info(f"💬 Chat received text: '{text_data}' with {len(images)} images from client: {self.current_client_id}")
+        logger.info(f"💬 Chat received text: '{text_data}' with {len(images)} images")
         
         if text_data.strip() or images:
             self._process_chat_request(text_data.strip(), images)
@@ -148,9 +147,6 @@ class OpenAIChatStep(PipelineStep):
         # Plus de distinction partial/complete via metadata
         logger.info(f"💬 Chat: Processing transcription - starting chat generation")
         
-        # Plus de client_id dans les métadonnées - sera géré par le routing des queues
-        self.current_client_id = None
-        
         # Utiliser l'accès direct aux propriétés dataclass
         text_data = message.text
             
@@ -160,9 +156,8 @@ class OpenAIChatStep(PipelineStep):
     def _handle_system_prompt_message(self, message: SystemPromptMessage):
         """Traite les mises à jour de system prompt"""
         logger.info(f"💬 Chat: Processing system prompt update")
-        new_prompt = message.text
-        self.system_prompt = new_prompt
-        logger.info(f"System prompt updated: {new_prompt[:100]}...")
+        self.system_prompt = message.promp
+        logger.info(f"System prompt updated: {self.system_prompt[:100]}...")
     
     def _handle_system_prompt_update(self, input_message):
         """Traite les mises à jour de system prompt"""
@@ -255,6 +250,7 @@ class OpenAIChatStep(PipelineStep):
             # Paramètres de base
             call_params = {
                 "model": self.model,
+                "client_id": "global",
                 "messages": messages,
                 "temperature": self.temperature,
                 "max_tokens": self.max_tokens,
@@ -375,7 +371,6 @@ class OpenAIChatStep(PipelineStep):
             with self._lock:
                 self.conversation_history = []
                 self.accumulated_text = ""
-                self.current_client_id = None
             
             logger.info("Conversation reset")
             
@@ -388,7 +383,6 @@ class OpenAIChatStep(PipelineStep):
             "chat_active": self.client is not None,
             "conversation_length": len(self.conversation_history),
             "accumulated_text": len(self.accumulated_text),
-            "current_client": self.current_client_id,
             "model": self.model
         }
         
@@ -525,7 +519,6 @@ class OpenAIChatStep(PipelineStep):
         with self._lock:
             self.conversation_history = []
             self.accumulated_text = ""
-            self.current_client_id = None
             self.client_tools = None  # Nettoyer les outils clients
             self.client_prompts = None  # Nettoyer les prompts enrichis
         
