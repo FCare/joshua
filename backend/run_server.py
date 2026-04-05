@@ -27,15 +27,29 @@ connected_clients = set()
 pipeline_args = None
 
 class Client():
-    async def __init__(self, pipeline: str, websocket):
-        self.pipeline = run_pipeline(pipeline)
-        if not self.pipeline:
-            raise ValueError(f"Impossible de créer le pipeline: {pipeline}")
-        success = await self.pipeline.start()
+
+    @classmethod
+    async def create(cls, pipeline_name: str, websocket):
+        """Factory method async pour créer un Client"""
+        pipeline = run_pipeline(pipeline_name)
+        if not pipeline:
+            raise ValueError(f"Impossible de créer le pipeline: {pipeline_name}")
+        
+        success = await pipeline.start()
         if not success:
-            raise ValueError(f"Impossible de démarrer le pipeline: {pipeline}")
+            raise ValueError(f"Impossible de démarrer le pipeline: {pipeline_name}")
+        
+        return cls(pipeline, websocket)
+
+    def __init__(self, pipeline: str, websocket):
+        self.pipeline = pipeline
         self.pipeline_input = self.pipeline.get_step("websocket_server")
         self.pipeline_input.set_ws_callback(self.sendToClient)
+        self.ws = websocket
+
+    def sendToClient(self, message):
+        asyncio.get_running_loop().create_task(self.ws.send(message))
+
     async def handle_message(self, websocket):
         try:
             # Listen for messages from the chat client
@@ -71,12 +85,10 @@ async def start_server():
     sys.exit("Server closed")
 
 async def handle_client(websocket):
-    client = await Client(pipeline_args, websocket)
+    client = await Client.create(pipeline_args, websocket)
     connected_clients.add(client)            
     await client.handle_message(websocket)
     
-    
-
 # Configure optimized deflate compression for real-time audio
 compression_config = permessage_deflate.ServerPerMessageDeflateFactory(
     server_max_window_bits=12,      # Reduced memory usage (4KB vs 32KB)
