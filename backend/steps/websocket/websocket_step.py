@@ -193,14 +193,14 @@ class WebSocketStep(PipelineStep):
                         )
                         self.output_queue.enqueue(audio_message)
                         logger.info(f"Audio message queued for processing")
-                        continue  # Message traité, passer au suivant
+                        return  # Message traité, passer au suivant
                     # Si ce n'est pas un message audio, laisser passer à la section texte
                 except json.JSONDecodeError:
                     logger.error(f"Invalid JSON: {message[:200]}...")
-                    continue
+                    return
                 except Exception as e:
                     logger.error(f"Error processing audio JSON: {e}")
-                    continue
+                    return
                     
             elif self.mode == "audio_to_text" and isinstance(message, bytes):
                 logger.info(f"Processing raw audio message: {len(message)} bytes")
@@ -218,7 +218,7 @@ class WebSocketStep(PipelineStep):
                     data = json.loads(message)
                     # Ne pas traiter les messages audio en mode texte
                     if data.get("type") == "audio":
-                        continue
+                        return
                         
                     # Support d'images avec API simplifiée
                     text_data = data.get("text", "")
