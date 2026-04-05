@@ -18,6 +18,9 @@ class WebSocketStep(PipelineStep):
     
     def __init__(self, name: str = "WebSocketServer", config: Optional[Dict] = None):
         super().__init__(name, config)
+        self.host = config.get("host", "0.0.0.0") if config else "0.0.0.0"
+        self.port = config.get("port", 8765) if config else 8765
+
         self.audio_format = config.get("audio_format", "pcm16") if config else "pcm16"
         self.sample_rate = config.get("sample_rate", 24000) if config else 24000
         
