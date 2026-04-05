@@ -63,8 +63,8 @@ class OpenAIChatStep(PipelineStep):
         self.current_client_id = None
         
         # Tools management - nouveau
-        self.client_tools = {}  # {client_id: [tool_definitions]}
-        self.client_prompts = {}  # {client_id: enhanced_prompt} - prompts enrichis par client
+        self.client_tools = None  # {client_id: [tool_definitions]}
+        self.client_prompts = None  # {client_id: enhanced_prompt} - prompts enrichis par client
         
         # Thread safety
         self._lock = threading.Lock()
@@ -224,9 +224,8 @@ class OpenAIChatStep(PipelineStep):
         
         # Message système - utiliser le prompt enrichi si disponible pour ce client
         system_prompt = self.system_prompt
-        if (self.current_client_id and
-            self.current_client_id in self.client_prompts):
-            system_prompt = self.client_prompts[self.current_client_id]
+        if (self.client_prompts):
+            system_prompt = self.client_prompts
         
         if system_prompt:
             messages.append({
@@ -264,10 +263,8 @@ class OpenAIChatStep(PipelineStep):
             }
             
             # Ajouter les outils spécifiques au client actuel
-            if (self.current_client_id and
-                self.current_client_id in self.client_tools):
-                call_params["tools"] = self.client_tools[self.current_client_id]
-                logger.info(f"🔧 Using {len(call_params['tools'])} tools for client {self.current_client_id}")
+            call_params["tools"] = self.client_tools
+            logger.info(f"🔧 Using {len(call_params['tools'])} tools")
             
             response = self.client.chat.completions.create(**call_params)
             
@@ -406,16 +403,13 @@ class OpenAIChatStep(PipelineStep):
             tools_definitions = tools_ready_message.tools_definitions
             registered_tools = list(tools_definitions.values()) if tools_definitions else []
             
-            # Plus de client_id dans architecture dataclass pure - géré par routing des queues
-            client_id = "global"  # Utiliser un client générique pour l'instant
-            
             logger.info(f"🔧 Processing tools: {len(registered_tools)} outils")
             
             # Enregistrer les outils pour ce client - LOCK DEJA PRIS par _handle_input_message
-            self.client_tools[client_id] = registered_tools
+            self.client_tools = registered_tools
             # Générer le prompt enrichi avec les descriptions d'outils
             logger.info(f"🔧 Generating enhanced prompt...")
-            self.client_prompts[client_id] = self._generate_enhanced_prompt(registered_tools)
+            self.client_prompts= self._generate_enhanced_prompt(registered_tools)
             logger.info(f"🔧 Enhanced prompt generated successfully")
             
             logger.info(f"🛠️ Tools registration complet: {len(registered_tools)} outils")
@@ -533,7 +527,7 @@ class OpenAIChatStep(PipelineStep):
             self.conversation_history = []
             self.accumulated_text = ""
             self.current_client_id = None
-            self.client_tools = {}  # Nettoyer les outils clients
-            self.client_prompts = {}  # Nettoyer les prompts enrichis
+            self.client_tools = None  # Nettoyer les outils clients
+            self.client_prompts = None  # Nettoyer les prompts enrichis
         
         print(f"OpenAI Chat {self.name} nettoyé")
