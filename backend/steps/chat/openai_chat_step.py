@@ -126,8 +126,6 @@ class OpenAIChatStep(PipelineStep):
                     self._handle_system_prompt_message(input_message)
                 elif isinstance(input_message, ToolsReadyMessage):
                     self._handle_tools_ready(input_message)
-                else:
-                    logger.warning(f"💬 Chat: Type de message non géré: {type(input_message).__name__}")
                     
         except Exception as e:
             logger.error(f"Erreur handling input event: {e}")
