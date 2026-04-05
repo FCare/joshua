@@ -60,11 +60,10 @@ class OpenAIChatStep(PipelineStep):
         # État de conversation
         self.conversation_history = []
         self.accumulated_text = ""  # Pour accumuler le texte reçu en plusieurs fois
-        self.current_client_id = None
         
         # Tools management - nouveau
-        self.client_tools = None  # {client_id: [tool_definitions]}
-        self.client_prompts = None  # {client_id: enhanced_prompt} - prompts enrichis par client
+        self.client_tools = None
+        self.client_prompts = None
         
         # Thread safety
         self._lock = threading.Lock()

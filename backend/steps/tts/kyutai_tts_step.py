@@ -64,7 +64,6 @@ class KyutaiTTS:
         self._stream_active = False
         
         self.output_queue = None
-        self.current_client_id = None
         self.audio_chunks_sent = 0
 
         logger.info(f"{self.name}: Initialized")
@@ -239,14 +238,11 @@ class KyutaiTTS:
         except Exception as e:
             logger.error(f"{self.name}: Error sending EOS to TTS: {e}")
 
-    def process_text(self, text: str, client_id: str = None):
+    def process_text(self, text: str):
         """Traite le texte avec EOS (méthode originale pour compatibilité)"""
         if not self._connected or not self._stream_active:
             logger.info("TTS not active")
             return
-            
-        if client_id:
-            self.current_client_id = client_id
             
         try:
             self._send_text(text)
@@ -304,7 +300,6 @@ class KyutaiTTSStep(PipelineStep):
         self.cfg_alpha = config.get("cfg_alpha", 1.5) if config else 1.5
         
         self.kyutai_tts = None
-        self.current_client_id = None
         
         print(f"KyutaiTTSStep '{self.name}' configured for {self.host}:{self.port}")
         print(f"TTS API key: {self.api_key[:10]}...{self.api_key[-10:] if self.api_key and len(self.api_key) > 20 else self.api_key}")
@@ -365,14 +360,14 @@ class KyutaiTTSStep(PipelineStep):
             text_data = message.text
             if isinstance(text_data, str) and text_data.strip():
                 # Envoyer seulement le texte, EOS sera envoyé au finish signal
-                self.kyutai_tts.process_text(text_data.strip(), self.current_client_id)
-                logger.info(f"TTS: Text processed: '{text_data[:50]}...' for client {self.current_client_id}")
+                self.kyutai_tts.process_text(text_data.strip())
+                logger.info(f"TTS: Text processed: '{text_data[:50]}...'")
 
             # 🎯 DÉTECTER LE SIGNAL FINISH DU CHAT
             is_finish_signal = message.is_last
             
             if is_finish_signal:
-                logger.info(f"TTS: Received finish signal from chat for client: {self.current_client_id}")
+                logger.info(f"TTS: Received finish signal from chat")
                 self._send_eos()
                 self._send_audio_finish_signal()
                 return
@@ -387,7 +382,7 @@ class KyutaiTTSStep(PipelineStep):
         try:
             if self.kyutai_tts and self.kyutai_tts._connected:
                 #self.kyutai_tts._send_eos()
-                logger.info(f"TTS: Sent EOS for finish signal to client: {self.current_client_id}")
+                logger.info(f"TTS: Sent EOS for finish signal")
             else:
                 logger.warning("TTS: Cannot send EOS - KyutaiTTS not connected")
         except Exception as e:
@@ -417,7 +412,6 @@ class KyutaiTTSStep(PipelineStep):
             if self.kyutai_tts:
                 self.kyutai_tts.reset()
             
-            self.current_client_id = None
             logger.info("TTS reset")
             
         except Exception as e:
@@ -426,7 +420,6 @@ class KyutaiTTSStep(PipelineStep):
     def get_tts_stats(self):
         stats = {
             "tts_active": self.kyutai_tts is not None,
-            "current_client": self.current_client_id,
             "host": f"{self.host}:{self.port}"
         }
         
@@ -450,5 +443,4 @@ class KyutaiTTSStep(PipelineStep):
             finally:
                 self.kyutai_tts = None
         
-        self.current_client_id = None
         print(f"Kyutai TTS {self.name} cleaned up")

@@ -116,7 +116,6 @@ class MoshiASR:
         
         self.output_queue = None
         self.text_buffer = []
-        self.current_client_id = None
 
         # Queue pour les paquets audio en attente de connexion
         self.pending_audio_queue = deque()
@@ -189,9 +188,9 @@ class MoshiASR:
         if self.pending_audio_queue:
             logger.info(f"{self.name}: Processing {len(self.pending_audio_queue)} queued audio packets")
             while self.pending_audio_queue:
-                audio_data, client_id, timestamp = self.pending_audio_queue.popleft()
+                audio_data, timestamp = self.pending_audio_queue.popleft()
                 try:
-                    self._process_audio_chunk_internal(audio_data, client_id, timestamp)
+                    self._process_audio_chunk_internal(audio_data, timestamp)
                 except Exception as e:
                     logger.error(f"{self.name}: Error processing queued audio: {e}")
                     break
@@ -290,7 +289,7 @@ class MoshiASR:
                     is_final=False  # partial transcription
                 )
                 self.output_queue.enqueue(message)
-                logger.info(f"{self.name}: Sent transcript_chunk: '{event.text}' for client {self.current_client_id}")
+                logger.info(f"{self.name}: Sent transcript_chunk: '{event.text}'")
                 
             elif isinstance(event, EndEvent):
                 # Message transcript_done pour LLM
@@ -302,7 +301,7 @@ class MoshiASR:
                     is_final=True   # complete transcription
                 )
                 self.output_queue.enqueue(message)
-                logger.info(f"{self.name}: Sent transcript_done: '{full_text}' for client {self.current_client_id}")
+                logger.info(f"{self.name}: Sent transcript_done: '{full_text}'")
                 # Reset buffer after sending complete transcript
                 self.text_buffer = []
             elif isinstance(event, StartEvent):
@@ -355,7 +354,7 @@ class MoshiASR:
                 logger.error(f"{self.name}: Error sending silence packet {i}: {e}")
                 break
 
-    def _process_audio_chunk(self, audio_chunk: str, client_id: str = None):
+    def _process_audio_chunk(self, audio_chunk: str):
         """
         Main entry point - handle queuing when not connected.
         """
@@ -363,7 +362,7 @@ class MoshiASR:
         
         if not self._connected:
             logger.info(f"{self.name}: Not connected, queuing audio packet")
-            self.pending_audio_queue.append((audio_chunk, client_id, timestamp))
+            self.pending_audio_queue.append((audio_chunk, timestamp))
             
             # Initier la connexion si pas déjà en cours
             if not self.connection_in_progress:
@@ -373,9 +372,9 @@ class MoshiASR:
                     logger.error(f"{self.name}: Failed to initiate connection: {e}")
             return
             
-        self._process_audio_chunk_internal(audio_chunk, client_id, timestamp)
+        self._process_audio_chunk_internal(audio_chunk, timestamp)
 
-    def _process_audio_chunk_internal(self, audio_chunk: str, client_id: str = None, timestamp: float = None):
+    def _process_audio_chunk_internal(self, audio_chunk: str, timestamp: float = None):
         """
         Internal processing - direct synchronous sending.
         
@@ -383,10 +382,6 @@ class MoshiASR:
         """
         if not self._stream_active:
             logger.info(f"{self.name}: Stream not active yet")
-            
-        # Update client_id if provided
-        if client_id:
-            self.current_client_id = client_id
             
         try:
             # Decode binary audio data using struct.unpack
@@ -485,7 +480,6 @@ class KyutaiASRStep(PipelineStep):
         
         self.moshi_asr = None
         self.text_buffer = []
-        self.current_client_id = None
         
         
         print(f"KyutaiASRStep '{self.name}' configuré pour {self.host}")
@@ -535,10 +529,6 @@ class KyutaiASRStep(PipelineStep):
                 logger.info(f"🎤 ASR: Données non-audio reçues ({type(audio_data)}), ignorées (probablement du texte pour tools/LLM)")
                 return
             
-            # Récupère l'ID du client directement depuis la propriété dataclass
-            self.current_client_id = message.client_id
-            logger.info(f"🎤 ASR: Client ID: {self.current_client_id}")
-            
             # Vérifie que MoshiASR est initialisé
             if not self.moshi_asr:
                 logger.error("🎤 ASR: MoshiASR non initialisé")
@@ -547,8 +537,8 @@ class KyutaiASRStep(PipelineStep):
             logger.info(f"🎤 ASR: MoshiASR connecté: {self.moshi_asr._connected}, actif: {self.moshi_asr._stream_active}")
             
             # Traite le chunk audio avec MoshiASR
-            self.moshi_asr._process_audio_chunk(audio_data, self.current_client_id)
-            logger.info(f"🎤 ASR: Chunk audio traité ({len(audio_data)} bytes) pour client {self.current_client_id}")
+            self.moshi_asr._process_audio_chunk(audio_data)
+            logger.info(f"🎤 ASR: Chunk audio traité ({len(audio_data)} bytes)")
             
         except Exception as e:
             logger.error(f"🎤 ASR: Erreur traitement audio ASR: {e}")
@@ -562,7 +552,6 @@ class KyutaiASRStep(PipelineStep):
                 self.moshi_asr.reset()
             
             self.text_buffer = []
-            self.current_client_id = None
             
             logger.info("Transcription reset")
             
@@ -574,7 +563,6 @@ class KyutaiASRStep(PipelineStep):
         stats = {
             "asr_active": self.moshi_asr is not None,
             "buffer_length": len(self.text_buffer),
-            "current_client": self.current_client_id,
             "host": self.host
         }
         
@@ -603,6 +591,5 @@ class KyutaiASRStep(PipelineStep):
                 self.moshi_asr = None
         
         self.text_buffer = []
-        self.current_client_id = None
         
         print(f"Kyutai ASR {self.name} nettoyé")

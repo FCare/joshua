@@ -6,7 +6,6 @@ from .base_message import BaseMessage
 @dataclass(frozen=True)
 class UserConnectionMessage(BaseMessage):
     """Message de connexion d'un utilisateur via WebSocket"""
-    client_id: str
     username: str
 
 
@@ -14,7 +13,6 @@ class UserConnectionMessage(BaseMessage):
 class AudioInputMessage(BaseMessage):
     """Message audio reçu via WebSocket"""
     audio_data: bytes
-    client_id: str
     format: str = "pcm16"
     sample_rate: int = 24000
 
@@ -23,5 +21,4 @@ class AudioInputMessage(BaseMessage):
 class TextInputMessage(BaseMessage):
     """Message texte reçu via WebSocket (avec support images)"""
     text: str
-    client_id: str
     images: Optional[List[str]] = None

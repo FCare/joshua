@@ -57,7 +57,6 @@ class BaseToolStep(PipelineStep, ABC):
         try:
             # Utiliser les propriétés directes de UserConnectionMessage (architecture dataclass pure)
             username = connection_message.username
-            client_id = connection_message.client_id
             
             logger.info(f"🔌 Tool '{self.name}': nouvelle connexion utilisateur {username}")
             

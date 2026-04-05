@@ -27,7 +27,7 @@ class WebSocketStep(PipelineStep):
         self.server_thread = None
         self.running = False
         
-        self.connections = {}
+        self.ws = {}
         
         self.audio_format = config.get("audio_format", "pcm16") if config else "pcm16"
         self.sample_rate = config.get("sample_rate", 24000) if config else 24000
@@ -104,14 +104,12 @@ class WebSocketStep(PipelineStep):
                     "duration_seconds": message_data.get('duration_seconds', 0),
                     "timestamp": time.time()
                 })
-                # Envoyer à tous les clients connectés
-                for client_id in list(self.connections.keys()):
-                    try:
-                        websocket = self.connections[client_id]
-                        await websocket.send(finish_message)
-                        logger.info(f"✅ Sent audio_finished to {client_id}")
-                    except Exception as e:
-                        logger.error(f"❌ Failed to send audio_finished to {client_id}: {e}")
+                try:
+                    websocket = self.ws
+                    await websocket.send(finish_message)
+                    logger.info(f"✅ Sent audio_finished")
+                except Exception as e:
+                    logger.error(f"❌ Failed to send audio_finished: {e}")
                 return
             
             # Architecture dataclass pure - accès direct aux propriétés selon le type
@@ -133,48 +131,40 @@ class WebSocketStep(PipelineStep):
                 logger.warning(f"Unknown message type: {type(message_data)}")
                 return
                 
-            # Plus de client_id original dans metadata - diffusion à tous les clients connectés
-            # Le routing client spécifique sera géré au niveau du pipeline
-            original_client_id = list(self.connections.keys())[0] if self.connections else None
-            
-            if not original_client_id:
-                logger.warning(f"No connected clients to send message to")
-                return
-            
             if message_type == 'audio_chunk' and isinstance(data, bytes):
                 # Message audio - envoyer comme JSON avec base64
-                logger.info(f"Sending audio chunk to client {original_client_id}: {len(data)} bytes")
-                await self.send_audio_to_client(original_client_id, data, metadata)
+                logger.info(f"Sending audio chunk: {len(data)} bytes")
+                await self.send_audio_to_client(data, metadata)
                 
             elif message_type == 'audio_finished':
                 # Signal de fin de streaming audio
-                logger.info(f"Sending audio finished signal to client {original_client_id}")
+                logger.info(f"Sending audio finished signal")
                 finish_message = {
                     "type": "audio_finished",
                     "total_chunks": data.get('total_chunks', 0) if isinstance(data, dict) else 0,
                     "total_bytes": data.get('total_bytes', 0) if isinstance(data, dict) else 0,
                     "timestamp": time.time()
                 }
-                await self.send_to_specific_client(original_client_id, json.dumps(finish_message))
+                await self.send_to_specific_client(json.dumps(finish_message))
                 
             elif message_type == 'chat_finished':
                 # 🎯 Signal de fin de chat complet (TTS a terminé)
-                logger.info(f"Sending chat finished signal to client {original_client_id}")
+                logger.info(f"Sending chat finished signal")
                 chat_finish_message = {
                     "type": "chat_finished",
                     "timestamp": time.time()
                 }
-                await self.send_to_specific_client(original_client_id, json.dumps(chat_finish_message))
+                await self.send_to_specific_client(json.dumps(chat_finish_message))
                 
             elif  message_type == "chat_response":
                 # Message texte normal - envoyer comme chat_response
-                logger.info(f"Sending chat response to client {original_client_id}: '{str(data)[:50]}{'...' if len(str(data)) > 50 else ''}'")
+                logger.info(f"Sending chat response: '{str(data)[:50]}{'...' if len(str(data)) > 50 else ''}'")
                 chat_response_message = {
                     "type": "transcription",
                     "text": data,
                     "timestamp": time.time(),
                 }
-                await self.send_to_specific_client(original_client_id, json.dumps(chat_response_message))
+                await self.send_to_specific_client(json.dumps(chat_response_message))
                 
         except Exception as e:
             logger.error(f"Error in _handle_input_message_async: {e}")
@@ -251,16 +241,14 @@ class WebSocketStep(PipelineStep):
             logger.warning("WebSocket connection rejected: authentication failed")
             await websocket.close(code=4001, reason="Authentication required")
             return
-        client_id = f"client_{id(websocket)}"
-        self.connections[client_id] = websocket
+        self.ws = websocket
         
         try:
-            logger.info(f"WebSocket handler started for client {client_id}, mode={self.mode}")
+            logger.info(f"WebSocket handler started, mode={self.mode}")
             
             # Envoyer le message de connexion établie avec les capacités du pipeline
             connection_message = {
                 "type": "connection_established",
-                "client_id": client_id,
                 "pipeline": self.pipeline_name,
                 "mode": self.mode,
                 "capabilities": self.pipeline_capabilities,
@@ -277,14 +265,13 @@ class WebSocketStep(PipelineStep):
             # 🚀 NOUVEAU : Notifier le pipeline de la nouvelle connexion
             if self.output_queue:
                 user_connection_message = UserConnectionMessage(
-                    client_id=client_id,
                     username=username
                 )
                 self.output_queue.enqueue(user_connection_message)
                 logger.info(f"🔌 User connection notification sent for {username}")
             
             async for message in websocket:
-                logger.info(f"Received message from {client_id}: type={type(message).__name__}, length={len(str(message)) if isinstance(message, str) else len(message) if isinstance(message, bytes) else 'unknown'}")
+                logger.info(f"Received message: type={type(message).__name__}, length={len(str(message)) if isinstance(message, str) else len(message) if isinstance(message, bytes) else 'unknown'}")
                 
                 if self.mode in ["audio_to_text", "audio_text_to_text_audio"] and isinstance(message, str):
                     # Mode audio : traiter les messages JSON avec audio encodé
@@ -296,10 +283,9 @@ class WebSocketStep(PipelineStep):
                             audio_bytes = base64.b64decode(audio_b64)
                             metadata = data.get("metadata", {})
                             
-                            logger.info(f"Processing JSON audio message from {client_id}: {len(audio_bytes)} bytes")
+                            logger.info(f"Processing JSON audio message: {len(audio_bytes)} bytes")
                             audio_message = AudioInputMessage(
                                 audio_data=audio_bytes,
-                                client_id=client_id,
                                 format=metadata.get("format", self.audio_format),
                                 sample_rate=metadata.get("sample_rate", self.sample_rate)
                             )
@@ -308,17 +294,16 @@ class WebSocketStep(PipelineStep):
                             continue  # Message traité, passer au suivant
                         # Si ce n'est pas un message audio, laisser passer à la section texte
                     except json.JSONDecodeError:
-                        logger.error(f"Invalid JSON from {client_id}: {message[:200]}...")
+                        logger.error(f"Invalid JSON: {message[:200]}...")
                         continue
                     except Exception as e:
-                        logger.error(f"Error processing audio JSON from {client_id}: {e}")
+                        logger.error(f"Error processing audio JSON}: {e}")
                         continue
                         
                 elif self.mode == "audio_to_text" and isinstance(message, bytes):
-                    logger.info(f"Processing raw audio message from {client_id}: {len(message)} bytes")
+                    logger.info(f"Processing raw audio message: {len(message)} bytes")
                     audio_message = AudioInputMessage(
                         audio_data=message,
-                        client_id=client_id,
                         format=self.audio_format,
                         sample_rate=self.sample_rate
                     )
@@ -326,7 +311,7 @@ class WebSocketStep(PipelineStep):
                     logger.info(f"Audio message queued for processing")
                     
                 if (self.mode in ["text_to_audio", "text_to_text", "audio_text_to_text_audio"]) and isinstance(message, str):
-                    logger.info(f"Processing text message from {client_id}: '{message[:100]}{'...' if len(message) > 100 else ''}'")
+                    logger.info(f"Processing text message: '{message[:100]}{'...' if len(message) > 100 else ''}'")
                     try:
                         data = json.loads(message)
                         # Ne pas traiter les messages audio en mode texte
@@ -350,19 +335,17 @@ class WebSocketStep(PipelineStep):
                     
                     text_message = TextInputMessage(
                         text=text_data,
-                        client_id=client_id,
                         images=images
                     )
                     self.output_queue.enqueue(text_message)
                     logger.info(f"Message queued - text: '{text_data}', images: {len(images)}")
                     
         except Exception as e:
-            logger.error(f"Error in websocket_handler for {client_id}: {e}")
+            logger.error(f"Error in websocket_handler: {e}")
             import traceback
             logger.error(f"Traceback: {traceback.format_exc()}")
         finally:
-            if client_id in self.connections:
-                del self.connections[client_id]
+            self.ws = None
     
     async def start_server(self):
         try:
@@ -383,42 +366,32 @@ class WebSocketStep(PipelineStep):
         except Exception as e:
             raise
     
-    async def send_to_specific_client(self, client_id: str, text: str):
+    async def send_to_specific_client(self, text: str):
         """Envoie un message texte à un client spécifique"""
-        if client_id not in self.connections:
-            logger.warning(f"❌ Client {client_id} not found in connections")
-            return
-            
-        websocket = self.connections[client_id]
+        websocket = self.ws
         
         try:
             # Vérifier l'état de la connexion WebSocket
             if websocket.close_code is not None:
-                logger.warning(f"WebSocket {client_id} is closed, removing from connections")
-                if client_id in self.connections:
-                    del self.connections[client_id]
+                logger.warning(f"WebSocket is closed, removing from connections")
+                self.ws = None
                 return
                 
             await websocket.send(text)
-            logger.info(f"✅ Sent to {client_id}: '{text[:30]}{'...' if len(text) > 30 else ''}'")
+            logger.info(f"✅ Sent: '{text[:30]}{'...' if len(text) > 30 else ''}'")
         except Exception as e:
-            logger.warning(f"⚠️  Temporary error sending to {client_id}: {e}")
+            logger.warning(f"⚠️  Temporary error sending: {e}")
             # Ne pas supprimer la connexion immédiatement - elle pourrait être temporairement occupée
 
-    async def send_audio_to_client(self, client_id: str, audio_data: bytes, metadata: dict):
+    async def send_audio_to_client(self, audio_data: bytes, metadata: dict):
         """Envoie un chunk audio à un client spécifique au format JSON"""
-        if client_id not in self.connections:
-            logger.warning(f"Client {client_id} not connected for audio")
-            return
-            
-        websocket = self.connections[client_id]
+        websocket = self.ws
         
         try:
             # Vérifier l'état de la connexion WebSocket
             if websocket.close_code is not None:
-                logger.warning(f"WebSocket {client_id} is closed, removing from connections")
-                if client_id in self.connections:
-                    del self.connections[client_id]
+                logger.warning(f"WebSocket is closed, removing from connections")
+                self.ws = None
                 return
             
             # Encoder l'audio en base64 pour transmission JSON
@@ -432,9 +405,9 @@ class WebSocketStep(PipelineStep):
             }
             
             await websocket.send(json.dumps(message))
-            logger.info(f"✅ Sent audio chunk to {client_id}: {len(audio_data)} bytes")
+            logger.info(f"✅ Sent audio chunk: {len(audio_data)} bytes")
         except Exception as e:
-            logger.warning(f"⚠️  Temporary error sending audio to {client_id}: {e}")
+            logger.warning(f"⚠️  Temporary error sending audio: {e}")
             # Ne pas supprimer la connexion immédiatement - elle pourrait être temporairement occupée
 
     async def broadcast_text(self, text: str):
@@ -443,9 +416,9 @@ class WebSocketStep(PipelineStep):
     
     async def broadcast_text_with_metadata(self, text: str, metadata: dict):
         """Broadcast text avec métadonnées"""
-        logger.info(f"🔊 Broadcasting to {len(self.connections)} clients: '{text[:30]}{'...' if len(text) > 30 else ''}'")
+        logger.info(f"🔊 Broadcasting to {len(self.ws)} clients: '{text[:30]}{'...' if len(text) > 30 else ''}'")
         
-        if not self.connections:
+        if not self.ws:
             logger.warning("❌ No connections to broadcast to")
             return
             
@@ -456,32 +429,24 @@ class WebSocketStep(PipelineStep):
             "metadata": metadata
         }
         
-        disconnected = []
         sent_count = 0
-        for client_id, websocket in self.connections.items():
-            try:
-                # Vérifier l'état de la connexion WebSocket
-                if websocket.close_code is not None:
-                    logger.warning(f"WebSocket {client_id} is closed")
-                    disconnected.append(client_id)
-                    continue
+        websocket = self.ws
+        try:
+            # Vérifier l'état de la connexion WebSocket
+            if websocket.close_code is not None:
+                logger.warning(f"WebSocket is closed")
                     
-                await websocket.send(json.dumps(message))
-                sent_count += 1
-                logger.info(f"✅ Sent to {client_id}")
-            except Exception as e:
-                logger.warning(f"⚠️  Temporary error broadcasting to {client_id}: {e}")
-                # Ne pas ajouter à disconnected - erreur temporaire possible
+            await websocket.send(json.dumps(message))
+            sent_count += 1
+        except Exception as e:
+            logger.warning(f"⚠️  Temporary error broadcasting: {e}")
+            # Ne pas ajouter à disconnected - erreur temporaire possible
         
-        logger.info(f"📤 Sent to {sent_count}/{len(self.connections)} clients")
-        
-        for client_id in disconnected:
-            if client_id in self.connections:
-                del self.connections[client_id]
-                logger.info(f"🗑️ Removed disconnected client {client_id}")
+        self.ws = None
+        logger.info(f"🗑️ Removed disconnected")
     
     async def broadcast_audio(self, audio_data: bytes):
-        if not self.connections:
+        if not self.ws:
             return
         
         audio_b64 = base64.b64encode(audio_data).decode()
@@ -493,13 +458,10 @@ class WebSocketStep(PipelineStep):
             "timestamp": time.time()
         }
         
-        disconnected = []
-        for client_id, websocket in self.connections.items():
-            try:
-                await websocket.send(json.dumps(message))
-            except:
-                disconnected.append(client_id)
-        
-        for client_id in disconnected:
-            if client_id in self.connections:
-                del self.connections[client_id]
+        websocket = self.ws
+        try:
+            await websocket.send(json.dumps(message))
+        except:
+            pass
+
+        self.ws = None

@@ -7,7 +7,6 @@ from .base_message import BaseMessage
 class AudioChunkMessage(BaseMessage):
     """Message de chunk audio pour ASR"""
     audio_data: bytes
-    client_id: str
     sample_rate: int = 24000
     format: str = "pcm16"
 

@@ -43,7 +43,7 @@ class Pipeline:
     def __init__(self, name: str):
         self.name = name
         self.steps = {}
-        self.connections = []
+        self.ws = []
         self.is_running = False
     
     def add_step(self, step: PipelineStep):
@@ -57,7 +57,7 @@ class Pipeline:
         to_step = self.steps[to_step_name]
         
         from_step.output_queue = to_step.input_queue
-        self.connections.append((from_step_name, to_step_name))
+        self.ws.append((from_step_name, to_step_name))
     
     async def start(self):
         for step in self.steps.values():

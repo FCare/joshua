@@ -96,7 +96,7 @@ class ChatterboxTTSStep(PipelineStep):
             
             if self.output_queue:
                 self.output_queue.enqueue(finish_message)
-                print(f"🎉 TTS envoyé signal CHAT TERMINÉ pour client: {finish_metadata.get('original_client_id')}")
+                print(f"🎉 TTS envoyé signal CHAT TERMINÉ")
         
         except Exception as e:
             print(f"❌ Erreur envoi finish signal: {e}")
@@ -215,7 +215,6 @@ class ChatterboxTTSStep(PipelineStep):
             "timestamp": time.time()
         }
         
-        # Préserver les métadonnées client (original_client_id, etc.)
         if hasattr(self, '_current_metadata') and self._current_metadata:
             audio_metadata.update(self._current_metadata)
             # S'assurer que le type reste "audio_chunk"
@@ -243,7 +242,6 @@ class ChatterboxTTSStep(PipelineStep):
             "timestamp": time.time()
         }
         
-        # Préserver les métadonnées client (original_client_id, etc.)
         if hasattr(self, '_current_metadata') and self._current_metadata:
             finish_metadata.update(self._current_metadata)
             # S'assurer que le type reste "audio_finished"
@@ -253,9 +251,9 @@ class ChatterboxTTSStep(PipelineStep):
         is_last_phrase = finish_metadata.get('is_last_phrase', False)
         if is_last_phrase:
             finish_metadata["is_final_response"] = True
-            print(f"🎉 TTS finished DERNIÈRE phrase - RÉPONSE COMPLÈTE TERMINÉE for client: {finish_metadata.get('original_client_id')}")
+            print(f"🎉 TTS finished DERNIÈRE phrase - RÉPONSE COMPLÈTE TERMINÉE")
         else:
-            print(f"🏁 TTS finished phrase for client: {finish_metadata.get('original_client_id')}")
+            print(f"🏁 TTS finished phrase")
         
         # Créer et envoyer le message de fin
         from messages.tts_message import AudioFinishedMessage

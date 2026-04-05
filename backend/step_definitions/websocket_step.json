@@ -10,7 +10,6 @@
     "format": "string",
     "description": "Texte transcrit à renvoyer aux clients WebSocket",
     "metadata": {
-      "original_client_id": "string",
       "transcription_type": "string"
     }
   },
@@ -19,7 +18,6 @@
     "format": "binary",
     "description": "Chunks audio reçus des clients WebSocket",
     "metadata": {
-      "client_id": "string",
       "audio_format": "string",
       "sample_rate": "integer",
       "chunk_size": "integer"
