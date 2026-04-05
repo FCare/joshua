@@ -44,8 +44,8 @@ class Client():
     def __init__(self, pipeline: str, websocket):
         self.pipeline = pipeline
         self.pipeline_input = self.pipeline.get_step("websocket_server")
-        self.pipeline_input.set_ws_callback(self.sendToClient)
         self.ws = websocket
+        self.pipeline_input.set_ws_callback(self.sendToClient)
 
     def sendToClient(self, message):
         asyncio.get_running_loop().create_task(self.ws.send(message))
