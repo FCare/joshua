@@ -18,16 +18,6 @@ class WebSocketStep(PipelineStep):
     
     def __init__(self, name: str = "WebSocketServer", config: Optional[Dict] = None):
         super().__init__(name, config)
-        
-        self.host = config.get("host", "0.0.0.0") if config else "0.0.0.0"
-        self.port = config.get("port", 8765) if config else 8765
-        
-        self.websocket_server = None
-        self.event_loop = None
-        self.server_thread = None
-        
-        self.ws = {}
-        
         self.audio_format = config.get("audio_format", "pcm16") if config else "pcm16"
         self.sample_rate = config.get("sample_rate", 24000) if config else 24000
         
@@ -42,6 +32,9 @@ class WebSocketStep(PipelineStep):
         # output_queue sera définie par le pipeline builder (= input_queue du step suivant)
         self.input_queue = ChunkQueue(handler=self._handle_input_message_async)
         self.ws_send = None
+
+    def init(self) -> bool:
+        return True
 
     def set_ws_callback(self, callback):
         if (not self.ws_send):
