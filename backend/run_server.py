@@ -23,8 +23,8 @@ logging.basicConfig(
     ]
 )
 
-connected_clients = set()
-pipeline_args = None
+global connected_clients = set()
+global pipeline_args = None
 
 class Client():
     def __init__(self, pipeline: str, websocket):
