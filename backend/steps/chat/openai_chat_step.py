@@ -156,7 +156,7 @@ class OpenAIChatStep(PipelineStep):
     def _handle_system_prompt_message(self, message: SystemPromptMessage):
         """Traite les mises à jour de system prompt"""
         logger.info(f"💬 Chat: Processing system prompt update")
-        self.system_prompt = message.promp
+        self.system_prompt = message.prompt
         logger.info(f"System prompt updated: {self.system_prompt[:100]}...")
     
     def _handle_system_prompt_update(self, input_message):
@@ -250,7 +250,6 @@ class OpenAIChatStep(PipelineStep):
             # Paramètres de base
             call_params = {
                 "model": self.model,
-                "client_id": "global",
                 "messages": messages,
                 "temperature": self.temperature,
                 "max_tokens": self.max_tokens,
