@@ -69,6 +69,7 @@ async def handle_client(websocket):
     connected_clients.add(client)            
     client.handle_message(websocket)
     
+    
 
 # Configure optimized deflate compression for real-time audio
 compression_config = permessage_deflate.ServerPerMessageDeflateFactory(
@@ -102,7 +103,7 @@ def run_pipeline(pipeline_id: str, config_overrides=None, duration=None):
         logging.info(f"❌ Pipeline '{pipeline_id}' non trouvé")
         available = loader.get_available_pipelines()
         logging.info(f"Pipelines disponibles: {available}")
-        return False
+        return None
     
     logging.info(f"✅ Pipeline créé avec {len(pipeline.steps)} étapes")
     for step_name in pipeline.steps.keys():
@@ -139,10 +140,10 @@ def run_pipeline(pipeline_id: str, config_overrides=None, duration=None):
     
     try:
         asyncio.run(execute())
-        return True
+        return pipeline
     except Exception as e:
         logging.info(f"💥 Erreur fatale: {e}")
-        return False
+        return None
 
 
 # Run the server
