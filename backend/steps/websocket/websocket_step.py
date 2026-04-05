@@ -44,7 +44,7 @@ class WebSocketStep(PipelineStep):
         self.ws_send = None
 
     def set_ws_callback(self, callback):
-        if (not self.ws_send)
+        if (not self.ws_send):
             self.ws_send = callback
             connection_message = {
                 "type": "connection_established",
