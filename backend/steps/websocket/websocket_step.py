@@ -297,7 +297,7 @@ class WebSocketStep(PipelineStep):
                         logger.error(f"Invalid JSON: {message[:200]}...")
                         continue
                     except Exception as e:
-                        logger.error(f"Error processing audio JSON}: {e}")
+                        logger.error(f"Error processing audio JSON: {e}")
                         continue
                         
                 elif self.mode == "audio_to_text" and isinstance(message, bytes):
