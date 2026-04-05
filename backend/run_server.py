@@ -23,8 +23,8 @@ logging.basicConfig(
     ]
 )
 
-global connected_clients = set()
-global pipeline_args = None
+connected_clients = set()
+pipeline_args = None
 
 class Client():
     def __init__(self, pipeline: str, websocket):
@@ -45,6 +45,7 @@ class Client():
         return
 
 async def start_server():
+    global pipeline_args
     parser = argparse.ArgumentParser()
     subparsers = parser.add_subparsers(dest='command')
     
