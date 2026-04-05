@@ -27,8 +27,13 @@ connected_clients = set()
 pipeline_args = None
 
 class Client():
-    def __init__(self, pipeline: str, websocket):
+    async def __init__(self, pipeline: str, websocket):
         self.pipeline = run_pipeline(pipeline)
+        if not self.pipeline:
+            raise ValueError(f"Impossible de créer le pipeline: {pipeline}")
+        success = await self.pipeline.start()
+        if not success:
+            raise ValueError(f"Impossible de démarrer le pipeline: {pipeline}")
         self.pipeline_input = self.pipeline.get_step("websocket_server")
         self.pipeline_input.set_ws_callback(self.sendToClient)
     async def handle_message(self, websocket):
@@ -66,9 +71,9 @@ async def start_server():
     sys.exit("Server closed")
 
 async def handle_client(websocket):
-    client = Client(pipeline_args, websocket)
+    client = await Client(pipeline_args, websocket)
     connected_clients.add(client)            
-    client.handle_message(websocket)
+    await client.handle_message(websocket)
     
     
 
@@ -110,42 +115,7 @@ def run_pipeline(pipeline_id: str, config_overrides=None, duration=None):
     for step_name in pipeline.steps.keys():
         logging.info(f"   - {step_name}")
     
-    async def execute():
-        try:
-            logging.info("🚀 Démarrage du pipeline...")
-            success = await pipeline.start()
-            
-            if not success:
-                logging.info("❌ Échec démarrage pipeline")
-                return
-                
-            logging.info("✅ Pipeline démarré avec succès")
-            logging.info("🔄 Pipeline en cours d'exécution...")
-            
-            if duration:
-                logging.info(f"⏱️  Arrêt automatique dans {duration} secondes")
-                await asyncio.sleep(duration)
-            else:
-                logging.info("💡 Appuyez sur Ctrl+C pour arrêter")
-                while True:
-                    await asyncio.sleep(1)
-                    
-        except KeyboardInterrupt:
-            logging.info("🛑 Arrêt demandé par l'utilisateur")
-        except Exception as e:
-            logging.info(f"💥 Erreur pipeline: {e}")
-        finally:
-            logging.info("🧹 Nettoyage du pipeline...")
-            await pipeline.stop()
-            logging.info("✅ Pipeline arrêté")
-    
-    try:
-        asyncio.run(execute())
-        return pipeline
-    except Exception as e:
-        logging.info(f"💥 Erreur fatale: {e}")
-        return None
-
+    return pipeline
 
 # Run the server
 if __name__ == "__main__":
