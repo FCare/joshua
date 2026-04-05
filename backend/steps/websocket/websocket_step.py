@@ -167,7 +167,7 @@ class WebSocketStep(PipelineStep):
         if hasattr(self, 'input_queue') and self.input_queue:
             self.input_queue.stop()
       
-    async def handle_websocket(self, message):   
+    def handle_websocket(self, message):   
         try:
             logger.info(f"Received message: type={type(message).__name__}, length={len(str(message)) if isinstance(message, str) else len(message) if isinstance(message, bytes) else 'unknown'}")
             
