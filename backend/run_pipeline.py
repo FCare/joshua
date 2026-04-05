@@ -91,8 +91,6 @@ def main():
     parser = argparse.ArgumentParser()
     subparsers = parser.add_subparsers(dest='command')
     
-    list_parser = subparsers.add_parser('list')
-    
     run_parser = subparsers.add_parser('run')
     run_parser.add_argument('--pipeline', required=True)
     run_parser.add_argument('--config')

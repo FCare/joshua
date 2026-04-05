@@ -25,7 +25,6 @@ class WebSocketStep(PipelineStep):
         self.websocket_server = None
         self.event_loop = None
         self.server_thread = None
-        self.running = False
         
         self.ws = {}
         
@@ -42,38 +41,34 @@ class WebSocketStep(PipelineStep):
         # Chaque step ne crée que son input_queue avec handler ASYNC
         # output_queue sera définie par le pipeline builder (= input_queue du step suivant)
         self.input_queue = ChunkQueue(handler=self._handle_input_message_async)
-    
-    def init(self) -> bool:
-        """Démarre le serveur WebSocket dans un thread séparé"""
-        try:
-            self.running = True
-            self.server_thread = threading.Thread(target=self._run_server, daemon=True)
-            self.server_thread.start()
-            
-            # Attendre que le serveur soit prêt (maximum 5 secondes)
-            for i in range(50):
-                if self.websocket_server is not None:
-                    return True
-                time.sleep(0.1)
-            
-            return False
-            
-        except Exception as e:
-            return False
-    
-    def _run_server(self):
-        """Lance le serveur WebSocket dans sa propre boucle d'événements"""
-        self.event_loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(self.event_loop)
-        
-        try:
-            self.event_loop.run_until_complete(self.start_server())
-            self.event_loop.run_forever()
-        except Exception as e:
-            pass
-        finally:
-            self.event_loop.close()
-    
+        self.ws_send = None
+
+    def set_ws_callback(self, callback):
+        if (not self.ws_send)
+            self.ws_send = callback
+            connection_message = {
+                "type": "connection_established",
+                "pipeline": self.pipeline_name,
+                "mode": self.mode,
+                "capabilities": self.pipeline_capabilities,
+                "server_info": {
+                    "host": self.host,
+                    "port": self.port,
+                    "audio_format": self.audio_format,
+                    "sample_rate": self.sample_rate
+                },
+                "timestamp": time.time()
+            }
+            callback(json.dumps(connection_message))
+
+             # 🚀 NOUVEAU : Notifier le pipeline de la nouvelle connexion
+            if self.output_queue:
+                user_connection_message = UserConnectionMessage(
+                    username="global"
+                )
+                self.output_queue.enqueue(user_connection_message)
+                logger.info(f"🔌 User connection notification sent")
+
     async def _handle_input_message_async(self, message_data):
         """Handler ASYNC pour traiter les réponses du ChatStep - ChunkQueue gère la boucle !"""
         # Validation des types de messages autorisés - accepte tous les messages de sortie
@@ -145,7 +140,7 @@ class WebSocketStep(PipelineStep):
                     "total_bytes": data.get('total_bytes', 0) if isinstance(data, dict) else 0,
                     "timestamp": time.time()
                 }
-                await self.send_to_specific_client(json.dumps(finish_message))
+                await self.send_to_client(json.dumps(finish_message))
                 
             elif message_type == 'chat_finished':
                 # 🎯 Signal de fin de chat complet (TTS a terminé)
@@ -154,7 +149,7 @@ class WebSocketStep(PipelineStep):
                     "type": "chat_finished",
                     "timestamp": time.time()
                 }
-                await self.send_to_specific_client(json.dumps(chat_finish_message))
+                await self.send_to_client(json.dumps(chat_finish_message))
                 
             elif  message_type == "chat_response":
                 # Message texte normal - envoyer comme chat_response
@@ -164,7 +159,7 @@ class WebSocketStep(PipelineStep):
                     "text": data,
                     "timestamp": time.time(),
                 }
-                await self.send_to_specific_client(json.dumps(chat_response_message))
+                await self.send_to_client(json.dumps(chat_response_message))
                 
         except Exception as e:
             logger.error(f"Error in _handle_input_message_async: {e}")
@@ -172,173 +167,80 @@ class WebSocketStep(PipelineStep):
             logger.error(f"Traceback: {traceback.format_exc()}")
     
     def cleanup(self):
-        self.running = False
-        
         # Arrête les ChunkQueues
         if hasattr(self, 'input_queue') and self.input_queue:
             self.input_queue.stop()
-        
-        if self.websocket_server:
-            self.websocket_server.close()
-        if self.server_thread and self.server_thread.is_alive():
-            self.server_thread.join(timeout=2.0)
-    
-    async def verify_authentication(self, websocket, path=None):
-        """Vérifie l'authentification avec API key temporaire depuis Voight-Kampff"""
+      
+    async def handle_websocket(self, websocket, message):   
         try:
-            # Extraire l'API key depuis les paramètres de query de l'URL WebSocket
-            import urllib.parse as urlparse
+            logger.info(f"Received message: type={type(message).__name__}, length={len(str(message)) if isinstance(message, str) else len(message) if isinstance(message, bytes) else 'unknown'}")
             
-            # Essayer d'obtenir l'URI complète avec query params depuis websocket.request
-            uri = None
-            if hasattr(websocket, 'request'):
-                if hasattr(websocket.request, 'path'):
-                    uri = websocket.request.path
-                    logger.info(f"🔍 websocket.request.path: {uri}")
-                elif hasattr(websocket.request, 'uri'):
-                    uri = websocket.request.uri
-                    logger.info(f"🔍 websocket.request.uri: {uri}")
-            
-            if not uri:
-                uri = path if path else "/"
-                logger.info(f"🔍 Fallback to path parameter: {uri}")
-            
-            parsed_url = urlparse.urlparse(uri)
-            query_params = urlparse.parse_qs(parsed_url.query)
-            api_key = query_params.get('api_key', [None])[0]
-            
-            if not api_key:
-                logger.warning("❌ No API key provided in WebSocket connection")
-                return False, None
-                
-            logger.info(f"🔑 API key provided for WebSocket authentication: {api_key[:8]}...")
-            
-            # Vérifier l'API key avec Voight-Kampff
-            # Ajouter les headers pour identifier le service Joshua
-            headers = {
-                'X-API-Key': api_key,
-                'X-Forwarded-Host': 'joshua.caronboulme.fr',
-                'X-Forwarded-Uri': '/verify'
-            }
-            async with aiohttp.ClientSession() as session:
-                async with session.get('http://voight-kampff:8080/verify', headers=headers) as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        username = data.get('user')
-                        logger.info(f"✅ API key authentication successful for user: {username}")
-                        return True, username
-                    else:
-                        logger.warning(f"❌ API key authentication failed with status {response.status}")
-                        return False, None
-        except Exception as e:
-            logger.error(f"❌ API key authentication error: {e}")
-            return False, None
-    
-    async def websocket_handler(self, websocket, path=None):
-        # Vérifier l'authentification avant d'accepter la connexion
-        is_authenticated, username = await self.verify_authentication(websocket, path)
-        if not is_authenticated:
-            logger.warning("WebSocket connection rejected: authentication failed")
-            await websocket.close(code=4001, reason="Authentication required")
-            return
-        self.ws = websocket
-        
-        try:
-            logger.info(f"WebSocket handler started, mode={self.mode}")
-            
-            # Envoyer le message de connexion établie avec les capacités du pipeline
-            connection_message = {
-                "type": "connection_established",
-                "pipeline": self.pipeline_name,
-                "mode": self.mode,
-                "capabilities": self.pipeline_capabilities,
-                "server_info": {
-                    "host": self.host,
-                    "port": self.port,
-                    "audio_format": self.audio_format,
-                    "sample_rate": self.sample_rate
-                },
-                "timestamp": time.time()
-            }
-            await websocket.send(json.dumps(connection_message))
-            
-            # 🚀 NOUVEAU : Notifier le pipeline de la nouvelle connexion
-            if self.output_queue:
-                user_connection_message = UserConnectionMessage(
-                    username=username
+            if self.mode in ["audio_to_text", "audio_text_to_text_audio"] and isinstance(message, str):
+                # Mode audio : traiter les messages JSON avec audio encodé
+                try:
+                    data = json.loads(message)
+                    if data.get("type") == "audio" and "data" in data:
+                        # Décoder l'audio base64
+                        audio_b64 = data["data"]
+                        audio_bytes = base64.b64decode(audio_b64)
+                        metadata = data.get("metadata", {})
+                        
+                        logger.info(f"Processing JSON audio message: {len(audio_bytes)} bytes")
+                        audio_message = AudioInputMessage(
+                            audio_data=audio_bytes,
+                            format=metadata.get("format", self.audio_format),
+                            sample_rate=metadata.get("sample_rate", self.sample_rate)
+                        )
+                        self.output_queue.enqueue(audio_message)
+                        logger.info(f"Audio message queued for processing")
+                        continue  # Message traité, passer au suivant
+                    # Si ce n'est pas un message audio, laisser passer à la section texte
+                except json.JSONDecodeError:
+                    logger.error(f"Invalid JSON: {message[:200]}...")
+                    continue
+                except Exception as e:
+                    logger.error(f"Error processing audio JSON: {e}")
+                    continue
+                    
+            elif self.mode == "audio_to_text" and isinstance(message, bytes):
+                logger.info(f"Processing raw audio message: {len(message)} bytes")
+                audio_message = AudioInputMessage(
+                    audio_data=message,
+                    format=self.audio_format,
+                    sample_rate=self.sample_rate
                 )
-                self.output_queue.enqueue(user_connection_message)
-                logger.info(f"🔌 User connection notification sent for {username}")
-            
-            async for message in websocket:
-                logger.info(f"Received message: type={type(message).__name__}, length={len(str(message)) if isinstance(message, str) else len(message) if isinstance(message, bytes) else 'unknown'}")
+                self.output_queue.enqueue(audio_message)
+                logger.info(f"Audio message queued for processing")
                 
-                if self.mode in ["audio_to_text", "audio_text_to_text_audio"] and isinstance(message, str):
-                    # Mode audio : traiter les messages JSON avec audio encodé
-                    try:
-                        data = json.loads(message)
-                        if data.get("type") == "audio" and "data" in data:
-                            # Décoder l'audio base64
-                            audio_b64 = data["data"]
-                            audio_bytes = base64.b64decode(audio_b64)
-                            metadata = data.get("metadata", {})
-                            
-                            logger.info(f"Processing JSON audio message: {len(audio_bytes)} bytes")
-                            audio_message = AudioInputMessage(
-                                audio_data=audio_bytes,
-                                format=metadata.get("format", self.audio_format),
-                                sample_rate=metadata.get("sample_rate", self.sample_rate)
-                            )
-                            self.output_queue.enqueue(audio_message)
-                            logger.info(f"Audio message queued for processing")
-                            continue  # Message traité, passer au suivant
-                        # Si ce n'est pas un message audio, laisser passer à la section texte
-                    except json.JSONDecodeError:
-                        logger.error(f"Invalid JSON: {message[:200]}...")
-                        continue
-                    except Exception as e:
-                        logger.error(f"Error processing audio JSON: {e}")
+            if (self.mode in ["text_to_audio", "text_to_text", "audio_text_to_text_audio"]) and isinstance(message, str):
+                logger.info(f"Processing text message: '{message[:100]}{'...' if len(message) > 100 else ''}'")
+                try:
+                    data = json.loads(message)
+                    # Ne pas traiter les messages audio en mode texte
+                    if data.get("type") == "audio":
                         continue
                         
-                elif self.mode == "audio_to_text" and isinstance(message, bytes):
-                    logger.info(f"Processing raw audio message: {len(message)} bytes")
-                    audio_message = AudioInputMessage(
-                        audio_data=message,
-                        format=self.audio_format,
-                        sample_rate=self.sample_rate
-                    )
-                    self.output_queue.enqueue(audio_message)
-                    logger.info(f"Audio message queued for processing")
+                    # Support d'images avec API simplifiée
+                    text_data = data.get("text", "")
+                    image = data.get("image")  # Une seule image
+                    images = data.get("images", [])  # Ou plusieurs images
                     
-                if (self.mode in ["text_to_audio", "text_to_text", "audio_text_to_text_audio"]) and isinstance(message, str):
-                    logger.info(f"Processing text message: '{message[:100]}{'...' if len(message) > 100 else ''}'")
-                    try:
-                        data = json.loads(message)
-                        # Ne pas traiter les messages audio en mode texte
-                        if data.get("type") == "audio":
-                            continue
-                            
-                        # Support d'images avec API simplifiée
-                        text_data = data.get("text", "")
-                        image = data.get("image")  # Une seule image
-                        images = data.get("images", [])  # Ou plusieurs images
-                        
-                        # Normaliser vers une liste
-                        if image:
-                            images = [image]
-                        
-                        logger.info(f"Parsed JSON message - text: '{text_data}', images: {len(images)}")
-                    except:
-                        text_data = message
-                        images = []
-                        logger.info(f"Using raw text message: '{text_data}'")
+                    # Normaliser vers une liste
+                    if image:
+                        images = [image]
                     
-                    text_message = TextInputMessage(
-                        text=text_data,
-                        images=images
-                    )
-                    self.output_queue.enqueue(text_message)
-                    logger.info(f"Message queued - text: '{text_data}', images: {len(images)}")
+                    logger.info(f"Parsed JSON message - text: '{text_data}', images: {len(images)}")
+                except:
+                    text_data = message
+                    images = []
+                    logger.info(f"Using raw text message: '{text_data}'")
+                
+                text_message = TextInputMessage(
+                    text=text_data,
+                    images=images
+                )
+                self.output_queue.enqueue(text_message)
+                logger.info(f"Message queued - text: '{text_data}', images: {len(images)}")
                     
         except Exception as e:
             logger.error(f"Error in websocket_handler: {e}")
@@ -347,53 +249,17 @@ class WebSocketStep(PipelineStep):
         finally:
             self.ws = None
     
-    async def start_server(self):
-        try:
-            import websockets
-            self.websocket_server = await websockets.serve(
-                self.websocket_handler, self.host, self.port
-            )
-            print(f"WebSocket server started on {self.host}:{self.port}")
-            if self.pipeline_capabilities:
-                print(f"Pipeline: {self.pipeline_name}")
-                modalities = self.pipeline_capabilities.get("modalities", {})
-                if modalities:
-                    print(f"  Input modalities: {modalities.get('input', [])}")
-                    print(f"  Output modalities: {modalities.get('output', [])}")
-                    print(f"  Processing capabilities: {modalities.get('processing', [])}")
-        except ImportError as e:
-            raise
-        except Exception as e:
-            raise
-    
-    async def send_to_specific_client(self, text: str):
+    async def send_to_client(self, text: str):
         """Envoie un message texte à un client spécifique"""
-        websocket = self.ws
-        
         try:
-            # Vérifier l'état de la connexion WebSocket
-            if websocket.close_code is not None:
-                logger.warning(f"WebSocket is closed, removing from connections")
-                self.ws = None
-                return
-                
-            await websocket.send(text)
+            self.ws_send(text)    
             logger.info(f"✅ Sent: '{text[:30]}{'...' if len(text) > 30 else ''}'")
         except Exception as e:
             logger.warning(f"⚠️  Temporary error sending: {e}")
-            # Ne pas supprimer la connexion immédiatement - elle pourrait être temporairement occupée
 
     async def send_audio_to_client(self, audio_data: bytes, metadata: dict):
         """Envoie un chunk audio à un client spécifique au format JSON"""
-        websocket = self.ws
-        
         try:
-            # Vérifier l'état de la connexion WebSocket
-            if websocket.close_code is not None:
-                logger.warning(f"WebSocket is closed, removing from connections")
-                self.ws = None
-                return
-            
             # Encoder l'audio en base64 pour transmission JSON
             audio_b64 = base64.b64encode(audio_data).decode()
             
@@ -404,64 +270,8 @@ class WebSocketStep(PipelineStep):
                 "metadata": metadata
             }
             
-            await websocket.send(json.dumps(message))
+            self.ws_send(json.dumps(message))
             logger.info(f"✅ Sent audio chunk: {len(audio_data)} bytes")
         except Exception as e:
             logger.warning(f"⚠️  Temporary error sending audio: {e}")
             # Ne pas supprimer la connexion immédiatement - elle pourrait être temporairement occupée
-
-    async def broadcast_text(self, text: str):
-        """Broadcast simple text (pour compatibilité)"""
-        await self.broadcast_text_with_metadata(text, {})
-    
-    async def broadcast_text_with_metadata(self, text: str, metadata: dict):
-        """Broadcast text avec métadonnées"""
-        logger.info(f"🔊 Broadcasting to {len(self.ws)} clients: '{text[:30]}{'...' if len(text) > 30 else ''}'")
-        
-        if not self.ws:
-            logger.warning("❌ No connections to broadcast to")
-            return
-            
-        message = {
-            "type": "transcription",
-            "text": text,
-            "timestamp": time.time(),
-            "metadata": metadata
-        }
-        
-        sent_count = 0
-        websocket = self.ws
-        try:
-            # Vérifier l'état de la connexion WebSocket
-            if websocket.close_code is not None:
-                logger.warning(f"WebSocket is closed")
-                    
-            await websocket.send(json.dumps(message))
-            sent_count += 1
-        except Exception as e:
-            logger.warning(f"⚠️  Temporary error broadcasting: {e}")
-            # Ne pas ajouter à disconnected - erreur temporaire possible
-        
-        self.ws = None
-        logger.info(f"🗑️ Removed disconnected")
-    
-    async def broadcast_audio(self, audio_data: bytes):
-        if not self.ws:
-            return
-        
-        audio_b64 = base64.b64encode(audio_data).decode()
-        
-        message = {
-            "type": "audio_chunk",
-            "data": audio_b64,
-            "format": "pcm",
-            "timestamp": time.time()
-        }
-        
-        websocket = self.ws
-        try:
-            await websocket.send(json.dumps(message))
-        except:
-            pass
-
-        self.ws = None
