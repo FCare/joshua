@@ -29,7 +29,6 @@ pipeline_args = None
 class Client():
     def __init__(self, pipeline: str, websocket):
         self.pipeline = run_pipeline(pipeline)
-        //Associé le client au step
         self.pipeline_input = self.pipeline.get_step("websocket_server")
         self.pipeline_input.set_ws_callback(self.sendToClient)
     async def handle_message(self, websocket):
