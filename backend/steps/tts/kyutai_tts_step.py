@@ -207,6 +207,9 @@ class KyutaiTTS:
             elif message_type == 'Error':
                 error_msg = message_dict.get('message', 'Unknown TTS error')
                 logger.error(f"{self.name}: TTS Error: {error_msg}")
+            else:
+                logger.error(f"{self.name}: TTS Error: unknown message: {message_dict}")
+                
                 
         except msgpack.exceptions.ExtraData:
             # Si c'est des données binaires non-msgpack, les traiter comme audio
@@ -215,10 +218,6 @@ class KyutaiTTS:
         except Exception as decode_error:
             # Si ce n'est pas du msgpack valide, traiter comme audio brut
             logger.info(f"{self.name}: Could not decode as msgpack, treating as raw audio: {decode_error}")
-            if isinstance(message, bytes):
-                self._enqueue_audio_chunk(message)
-            else:
-                logger.warning(f"{self.name}: Unknown message type: {type(message)}")
 
     def _write_to_debug_wav(self, audio_bytes: bytes):
         """Écrit les données audio PCM dans le fichier WAV de debug TTS"""
@@ -264,7 +263,7 @@ class KyutaiTTS:
             }
             
             packed_message = msgpack.packb(message, use_bin_type=True)
-            logger.info(f"{self.name}: Sent text: '{text}...'")
+            logger.info(f"{self.name}: Sent text: '{text}'")
             self.ws.send(packed_message, opcode=websocket.ABNF.OPCODE_BINARY)
             
         except Exception as e:
@@ -276,7 +275,7 @@ class KyutaiTTS:
         try:
             message = {"type": "Eos"}
             packed_message = msgpack.packb(message, use_bin_type=True)
-            # self.ws.send(packed_message, opcode=websocket.ABNF.OPCODE_BINARY)
+            self.ws.send(packed_message, opcode=websocket.ABNF.OPCODE_BINARY)
             logger.info(f"{self.name}: Sent EOS")
             
         except Exception as e:
