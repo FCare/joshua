@@ -255,6 +255,7 @@ class KyutaiTTS:
 
     def _send_text(self, text: str):
         if not self._connected or not self.ws:
+            logger.info(f"TTS kyutai: No more ws for: '{text[:50]}...' {self._connected}")
             return
         try:
             message = {
@@ -263,8 +264,8 @@ class KyutaiTTS:
             }
             
             packed_message = msgpack.packb(message, use_bin_type=True)
-            self.ws.send(packed_message, opcode=websocket.ABNF.OPCODE_BINARY)
             logger.info(f"{self.name}: Sent text: '{text[:50]}...'")
+            self.ws.send(packed_message, opcode=websocket.ABNF.OPCODE_BINARY)
             
         except Exception as e:
             logger.error(f"{self.name}: Error sending text to TTS: {e}")
