@@ -5,6 +5,8 @@ import threading
 import time
 import base64
 import aiohttp
+import wave
+import os
 from typing import Optional, Dict, Any
 
 from pipeline_framework import PipelineStep
@@ -12,6 +14,9 @@ from messages.websocket_message import UserConnectionMessage, AudioInputMessage,
 from utils.chunk_queue import ChunkQueue
 
 logger = logging.getLogger(__name__)
+
+# Variable globale pour activer/désactiver l'enregistrement WAV
+DEBUG_WAV = os.environ.get('DEBUG_WAV', 'True').lower() == 'true'
 
 
 class WebSocketStep(PipelineStep):
@@ -35,6 +40,35 @@ class WebSocketStep(PipelineStep):
         # output_queue sera définie par le pipeline builder (= input_queue du step suivant)
         self.input_queue = ChunkQueue(handler=self._handle_input_message_async)
         self.ws_send = None
+        
+        # Enregistrement WAV pour debug
+        self.debug_wav_file = None
+        self.debug_wav_lock = threading.Lock()
+        if DEBUG_WAV:
+            self._init_debug_wav()
+
+    def _init_debug_wav(self):
+        """Initialise le fichier WAV pour l'enregistrement debug"""
+        try:
+            # Créer le répertoire de debug s'il n'existe pas
+            debug_dir = "debug_audio"
+            os.makedirs(debug_dir, exist_ok=True)
+            
+            # Nom de fichier avec timestamp
+            timestamp = time.strftime("%Y%m%d_%H%M%S")
+            wav_filename = os.path.join(debug_dir, f"websocket_audio_{timestamp}.wav")
+            
+            # Ouvrir le fichier WAV
+            self.debug_wav_file = wave.open(wav_filename, 'wb')
+            self.debug_wav_file.setnchannels(1)  # Mono
+            self.debug_wav_file.setsampwidth(2)  # 16-bit
+            self.debug_wav_file.setframerate(self.sample_rate)
+            
+            logger.info(f"🎧 DEBUG_WAV: Enregistrement audio dans {wav_filename}")
+            
+        except Exception as e:
+            logger.error(f"❌ DEBUG_WAV: Erreur initialisation fichier WAV: {e}")
+            self.debug_wav_file = None
 
     def init(self) -> bool:
         return True
@@ -162,6 +196,17 @@ class WebSocketStep(PipelineStep):
             logger.error(f"Traceback: {traceback.format_exc()}")
     
     def cleanup(self):
+        # 🎧 DEBUG: Fermer le fichier WAV proprement
+        if DEBUG_WAV and self.debug_wav_file:
+            try:
+                with self.debug_wav_lock:
+                    self.debug_wav_file.close()
+                    logger.info(f"🎧 DEBUG_WAV: Fichier WAV fermé")
+            except Exception as e:
+                logger.error(f"❌ DEBUG_WAV: Erreur fermeture fichier: {e}")
+            finally:
+                self.debug_wav_file = None
+                
         # Arrête les ChunkQueues
         if hasattr(self, 'input_queue') and self.input_queue:
             self.input_queue.stop()
@@ -252,9 +297,25 @@ class WebSocketStep(PipelineStep):
         except Exception as e:
             logger.warning(f"⚠️  Temporary error sending: {e}")
 
+    def _write_to_debug_wav(self, audio_data: bytes):
+        """Écrit les données audio dans le fichier WAV de debug"""
+        if not DEBUG_WAV or not self.debug_wav_file:
+            return
+            
+        try:
+            with self.debug_wav_lock:
+                self.debug_wav_file.writeframes(audio_data)
+                self.debug_wav_file._file.flush()  # Force flush pour voir le contenu en temps réel
+        except Exception as e:
+            logger.error(f"❌ DEBUG_WAV: Erreur écriture chunk: {e}")
+
     async def send_audio_to_client(self, audio_data: bytes):
         """Envoie un chunk audio à un client spécifique au format JSON"""
         try:
+            # 🎧 DEBUG: Enregistrer dans fichier WAV si activé
+            if DEBUG_WAV:
+                self._write_to_debug_wav(audio_data)
+            
             # Encoder l'audio en base64 pour transmission JSON
             audio_b64 = base64.b64encode(audio_data).decode()
             
