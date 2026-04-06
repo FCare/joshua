@@ -194,7 +194,7 @@ class KyutaiTTS:
                 audio_data=audio_bytes
             )
             self.output_queue.enqueue(message)
-            logger.info(f"{self.name}: Audio chunk sent ({len(audio_bytes)} bytes, format: "pcm_int16")")
+            logger.info(f"{self.name}: Audio chunk sent ({len(audio_bytes)} bytes, format: pcm_int16)")
 
     def on_error(self, ws, error):
         logger.error(f"{self.name}: WebSocket error: {error}")
