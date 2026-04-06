@@ -4,6 +4,7 @@ import logging
 import os
 import json
 import struct
+import wave
 from typing import Optional, Dict, Any
 from dataclasses import dataclass
 from enum import Enum
@@ -26,6 +27,9 @@ except ImportError as e:
     msgpack = None
 
 logger = logging.getLogger(__name__)
+
+# Variable globale pour activer/désactiver l'enregistrement WAV
+DEBUG_WAV = os.environ.get('DEBUG_WAV', 'True').lower() == 'true'
 
 SAMPLE_RATE = 24000
 FRAME_TIME_SEC = 0.08
@@ -66,7 +70,36 @@ class KyutaiTTS:
         self.output_queue = None
         self.audio_chunks_sent = 0
 
+        # Enregistrement WAV pour debug
+        self.debug_wav_file = None
+        self.debug_wav_lock = threading.Lock()
+        if DEBUG_WAV:
+            self._init_debug_wav()
+
         logger.info(f"{self.name}: Initialized")
+
+    def _init_debug_wav(self):
+        """Initialise le fichier WAV pour l'enregistrement debug du TTS"""
+        try:
+            # Créer le répertoire de debug s'il n'existe pas
+            debug_dir = "debug_audio"
+            os.makedirs(debug_dir, exist_ok=True)
+            
+            # Nom de fichier avec timestamp
+            timestamp = time.strftime("%Y%m%d_%H%M%S")
+            wav_filename = os.path.join(debug_dir, f"kyutai_tts_{timestamp}.wav")
+            
+            # Ouvrir le fichier WAV
+            self.debug_wav_file = wave.open(wav_filename, 'wb')
+            self.debug_wav_file.setnchannels(1)  # Mono
+            self.debug_wav_file.setsampwidth(2)  # 16-bit
+            self.debug_wav_file.setframerate(SAMPLE_RATE)
+            
+            logger.info(f"{self.name}: 🎧 DEBUG_WAV: Enregistrement TTS dans {wav_filename}")
+            
+        except Exception as e:
+            logger.error(f"{self.name}: ❌ DEBUG_WAV: Erreur initialisation fichier WAV: {e}")
+            self.debug_wav_file = None
 
     def set_output_queue(self, queue):
         self.output_queue = queue
@@ -187,7 +220,23 @@ class KyutaiTTS:
             else:
                 logger.warning(f"{self.name}: Unknown message type: {type(message)}")
 
+    def _write_to_debug_wav(self, audio_bytes: bytes):
+        """Écrit les données audio PCM dans le fichier WAV de debug TTS"""
+        if not DEBUG_WAV or not self.debug_wav_file:
+            return
+            
+        try:
+            with self.debug_wav_lock:
+                self.debug_wav_file.writeframes(audio_bytes)
+                self.debug_wav_file._file.flush()  # Force flush pour voir le contenu en temps réel
+        except Exception as e:
+            logger.error(f"{self.name}: ❌ DEBUG_WAV: Erreur écriture chunk TTS: {e}")
+
     def _enqueue_audio_chunk(self, audio_bytes: bytes):
+        # 🎧 DEBUG: Enregistrer dans fichier WAV si activé
+        if DEBUG_WAV:
+            self._write_to_debug_wav(audio_bytes)
+            
         if self.output_queue:
             from messages.tts_message import AudioChunkOutputMessage
             message = AudioChunkOutputMessage(
@@ -246,6 +295,17 @@ class KyutaiTTS:
 
     def disconnect(self):
         logger.info(f"{self.name}: Disconnecting...")
+        
+        # 🎧 DEBUG: Fermer le fichier WAV proprement
+        if DEBUG_WAV and self.debug_wav_file:
+            try:
+                with self.debug_wav_lock:
+                    self.debug_wav_file.close()
+                    logger.info(f"{self.name}: 🎧 DEBUG_WAV: Fichier WAV TTS fermé")
+            except Exception as e:
+                logger.error(f"{self.name}: ❌ DEBUG_WAV: Erreur fermeture fichier TTS: {e}")
+            finally:
+                self.debug_wav_file = None
         
         try:
             if self.ws:

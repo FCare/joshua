@@ -16,7 +16,7 @@ from utils.chunk_queue import ChunkQueue
 logger = logging.getLogger(__name__)
 
 # Variable globale pour activer/désactiver l'enregistrement WAV
-DEBUG_WAV = os.environ.get('DEBUG_WAV', 'True').lower() == 'true'
+DEBUG_WAV = os.environ.get('DEBUG_WAV', 'False').lower() == 'true'
 
 
 class WebSocketStep(PipelineStep):
