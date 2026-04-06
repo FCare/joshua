@@ -29,7 +29,7 @@ except ImportError as e:
 logger = logging.getLogger(__name__)
 
 # Variable globale pour activer/désactiver l'enregistrement WAV
-DEBUG_WAV = os.environ.get('DEBUG_WAV', 'True').lower() == 'true'
+DEBUG_WAV = os.environ.get('DEBUG_WAV', 'False').lower() == 'true'
 
 SAMPLE_RATE = 24000
 FRAME_TIME_SEC = 0.08
@@ -264,7 +264,7 @@ class KyutaiTTS:
             }
             
             packed_message = msgpack.packb(message, use_bin_type=True)
-            logger.info(f"{self.name}: Sent text: '{text[:50]}...'")
+            logger.info(f"{self.name}: Sent text: '{text}...'")
             self.ws.send(packed_message, opcode=websocket.ABNF.OPCODE_BINARY)
             
         except Exception as e:
