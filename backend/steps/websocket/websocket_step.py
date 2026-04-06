@@ -261,8 +261,7 @@ class WebSocketStep(PipelineStep):
             message = {
                 "type": "audio_chunk",
                 "data": audio_b64,
-                "timestamp": time.time(),
-                "metadata": metadata
+                "timestamp": time.time()
             }
             
             self.ws_send(json.dumps(message))
