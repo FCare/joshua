@@ -105,7 +105,6 @@ class WebSocketStep(PipelineStep):
             
             # Architecture dataclass pure - accès direct aux propriétés selon le type
             data = None
-            metadata = {}  # Plus de metadata dans architecture pure
             if isinstance(message_data, ChatFinishMessage):
                 logger.info("Websocket received ChatFinished")
                 message_type = "chat_finished"
@@ -125,7 +124,7 @@ class WebSocketStep(PipelineStep):
             if message_type == 'audio_chunk' and isinstance(data, bytes):
                 # Message audio - envoyer comme JSON avec base64
                 logger.info(f"Sending audio chunk: {len(data)} bytes")
-                await self.send_audio_to_client(data, metadata)
+                await self.send_audio_to_client(data)
                 
             elif message_type == 'audio_finished':
                 # Signal de fin de streaming audio
@@ -253,7 +252,7 @@ class WebSocketStep(PipelineStep):
         except Exception as e:
             logger.warning(f"⚠️  Temporary error sending: {e}")
 
-    async def send_audio_to_client(self, audio_data: bytes, metadata: dict):
+    async def send_audio_to_client(self, audio_data: bytes):
         """Envoie un chunk audio à un client spécifique au format JSON"""
         try:
             # Encoder l'audio en base64 pour transmission JSON

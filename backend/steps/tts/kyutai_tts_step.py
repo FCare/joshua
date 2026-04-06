@@ -189,18 +189,12 @@ class KyutaiTTS:
 
     def _enqueue_audio_chunk(self, audio_bytes: bytes):
         if self.output_queue:
-            # Détecter le format audio - maintenant on envoie du PCM int16
-            audio_format = "ogg_vorbis" if audio_bytes.startswith(b'OggS') else "pcm_int16"
-            
             from messages.tts_message import AudioChunkOutputMessage
             message = AudioChunkOutputMessage(
-                audio_data=audio_bytes,
-                chunk_index=self.audio_chunks_sent,
-                total_chunks=1  # Default value
+                audio_data=audio_bytes
             )
             self.output_queue.enqueue(message)
-            self.audio_chunks_sent += 1
-            logger.info(f"{self.name}: Audio chunk sent ({len(audio_bytes)} bytes, format: {audio_format})")
+            logger.info(f"{self.name}: Audio chunk sent ({len(audio_bytes)} bytes, format: "pcm_int16")")
 
     def on_error(self, ws, error):
         logger.error(f"{self.name}: WebSocket error: {error}")
@@ -265,12 +259,10 @@ class KyutaiTTS:
         finally:
             self._connected = False
             self._stream_active = False
-            self.audio_chunks_sent = 0
             logger.info(f"{self.name}: Disconnected")
 
     def reset(self):
         try:
-            self.audio_chunks_sent = 0
             logger.info(f"{self.name}: Reset completed")
             
         except Exception as e:
@@ -368,24 +360,13 @@ class KyutaiTTSStep(PipelineStep):
             
             if is_finish_signal:
                 logger.info(f"TTS: Received finish signal from chat")
-                self._send_eos()
+                self.kyutai_tts._send_eos()
                 return
             
         except Exception as e:
             logger.error(f"TTS: Error processing text: {e}")
             import traceback
             logger.error(f"TTS: Traceback: {traceback.format_exc()}")
-    
-    def _send_eos(self):
-        """Traite le signal finish du chat en envoyant EOS"""
-        try:
-            if self.kyutai_tts and self.kyutai_tts._connected:
-                #self.kyutai_tts._send_eos()
-                logger.info(f"TTS: Sent EOS for finish signal")
-            else:
-                logger.warning("TTS: Cannot send EOS - KyutaiTTS not connected")
-        except Exception as e:
-            logger.error(f"TTS: Error sending finish EOS: {e}")
 
     def _send_audio_finish_signal(self):
         """
@@ -405,31 +386,6 @@ class KyutaiTTSStep(PipelineStep):
         
         except Exception as e:
             print(f"❌ Erreur envoi finish signal: {e}")
-    
-    def reset_tts(self):
-        try:
-            if self.kyutai_tts:
-                self.kyutai_tts.reset()
-            
-            logger.info("TTS reset")
-            
-        except Exception as e:
-            logger.error(f"Error resetting TTS: {e}")
-    
-    def get_tts_stats(self):
-        stats = {
-            "tts_active": self.kyutai_tts is not None,
-            "host": f"{self.host}:{self.port}"
-        }
-        
-        if self.kyutai_tts:
-            stats.update({
-                "connected": self.kyutai_tts._connected,
-                "stream_active": self.kyutai_tts._stream_active,
-                "audio_chunks_sent": self.kyutai_tts.audio_chunks_sent
-            })
-        
-        return stats
     
     def cleanup(self):
         print(f"Cleaning up Kyutai TTS {self.name}")

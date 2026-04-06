@@ -223,9 +223,7 @@ class ChatterboxTTSStep(PipelineStep):
         # Créer et envoyer le message audio
         from messages.tts_message import AudioChunkOutputMessage
         audio_message = AudioChunkOutputMessage(
-            audio_data=chunk,
-            chunk_index=0,  # Could be set from metadata if needed
-            total_chunks=1   # Could be set from metadata if needed
+            audio_data=chunk
         )
         
         if self.output_queue:

@@ -7,8 +7,6 @@ from .base_message import BaseMessage
 class AudioChunkOutputMessage(BaseMessage):
     """Message de chunk audio émis par le TTS"""
     audio_data: bytes
-    chunk_index: int = 0
-    total_chunks: int = 1
 
 
 @dataclass(frozen=True)

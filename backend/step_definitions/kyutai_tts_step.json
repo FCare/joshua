@@ -35,7 +35,7 @@
         "type": "string",
         "default": "PcmMessagePack",
         "description": "Format audio de sortie",
-        "enum": ["pcm", "PcmMessagePack", "ogg_vorbis"]
+        "enum": ["pcm", "PcmMessagePack"]
       },
       "voice": {
         "type": "string",

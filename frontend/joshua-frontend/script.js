@@ -323,7 +323,6 @@ class JoshuaChat {
 
     handleChatResponse(message) {
         const text = message.text || message.content || '';
-        const metadata = message.metadata || {};
         
         // Filtrer les messages JSON techniques qui ne doivent pas être affichés
         if (this.isSystemMessage(text)) {
@@ -338,13 +337,6 @@ class JoshuaChat {
         this.currentResponse += text;
         this.currentAssistantDiv.innerHTML = this.formatMessage(this.currentResponse);
         this.scrollToBottom();
-        
-        // If this is a finish type response, mark as complete
-        if (metadata.chunk_type === 'finish' || metadata.response_type === 'finish') {
-            this.setGenerating(false);
-            this.currentAssistantDiv = null;
-            this.currentResponse = '';
-        }
     }
     
     isSystemMessage(text) {
@@ -1042,12 +1034,6 @@ class JoshuaChat {
         const audioMessage = {
             type: 'audio',
             data: audioBase64,
-            metadata: {
-                format: 'pcm16',
-                sample_rate: chunkData.sampleRate,
-                duration: chunkData.duration,
-                samples: chunkData.samples
-            }
         };
 
         this.ws.send(JSON.stringify(audioMessage));
