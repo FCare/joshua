@@ -232,7 +232,7 @@ class KyutaiTTS:
         try:
             message = {"type": "Eos"}
             packed_message = msgpack.packb(message, use_bin_type=True)
-            self.ws.send(packed_message, opcode=websocket.ABNF.OPCODE_BINARY)
+            # self.ws.send(packed_message, opcode=websocket.ABNF.OPCODE_BINARY)
             logger.info(f"{self.name}: Sent EOS")
             
         except Exception as e:
@@ -369,7 +369,6 @@ class KyutaiTTSStep(PipelineStep):
             if is_finish_signal:
                 logger.info(f"TTS: Received finish signal from chat")
                 self._send_eos()
-                # self._send_audio_finish_signal()
                 return
             
         except Exception as e:
