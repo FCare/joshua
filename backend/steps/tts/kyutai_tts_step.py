@@ -369,7 +369,7 @@ class KyutaiTTSStep(PipelineStep):
             if is_finish_signal:
                 logger.info(f"TTS: Received finish signal from chat")
                 self._send_eos()
-                self._send_audio_finish_signal()
+                # self._send_audio_finish_signal()
                 return
             
         except Exception as e:
