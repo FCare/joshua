@@ -55,6 +55,9 @@ class SentenceNormalizerStep(PipelineStep):
                 'mm': 'millimètres', 'cm': 'centimètres', 'km': 'kilomètres',
                 'mg': 'milligrammes', 'kg': 'kilogrammes',
                 'ml': 'millilitres',
+                # Abréviations culinaires
+                'càc': 'cuillère à café', 'c.à.c.': 'cuillère à café',
+                'cas': 'cuillère à soupe', 'c.à.s.': 'cuillère à soupe',
                 # Note: 'm', 'g', 'l' supprimés car trop courts et causent des faux positifs
                 # Autres abréviations courantes
                 'av.': 'avenue', 'bd': 'boulevard', 'bd.': 'boulevard',
@@ -415,10 +418,20 @@ class SentenceNormalizerStep(PipelineStep):
     
     def _clean_text_for_tts(self, text: str) -> str:
         """Nettoie le texte pour la synthèse vocale"""
+        # Supprimer le contenu entre parenthèses
+        text = re.sub(r'\([^)]*\)', '', text)
+        
         # Supprimer formatage markdown
         text = re.sub(r'\*\*(.+?)\*\*', r'\1', text)  # **gras** → gras
         text = re.sub(r'\*(.+?)\*', r'\1', text)      # *italique* → italique
         text = re.sub(r'`(.+?)`', r'\1', text)        # `code` → code
+        
+        # Supprimer TOUS les emojis (toutes les plages Unicode des emojis)
+        emoji_pattern = r'[\U0001F600-\U0001F64F\U0001F300-\U0001F5FF\U0001F680-\U0001F6FF\U0001F1E0-\U0001F1FF\U0001F900-\U0001F9FF\U00002600-\U000026FF\U00002700-\U000027BF\U0001F190-\U0001F1FF\U0001FA70-\U0001FAFF\U00002300-\U000023FF\U00002B50\U00002B55\U00002728\U0001F004\U0001F0CF\U0001F170-\U0001F251\U0001F600-\U0001F636\U0001F681-\U0001F6C5\U0001F30D-\U0001F567]'
+        text = re.sub(emoji_pattern, '', text)
+        
+        # Supprimer autres caractères indésirables (garder lettres, chiffres, espaces, ponctuation de base)
+        text = re.sub(r'[^\w\s\'-.,!?:;àâäéèêëïîôöùûüÿçÀÂÄÉÈÊËÏÎÔÖÙÛÜŸÇ]', ' ', text)
         
         # Supprimer caractères de formatage indésirables
         text = re.sub(r'[_~`]', ' ', text)
