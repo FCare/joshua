@@ -575,8 +575,8 @@ class JoshuaChat {
 
     async fetchWebSocketApiKey() {
         try {
-            // Use relative path - Traefik will proxy to auth service
-            const response = await fetch('/auth/session-api-key', {
+            // Use absolute URL to auth service
+            const response = await fetch('https://auth.caronboulme.fr/auth/session-api-key', {
                 method: 'POST',
                 credentials: 'include'
             });
@@ -599,8 +599,8 @@ class JoshuaChat {
 
     async logout() {
         try {
-            // Use relative path - Traefik will proxy to auth service
-            await fetch('/auth/logout', {
+            // Use absolute URL to auth service
+            await fetch('https://auth.caronboulme.fr/auth/logout', {
                 credentials: 'include'
             });
             console.log('Logout successful');
