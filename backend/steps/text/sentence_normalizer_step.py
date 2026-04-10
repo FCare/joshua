@@ -51,7 +51,7 @@ class SentenceNormalizerStep(PipelineStep):
                 # Unités temporelles
                 'h': 'heures', 'min': 'minutes', 'min.': 'minutes', 'sec': 'secondes', 'sec.': 'secondes',
                 # Unités de mesure
-                '°': 'degrés', '°C': 'degrés Celsius', '°F': 'degrés Fahrenheit',
+                '°': 'degrés', '°C': 'degrés', '°F': 'degrés',
                 'mm': 'millimètres', 'cm': 'centimètres', 'km': 'kilomètres',
                 'mg': 'milligrammes', 'kg': 'kilogrammes',
                 'ml': 'millilitres',
@@ -335,6 +335,17 @@ class SentenceNormalizerStep(PipelineStep):
         """Expanse les abréviations vers leurs formes complètes"""
         expansions = self.abbreviation_expansions.get(self.language_id, {})
         
+        result = text
+        
+        # D'abord traiter les unités composées spéciales
+        # km/h → kilomètres heure
+        result = re.sub(r'\b(\d+(?:[.,]\d+)?)\s*km/h\b', r'\1 kilomètres heure', result, flags=re.IGNORECASE)
+        
+        # Températures avec contexte numérique
+        result = re.sub(r'\b(\d+(?:[.,]\d+)?)\s*°C\b', r'\1 degrés', result, flags=re.IGNORECASE)
+        result = re.sub(r'\b(\d+(?:[.,]\d+)?)\s*°F\b', r'\1 degrés', result, flags=re.IGNORECASE)
+        result = re.sub(r'\b(\d+(?:[.,]\d+)?)\s*°\b', r'\1 degrés', result, flags=re.IGNORECASE)
+        
         # Unités de mesure qui nécessitent un contexte numérique (précédées de chiffres)
         numeric_units = {
             'l': 'litres',
@@ -348,12 +359,10 @@ class SentenceNormalizerStep(PipelineStep):
             'ml': 'millilitres'
         }
         
-        result = text
-        
-        # D'abord traiter les unités avec contexte numérique
+        # Traiter les unités avec contexte numérique (incluant décimaux)
         for unit, expansion in numeric_units.items():
-            # Pattern: nombre + espaces optionnels + unité + frontière de mot
-            pattern = r'\b(\d+)\s*(' + re.escape(unit) + r')\b'
+            # Pattern: nombre (entier ou décimal) + espaces optionnels + unité + frontière de mot
+            pattern = r'\b(\d+(?:[.,]\d+)?)\s*(' + re.escape(unit) + r')\b'
             result = re.sub(pattern, r'\1 ' + expansion, result, flags=re.IGNORECASE)
         
         # Ensuite traiter les autres abréviations normalement
@@ -385,7 +394,7 @@ class SentenceNormalizerStep(PipelineStep):
         # Ajouter un espace avant les unités simples qui en manquent
         simple_units = [
             'degrés', 'heures', 'minutes', 'secondes',
-            'mètres', 'grammes', 'litres', 'Celsius', 'Fahrenheit'
+            'mètres', 'grammes', 'litres'
         ]
         
         for unit in simple_units:
