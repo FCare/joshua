@@ -163,16 +163,16 @@ class WeatherToolStep(BaseToolStep):
                 data = response.json()
                 logger.info(f"🌤️ WEATHER API - Données JSON reçues: {data}")
                 
-                # Formater les données actuelles
+                # Formater les données actuelles avec arrondissement pour TTS
                 current = data.get("current", {})
                 result = {
                     "current": {
-                        "temperature": current.get("temperature_2m"),
-                        "feels_like": current.get("apparent_temperature"),
-                        "humidity": current.get("relative_humidity_2m"),
-                        "precipitation": current.get("precipitation"),
-                        "wind_speed": current.get("wind_speed_10m"),
-                        "wind_direction": current.get("wind_direction_10m"),
+                        "temperature": self._round_value(current.get("temperature_2m")),
+                        "feels_like": self._round_value(current.get("apparent_temperature")),
+                        "humidity": self._round_value(current.get("relative_humidity_2m")),
+                        "precipitation": self._round_value(current.get("precipitation"), decimals=1),
+                        "wind_speed": self._round_value(current.get("wind_speed_10m")),
+                        "wind_direction": self._round_value(current.get("wind_direction_10m")),
                         "weather_code": current.get("weather_code"),
                         "description": self._get_weather_description(current.get("weather_code", 0))
                     }
@@ -188,10 +188,10 @@ class WeatherToolStep(BaseToolStep):
                     for i in range(min(7, len(daily.get("time", [])))):
                         forecasts.append({
                             "date": daily["time"][i],
-                            "temperature_max": daily["temperature_2m_max"][i],
-                            "temperature_min": daily["temperature_2m_min"][i],
-                            "precipitation": daily["precipitation_sum"][i],
-                            "wind_speed": daily["wind_speed_10m_max"][i],
+                            "temperature_max": self._round_value(daily["temperature_2m_max"][i]),
+                            "temperature_min": self._round_value(daily["temperature_2m_min"][i]),
+                            "precipitation": self._round_value(daily["precipitation_sum"][i], decimals=1),
+                            "wind_speed": self._round_value(daily["wind_speed_10m_max"][i]),
                             "weather_code": daily["weather_code"][i],
                             "description": self._get_weather_description(daily["weather_code"][i])
                         })
@@ -204,6 +204,18 @@ class WeatherToolStep(BaseToolStep):
                 
         except Exception as e:
             return {"error": f"Erreur récupération météo: {str(e)}"}
+    
+    def _round_value(self, value, decimals=0):
+        """Arrondit une valeur numérique pour une TTS plus naturelle"""
+        if value is None:
+            return None
+        try:
+            if decimals == 0:
+                return int(round(float(value)))
+            else:
+                return round(float(value), decimals)
+        except (ValueError, TypeError):
+            return value
     
     def _get_weather_description(self, weather_code: int) -> str:
         """Convertit le code météo Open-Meteo en description française"""
