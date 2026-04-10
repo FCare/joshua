@@ -156,69 +156,218 @@ class SentenceNormalizerStep(PipelineStep):
     
     def _add_chunk(self, chunk: str) -> list:
         """
-        Ajoute un chunk au buffer et retourne les phrases complètes détectées
+        Ajoute un chunk RAW au buffer et retourne les phrases complètes détectées
+        IMPORTANT: Accumule d'abord le texte RAW, détecte les fins de phrase,
+        puis normalise seulement les phrases complètes
         """
         if not chunk:
             return []
         
-        # Ajouter le chunk au buffer
+        # Ajouter le chunk RAW au buffer (SANS normalisation)
         self.sentence_buffer += chunk
-        logger.info(f"🔤 Buffer après ajout: {repr(self.sentence_buffer)}")
+        logger.info(f"🔤 Buffer RAW après ajout: {repr(self.sentence_buffer)}")
         
-        # Chercher les fins de phrase
+        # Chercher les fins de phrase sur le texte RAW
         complete_sentences = []
         sentence_endings = list(re.finditer(self.sentence_endings, self.sentence_buffer))
-        logger.info(f"🎯 Fins de phrase trouvées: {len(sentence_endings)} positions: {[m.span() for m in sentence_endings]}")
+        logger.info(f"🎯 Fins de phrase détectées: {len(sentence_endings)} positions: {[m.span() for m in sentence_endings]}")
         
         if sentence_endings:
             last_sentence_end = -1
             
             for match in sentence_endings:
                 end_pos = match.end()
-                potential_sentence = self.sentence_buffer[:end_pos].strip()
                 
-                if self._is_true_sentence_end(potential_sentence, end_pos - 1):
+                # Vérifier si c'est une vraie fin de phrase sur le texte RAW
+                if self._is_true_sentence_end(self.sentence_buffer, end_pos - 1):
                     if last_sentence_end == -1:
-                        sentence = potential_sentence
+                        # Première phrase depuis le début
+                        raw_sentence = self.sentence_buffer[:end_pos].strip()
                     else:
-                        sentence = self.sentence_buffer[last_sentence_end + 1:end_pos].strip()
+                        # Phrase suivante depuis la dernière fin
+                        raw_sentence = self.sentence_buffer[last_sentence_end + 1:end_pos].strip()
                     
-                    if sentence:
-                        logger.info(f"✅ Phrase complète ajoutée: {repr(sentence)}")
-                        complete_sentences.append(sentence)
+                    if raw_sentence:
+                        logger.info(f"✅ Phrase RAW complète détectée: {repr(raw_sentence)}")
+                        complete_sentences.append(raw_sentence)
                     last_sentence_end = end_pos - 1
             
-            # Garder seulement ce qui vient après la dernière phrase complète
+            # Garder seulement le texte RAW après la dernière phrase complète
             remaining_buffer = self.sentence_buffer[last_sentence_end + 1:]
-            logger.info(f"🔄 Buffer restant: {repr(remaining_buffer)}")
-            logger.info(f"🔤 Buffer avant nettoyage: {repr(self.sentence_buffer)}")
+            logger.info(f"🔄 Buffer RAW restant: {repr(remaining_buffer)}")
             self.sentence_buffer = remaining_buffer
-            logger.info(f"🔤 Buffer après nettoyage: {repr(self.sentence_buffer)}")
+            logger.info(f"🔤 Buffer RAW après nettoyage: {repr(self.sentence_buffer)}")
         
-        logger.info(f"📊 Retour de _add_chunk: {len(complete_sentences)} phrases: {[repr(s) for s in complete_sentences]}")
+        logger.info(f"📊 Phrases RAW complètes trouvées: {len(complete_sentences)} → {[repr(s) for s in complete_sentences]}")
         return complete_sentences
     
-    def _is_true_sentence_end(self, text: str, position: int) -> bool:
-        """Vérifie si une position correspond vraiment à une fin de phrase"""
-        words_before = text[:position + 1].split()
+    def _is_true_sentence_end(self, raw_text: str, position: int) -> bool:
+        """
+        Vérifie si une position correspond vraiment à une fin de phrase dans le texte RAW
         
-        if not words_before:
+        Cas gérés:
+        - "22.5. C'est" → vraie fin (point après nombre + espace + majuscule)
+        - "22.5.27" → vraie fin (point après nombre + chiffre sans espace)
+        - "22.5" → pas une fin (nombre décimal)
+        - "dorment.sur" → pas une fin (pas d'espace après)
+        - "LouisXIV." → vraie fin (mot + point)
+        """
+        logger.info(f"🔍 Vérification position {position}: '{raw_text[max(0,position-3):min(len(raw_text),position+4)]}'")
+        
+        if position >= len(raw_text):
+            return False
+            
+        end_char = raw_text[position]
+        if end_char not in '.!?':
             return False
         
-        last_word = words_before[-1]
-        current_abbrevs = self.abbreviations.get(self.language_id, set())
+        # Cas spécial : points multiples (...) → toujours une fin
+        if end_char == '.' and position > 0 and raw_text[position-1:position+1] == '..':
+            logger.info(f"✅ Points de suspension détectés")
+            return True
+            
+        # Cas spécial : ! ou ? → presque toujours une fin (sauf abréviations rares)
+        if end_char in '!?':
+            logger.info(f"✅ Exclamation/Question → fin de phrase")
+            return True
         
-        # Vérifier si le dernier mot est une abréviation connue
-        if last_word in current_abbrevs:
-            return False
-        
-        # Vérifier les abréviations composées
-        if len(words_before) >= 2:
-            last_two_words = " ".join(words_before[-2:])
-            if last_two_words in current_abbrevs:
+        # Pour les points simples, analyser le contexte
+        if end_char == '.':
+            
+            # Règle 1: Point sans espace après → analyser le contexte
+            if position < len(raw_text) - 1 and not raw_text[position + 1].isspace():
+                char_after = raw_text[position + 1]
+                
+                # Cas 1: Point entre chiffres = nombre décimal → PAS une fin
+                if position > 0 and char_after.isdigit():
+                    char_before = raw_text[position - 1]
+                    if char_before.isdigit():
+                        logger.info(f"❌ Nombre décimal détecté: '{char_before}.{char_after}'")
+                        return False
+                
+                # Cas 2: Point + Majuscule = vérifier si c'est un acronyme d'abord
+                # Ex: "aujourd'hui.Il" → vraie fin, "U.S.A." → acronyme
+                if char_after.isupper():
+                    # Vérifier si on est dans un acronyme (pattern: Lettre.Lettre.Lettre.)
+                    if self._is_in_acronym(raw_text, position):
+                        logger.info(f"❌ Acronyme détecté → pas une fin: '.{char_after}'")
+                        return False
+                    else:
+                        logger.info(f"✅ Point + majuscule (non-acronyme) → vraie fin: '.{char_after}'")
+                        return True
+                
+                # Cas 3: Point + minuscule = mot composé → PAS une fin
+                # Ex: "dorment.sur", "www.example.com"
+                if char_after.islower():
+                    logger.info(f"❌ Point + minuscule → pas une fin: '.{char_after}'")
+                    return False
+                
+                # Cas 4: Point + chiffre (pas nombre décimal) → probablement fin
+                # Ex: "version.27"
+                if char_after.isdigit():
+                    logger.info(f"⚠️ Point + chiffre → probablement fin: '.{char_after}'")
+                    return True
+                
+                # Cas 5: Autres caractères (ponctuation, etc.) → pas une fin
+                logger.info(f"❌ Point + caractère spécial → pas une fin: '.{char_after}'")
                 return False
+            
+            # Règle 2: Point dans nombre décimal → PAS une fin de phrase
+            # Ex: "23.8" → position du point, avant='3', après='8'
+            if position > 0 and position < len(raw_text) - 1:
+                char_before = raw_text[position - 1]
+                char_after = raw_text[position + 1]
+                if char_before.isdigit() and char_after.isdigit():
+                    logger.info(f"❌ Nombre décimal: '{char_before}.{char_after}'")
+                    return False
+            
+            # Règle 3: Vérifier les abréviations
+            words_before = raw_text[:position + 1].split()
+            if words_before:
+                last_word = words_before[-1].rstrip('.')
+                current_abbrevs = self.abbreviations.get(self.language_id, set())
+                
+                if last_word in current_abbrevs:
+                    logger.info(f"❌ Abréviation: '{last_word}'")
+                    return False
+                
+                # Abréviations composées
+                if len(words_before) >= 2:
+                    last_two_words = " ".join(words_before[-2:]).rstrip('.')
+                    if last_two_words in current_abbrevs:
+                        logger.info(f"❌ Abréviation composée: '{last_two_words}'")
+                        return False
         
+        # Si on arrive ici, c'est probablement une vraie fin de phrase
+        logger.info(f"✅ Fin de phrase confirmée à position {position}")
         return True
+    
+    def _is_in_acronym(self, text: str, position: int) -> bool:
+        """
+        Détecte si un point est au milieu d'un acronyme comme U.S.A. ou N.A.T.O.
+        
+        Pattern attendu: [Majuscule].[Majuscule].[Majuscule]...
+        """
+        # Regarder avant le point : doit être une majuscule
+        if position == 0:
+            return False
+            
+        char_before = text[position - 1]
+        if not char_before.isupper():
+            return False
+        
+        # Regarder après le point : doit être une majuscule
+        if position >= len(text) - 1:
+            return False
+            
+        char_after = text[position + 1]
+        if not char_after.isupper():
+            return False
+        
+        # Chercher le contexte élargi pour confirmer le pattern d'acronyme
+        # Regarder en arrière pour trouver le début de l'acronyme
+        start_pos = position - 1
+        while start_pos >= 2:  # Au moins 2 chars avant : X.Y
+            if text[start_pos].isupper() and text[start_pos - 1] == '.' and start_pos >= 2 and text[start_pos - 2].isupper():
+                start_pos -= 2  # Reculer de X. vers le Y précédent
+            else:
+                break
+        
+        # Regarder en avant pour confirmer que ça continue
+        end_pos = position + 1
+        acronym_continues = True
+        while end_pos < len(text) - 2:  # Au moins 2 chars après : .Z
+            if text[end_pos].isupper() and text[end_pos + 1] == '.' and end_pos + 2 < len(text):
+                if text[end_pos + 2].isupper():
+                    end_pos += 2  # Avancer vers la prochaine lettre
+                else:
+                    # Point suivi d'une majuscule mais pas d'acronyme qui continue
+                    break
+            else:
+                acronym_continues = False
+                break
+        
+        # Vérifier qu'on a au moins 2 lettres dans l'acronyme (minimum pour U.S.)
+        letters_before = 1  # La lettre avant le point actuel
+        pos = start_pos
+        while pos < position:
+            if text[pos].isupper():
+                letters_before += 1
+            pos += 2  # Sauter la lettre et le point
+        
+        letters_after = 1  # La lettre après le point actuel
+        pos = position + 3  # Position après .X pour aller au point suivant
+        while pos <= end_pos and pos < len(text):
+            if pos < len(text) and text[pos].isupper():
+                letters_after += 1
+            pos += 2
+        
+        total_letters = letters_before + letters_after - 1  # -1 car on compte la lettre du milieu 2 fois
+        
+        is_acronym = total_letters >= 2
+        logger.info(f"🔍 Analyse acronyme pos {position}: '{text[max(0,position-4):position+5]}' → {total_letters} lettres → {'ACRONYME' if is_acronym else 'PAS ACRONYME'}")
+        
+        return is_acronym
     
     def _normalize_sentence(self, sentence: str) -> str:
         """Normalise une phrase complète pour la TTS"""
