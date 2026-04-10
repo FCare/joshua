@@ -13,10 +13,7 @@ class JoshuaChat {
         this.uploadedFiles = [];
         this.capabilities = null;
         
-        // Authentication
-        this.apiBaseUrl = 'https://auth.caronboulme.fr';
-        this.isAuthenticated = false;
-        this.currentUser = null;
+        // WebSocket Authentication (API key only)
         this.apiKey = null; // API key temporaire pour WebSocket
         this.apiKeyExpiresAt = null; // Heure d'expiration de l'API key
         
@@ -43,15 +40,10 @@ class JoshuaChat {
         this.updateMuteButton();
         this.updateOutputVisualizerVisibility();
         
-        // Check authentication before connecting WebSocket
-        this.checkAuthentication().then(async () => {
-            if (this.isAuthenticated) {
-                const success = await this.fetchWebSocketApiKey();
-                if (success) {
-                    await this.connectWebSocket();
-                }
-            } else {
-                this.redirectToLogin();
+        // Traefik handles authentication, directly fetch API key and connect
+        this.fetchWebSocketApiKey().then(async (success) => {
+            if (success) {
+                await this.connectWebSocket();
             }
         });
     }
@@ -70,8 +62,6 @@ class JoshuaChat {
         this.fileInput = document.getElementById('file-input');
         this.loading = document.getElementById('loading');
         this.subtitle = document.querySelector('.subtitle');
-        this.authBtn = document.getElementById('auth-btn');
-        this.authText = document.getElementById('auth-text');
         this.logoutBtn = document.getElementById('logout-btn');
         
         // Audio elements
@@ -110,20 +100,6 @@ class JoshuaChat {
             this.handleFileUpload(e.target.files);
         });
 
-        // Auth button
-        this.authBtn.addEventListener('click', () => {
-            if (this.isAuthenticated) {
-                // Redirect to centralized Voight-Kampff dashboard
-                window.location.href = 'https://auth.caronboulme.fr/auth/dashboard';
-            } else {
-                this.redirectToLogin();
-            }
-        });
-
-        // Logout button
-        this.logoutBtn.addEventListener('click', () => {
-            this.logout();
-        });
 
         // Microphone button
         this.micBtn.addEventListener('click', () => {
@@ -133,6 +109,11 @@ class JoshuaChat {
         // Mute button
         this.muteBtn.addEventListener('click', () => {
             this.toggleMute();
+        });
+
+        // Logout button
+        this.logoutBtn.addEventListener('click', () => {
+            this.logout();
         });
 
         // Initial send button state
@@ -579,37 +560,7 @@ class JoshuaChat {
         this.updateConnectionStatus();
     }
 
-    // Authentication methods
-    async checkAuthentication() {
-        try {
-            const response = await fetch(`${this.apiBaseUrl}/verify`, {
-                credentials: 'include'
-            });
-            
-            if (response.ok) {
-                const data = await response.json();
-                this.isAuthenticated = true;
-                this.currentUser = data.user;
-                this.updateAuthUI();
-                console.log('Authentication successful with session cookie for user:', data.user);
-                return true;
-            } else {
-                this.isAuthenticated = false;
-                this.currentUser = null;
-                this.apiKey = null;
-                this.updateAuthUI();
-                return false;
-            }
-        } catch (error) {
-            console.error('Authentication check failed:', error);
-            this.isAuthenticated = false;
-            this.currentUser = null;
-            this.apiKey = null;
-            this.updateAuthUI();
-            return false;
-        }
-    }
-
+    // WebSocket API Key management (Traefik handles authentication)
     isApiKeyExpired() {
         if (!this.apiKey || !this.apiKeyExpiresAt) {
             return true;
@@ -624,7 +575,8 @@ class JoshuaChat {
 
     async fetchWebSocketApiKey() {
         try {
-            const response = await fetch(`${this.apiBaseUrl}/auth/session-api-key`, {
+            // Use relative path - Traefik will proxy to auth service
+            const response = await fetch('/auth/session-api-key', {
                 method: 'POST',
                 credentials: 'include'
             });
@@ -635,11 +587,6 @@ class JoshuaChat {
                 this.apiKeyExpiresAt = data.expires_at;
                 console.log(`WebSocket API key obtained (${data.status}), expires: ${data.expires_at}`);
                 return true;
-            } else if (response.status === 401) {
-                // Session expirée, rediriger vers login
-                console.log('Session expired, redirecting to login');
-                this.redirectToLogin();
-                return false;
             } else {
                 console.error('Failed to get WebSocket API key:', response.status);
                 return false;
@@ -650,40 +597,20 @@ class JoshuaChat {
         }
     }
 
-    updateAuthUI() {
-        if (this.isAuthenticated && this.currentUser) {
-            this.authBtn.style.display = 'flex';
-            this.logoutBtn.style.display = 'flex';
-            this.authText.textContent = this.currentUser;
-            this.subtitle.textContent = `Bienvenue, ${this.currentUser} ! Tapez votre message pour commencer.`;
-        } else {
-            this.authBtn.style.display = 'none';
-            this.logoutBtn.style.display = 'none';
-            this.subtitle.textContent = 'Connexion requise pour utiliser Joshua';
-        }
-    }
-
-    redirectToLogin() {
-        // Redirect to centralized Voight-Kampff authentication
-        const currentUrl = window.location.href;
-        const serviceName = 'Joshua Assistant';
-        const authUrl = `https://auth.caronboulme.fr/auth/login?redirect_after=${encodeURIComponent(currentUrl)}&service_name=${encodeURIComponent(serviceName)}`;
-        window.location.href = authUrl;
-    }
-
     async logout() {
         try {
-            await fetch(`${this.apiBaseUrl}/auth/logout`, {
+            // Use relative path - Traefik will proxy to auth service
+            await fetch('/auth/logout', {
                 credentials: 'include'
             });
+            console.log('Logout successful');
         } catch (error) {
             console.error('Logout error:', error);
         } finally {
-            this.isAuthenticated = false;
-            this.currentUser = null;
-            this.apiKey = null; // Effacer l'API key temporaire
-            this.disconnect(); // Fermer la connexion WebSocket (méthode existante)
-            this.redirectToLogin();
+            this.apiKey = null;
+            this.disconnect(); // Close WebSocket connection
+            // Redirect to current page - Traefik will handle auth redirect
+            window.location.reload();
         }
     }
 
