@@ -431,7 +431,8 @@ class SentenceNormalizerStep(PipelineStep):
         text = re.sub(emoji_pattern, '', text)
         
         # Supprimer autres caractères indésirables (garder lettres, chiffres, espaces, ponctuation de base)
-        text = re.sub(r'[^\w\s\'-.,!?:;àâäéèêëïîôöùûüÿçÀÂÄÉÈÊËÏÎÔÖÙÛÜŸÇ]', ' ', text)
+        # Inclure tous les types d'apostrophes: ' ' `
+        text = re.sub(r'[^\w\s\'\'\`\-.,!?:;àâäéèêëïîôöùûüÿçÀÂÄÉÈÊËÏÎÔÖÙÛÜŸÇ]', ' ', text)
         
         # Supprimer caractères de formatage indésirables
         text = re.sub(r'[_~`]', ' ', text)
