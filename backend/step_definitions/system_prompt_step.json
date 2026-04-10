@@ -7,7 +7,7 @@
     "config_schema": {
         "type": "object",
         "properties": {
-            "prompt_template": {
+            "prompt": {
                 "type": "string",
                 "description": "Template pour le system prompt",
                 "default": "Tu es un assistant virtuel intelligent et bienveillant. Tu réponds de manière claire, concise et utile. Adapte ton niveau de langage à la situation et sois créatif dans tes réponses."

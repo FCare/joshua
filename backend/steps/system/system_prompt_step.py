@@ -22,7 +22,12 @@ class SystemPromptStep(PipelineStep):
         super().__init__(name, config, handler=self._handle_input_event)
         
         # Configuration simple : juste le template
-        self.prompt_template = config.get("prompt_template", "") if config else ""
+        prompt_config = config.get("prompt", "") if config else ""
+        # Support pour array de strings OU string simple
+        if isinstance(prompt_config, list):
+            self.prompt = " ".join(prompt_config)  # Joint avec des espaces
+        else:
+            self.prompt = prompt_config
         
         logger.info(f"SystemPromptStep '{self.name}' configuré")
     
@@ -46,7 +51,7 @@ class SystemPromptStep(PipelineStep):
         """Génère et envoie un system prompt au chat"""
         try:
             # Utiliser le template configuré
-            system_prompt = self.prompt_template or "Tu es un assistant virtuel intelligent et bienveillant."
+            system_prompt = self.prompt or "Tu es un assistant virtuel intelligent et bienveillant."
             
             # Créer le message de mise à jour
             from messages.chat_message import SystemPromptMessage
