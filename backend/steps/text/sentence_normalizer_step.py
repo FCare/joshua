@@ -94,7 +94,7 @@ class SentenceNormalizerStep(PipelineStep):
     
     async def _process_text_chunk(self, message: BaseMessage):
         """
-        Handler : accumule les chunks ou normalise et envoie à la fin
+        Handler : accumule les chunks et traite les phrases complètes en temps réel
         """
         from messages.chat_message import ChatResponseMessage, ChatFinishMessage
         
@@ -103,14 +103,17 @@ class SentenceNormalizerStep(PipelineStep):
             return
             
         if isinstance(message, ChatResponseMessage):
-            # Simplement accumuler le texte
+            # Accumuler le texte
             if message.text:
                 self.text_buffer += str(message.text)
                 logger.info(f"📝 Texte accumulé: {repr(message.text)} - Buffer total: {repr(self.text_buffer)}")
                 
+                # Détecter et traiter les phrases complètes
+                self._detect_and_process_complete_sentences()
+                
         elif isinstance(message, ChatFinishMessage):
-            # Normaliser tout le texte accumulé et l'envoyer
-            logger.info(f"🏁 Fin du chat - normalisation du texte complet: {repr(self.text_buffer)}")
+            # Normaliser tout le texte restant dans le buffer et l'envoyer
+            logger.info(f"🏁 Fin du chat - normalisation du texte restant: {repr(self.text_buffer)}")
             if self.text_buffer.strip():
                 normalized_text = self._normalize_text(self.text_buffer)
                 self._send_normalized_text(normalized_text)
@@ -120,6 +123,38 @@ class SentenceNormalizerStep(PipelineStep):
             
             # Reset du buffer pour le prochain message
             self.text_buffer = ""
+
+    def _detect_and_process_complete_sentences(self):
+        """
+        Détecte les phrases complètes dans le buffer et les traite immédiatement
+        Pattern : lettre + {.,!,?} + espace optionnel + majuscule
+        """
+        if not self.text_buffer:
+            return
+        
+        # Pattern pour détecter une phrase complète :
+        # lettre/chiffre + ponctuation de fin + espace optionnel + majuscule
+        sentence_pattern = r'([a-zA-Zàâäéèêëïîôöùûüÿç0-9][^.!?]*[.!?])\s*([A-ZÀÂÄÉÈÊËÏÎÔÖÙÛÜŸÇ])'
+        
+        match = re.search(sentence_pattern, self.text_buffer)
+        if match:
+            sentence_end = match.start(2)  # Position du début du prochain mot (majuscule)
+            complete_sentence = self.text_buffer[:sentence_end].strip()
+            remaining_text = self.text_buffer[sentence_end:]
+            
+            logger.info(f"🔍 Phrase complète détectée: {repr(complete_sentence)}")
+            
+            # Normaliser et envoyer la phrase complète
+            if complete_sentence:
+                normalized_sentence = self._normalize_text(complete_sentence)
+                self._send_normalized_text(normalized_sentence)
+            
+            # Garder le reste dans le buffer
+            self.text_buffer = remaining_text
+            logger.info(f"📝 Buffer restant: {repr(self.text_buffer)}")
+            
+            # Récursion pour détecter d'autres phrases complètes
+            self._detect_and_process_complete_sentences()
 
     def _send_normalized_text(self, text: str):
         """
