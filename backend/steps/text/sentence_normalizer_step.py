@@ -237,10 +237,10 @@ class SentenceNormalizerStep(PipelineStep):
         ordinal_pattern = r'(\s|^|[^\w])([MXVCI]+)(er|e|ème)(\s|$|[^\w])'
         text = re.sub(ordinal_pattern, replace_roman_ordinal, text)
         
-        # Chiffres romains purs : "XIV" → "14"
+        # Chiffres romains purs : "XIV" → "14" (majuscules et minuscules)
         def replace_roman_safe(match):
             prefix = match.group(1)
-            roman = match.group(2)
+            roman = match.group(2).upper()  # Convertir en majuscules pour le traitement
             suffix = match.group(3)
             
             # Si c'est une contraction avec apostrophe, ne pas convertir
@@ -253,8 +253,9 @@ class SentenceNormalizerStep(PipelineStep):
             
             return prefix + str(number) + suffix
         
-        pure_pattern = r'(\s|^|[^\w])([MXVCI]+)(\s|$|[^\w])'
-        text = re.sub(pure_pattern, replace_roman_safe, text)
+        # Pattern pour majuscules ET minuscules
+        pure_pattern = r'(\s|^|[^\w])([MXVCImxvci]+)(\s|$|[^\w])'
+        text = re.sub(pure_pattern, replace_roman_safe, text, flags=re.IGNORECASE)
         
         return text
     
