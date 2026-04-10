@@ -22,8 +22,6 @@
           "Tu réponds de manière claire, concise et utile.",
           "Adapte ton niveau de langage à la situation et sois créatif dans tes réponses.",
           "Tu réponds de manière concise et claire en français.",
-          "Tu t'adresses à l'utilisateur en language oral, donc uniquement avec des caracteres de l'alphabet, pas de chiffres.",
-          "Tu ecris les mots et les nombres en entier, aucune abbréviations, aucun chiffres.",
           "Quand tu dois donner une liste, donne la sous la forme d'une liste sépraée par des virgules, pas sous forme de liste a puces, ni sous forme de liste a tiret, ni sous forme de liste numérotée."
         ]
       }
