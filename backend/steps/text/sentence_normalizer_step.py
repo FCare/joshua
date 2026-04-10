@@ -135,8 +135,11 @@ class SentenceNormalizerStep(PipelineStep):
         Envoie une phrase normalisée avec les métadonnées appropriées
         """
         try:
+            logger.info(f"🔄 Phrase avant normalisation: {repr(sentence)}")
             normalized = self._normalize_sentence(sentence)
+            logger.info(f"✅ Phrase après normalisation: {repr(normalized)}")
             if not normalized.strip():
+                logger.warning(f"⚠️ Phrase normalisée vide, abandonnée")
                 return
             
             from messages.text_message import SentenceMessage
@@ -146,6 +149,7 @@ class SentenceNormalizerStep(PipelineStep):
             )
             
             self.output_queue.enqueue(output_message)
+            logger.info(f"📤 Phrase envoyée vers TTS: {repr(normalized)}")
         
         except Exception as e:
             logger.error(f"Erreur envoi phrase normalisée: {e}")
@@ -187,7 +191,9 @@ class SentenceNormalizerStep(PipelineStep):
             # Garder seulement ce qui vient après la dernière phrase complète
             remaining_buffer = self.sentence_buffer[last_sentence_end + 1:]
             logger.info(f"🔄 Buffer restant: {repr(remaining_buffer)}")
+            logger.info(f"🔤 Buffer avant nettoyage: {repr(self.sentence_buffer)}")
             self.sentence_buffer = remaining_buffer
+            logger.info(f"🔤 Buffer après nettoyage: {repr(self.sentence_buffer)}")
         
         logger.info(f"📊 Retour de _add_chunk: {len(complete_sentences)} phrases: {[repr(s) for s in complete_sentences]}")
         return complete_sentences
@@ -216,23 +222,31 @@ class SentenceNormalizerStep(PipelineStep):
     
     def _normalize_sentence(self, sentence: str) -> str:
         """Normalise une phrase complète pour la TTS"""
+        logger.info(f"🔧 DÉBUT normalisation: {repr(sentence)}")
+        
         # 1. Normaliser les nombres français (supprimer espaces séparateurs)
         normalized = self._normalize_numbers(sentence)
+        logger.info(f"🔧 Étape 1 (espaces nombres): {repr(normalized)}")
         
         # 2. Convertir les chiffres romains en nombres arabes
         normalized = self._convert_roman_numerals(normalized)
+        logger.info(f"🔧 Étape 2 (chiffres romains): {repr(normalized)}")
         
         # 3. Séparer les nombres des unités (15h → 15 h)
         normalized = self._separate_numbers_from_units(normalized)
+        logger.info(f"🔧 Étape 3 (séparation unités): {repr(normalized)}")
         
         # 4. Convertir les nombres en mots (basique)
         normalized = self._convert_numbers_to_words(normalized)
+        logger.info(f"🔧 Étape 4 (nombres en mots): {repr(normalized)}")
         
         # 5. Expansion des abréviations
         normalized = self._expand_abbreviations(normalized)
+        logger.info(f"🔧 Étape 5 (abréviations): {repr(normalized)}")
         
         # 6. Nettoyage final
         normalized = self._clean_text_for_tts(normalized)
+        logger.info(f"🔧 FIN normalisation: {repr(normalized)}")
         
         return normalized
     
