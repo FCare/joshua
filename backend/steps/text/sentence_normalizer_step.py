@@ -253,9 +253,10 @@ class SentenceNormalizerStep(PipelineStep):
             
             return prefix + str(number) + suffix
         
-        # Pattern pour majuscules ET minuscules
-        pure_pattern = r'(\s|^|[^\w])([MXVCImxvci]+)(\s|$|[^\w])'
-        text = re.sub(pure_pattern, replace_roman_safe, text, flags=re.IGNORECASE)
+        # Pattern pour chiffres romains UNIQUEMENT en majuscules
+        # Exemples valides: I, II, III, IV, V, VI, VII, VIII, IX, X, XI, XII, XIII, XIV, XV, XVI, etc.
+        pure_pattern = r'(\s|^|[^\w])([IVXLCDM]{1,7})(\s|$|[^\w])'
+        text = re.sub(pure_pattern, replace_roman_safe, text)  # Pas de flag IGNORECASE
         
         return text
     
