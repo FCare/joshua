@@ -55,7 +55,7 @@ class OpenAIChatStep(PipelineStep):
         self.model = config.get("model", "gpt-4o-mini") if config else "gpt-4o-mini"
         self.temperature = config.get("temperature", 0.7) if config else 0.7
         self.max_tokens = config.get("max_tokens", 1000) if config else 1000
-        self.system_prompt = config.get("system_prompt", "You are a helpful assistant.") if config else "You are a helpful assistant."
+        self.system_prompt = ""
         
         # État de conversation
         self.conversation_history = []

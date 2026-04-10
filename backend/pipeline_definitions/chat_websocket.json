@@ -44,8 +44,7 @@
             "instance_id": "openai_chat",
             "step_definition": "OpenAI Chat Step",
             "config_overrides": {
-                "max_tokens": 1500,
-                "system_prompt": "Tu es un assistant virtuel intelligent utilisant Qwen3 VL 8B. Tu réponds de manière claire, concise et engageante en français."
+                "max_tokens": 1500
             }
         },
         {
