@@ -317,19 +317,22 @@ class SentenceNormalizerStep(PipelineStep):
             """Remplace un nombre par son équivalent en lettres"""
             number_str = match.group(0)
             try:
-                number = int(number_str)
-                # Limiter à des nombres raisonnables pour éviter les performances dégradées
-                if 0 <= number <= 999999:
-                    words = self.number_converter.number_to_words(number)
-                    return words
+                # Vérifier si c'est un décimal
+                if '.' in number_str or ',' in number_str:
+                    return self.number_converter.decimal_to_words(number_str)
                 else:
-                    return number_str  # Garder tel quel si trop grand
+                    number = int(number_str)
+                    # Limiter à des nombres raisonnables pour éviter les performances dégradées
+                    if 0 <= number <= 999999:
+                        words = self.number_converter.number_to_words(number)
+                        return words
+                    else:
+                        return number_str  # Garder tel quel si trop grand
             except (ValueError, OverflowError):
                 return number_str  # Garder tel quel si conversion impossible
         
-        # Pattern pour détecter les nombres entiers (pas les décimaux ni les dates)
-        # Évite les numéros de téléphone, dates, etc.
-        number_pattern = r'\b\d{1,6}\b'
+        # Pattern pour détecter les nombres entiers ET décimaux (évite dates, téléphones)
+        number_pattern = r'\b\d{1,6}(?:[.,]\d{1,3})?\b'
         
         return re.sub(number_pattern, replace_number, text_with_ordinals)
     

@@ -199,3 +199,34 @@ class NumberToWordsConverter:
             text = re.sub(pattern, replace_ordinal, text)
         
         return text
+
+    def decimal_to_words(self, decimal_str):
+        """Convertit un nombre décimal en lettres (3.14 → 'trois virgule quatorze')"""
+        try:
+            # Normaliser point/virgule selon la langue
+            if ',' in decimal_str:
+                integer_part, decimal_part = decimal_str.split(',', 1)
+                separator = 'virgule' if self.language == 'fr' else 'point'
+            elif '.' in decimal_str:
+                integer_part, decimal_part = decimal_str.split('.', 1)
+                separator = 'point' if self.language == 'fr' else 'point'
+            else:
+                # Pas de partie décimale, traiter comme entier
+                return self.number_to_words(int(decimal_str))
+            
+            # Convertir partie entière
+            integer_words = self.number_to_words(int(integer_part))
+            
+            # Convertir partie décimale (chiffre par chiffre)
+            decimal_words = []
+            for digit in decimal_part[:3]:  # Limiter à 3 décimales max
+                if self.language == 'fr':
+                    decimal_words.append(self.fr_units[int(digit)])
+                else:
+                    decimal_words.append(self.en_units[int(digit)])
+            
+            return f"{integer_words} {separator} {' '.join(decimal_words)}"
+            
+        except (ValueError, IndexError):
+            # En cas d'erreur, retourner tel quel
+            return decimal_str
