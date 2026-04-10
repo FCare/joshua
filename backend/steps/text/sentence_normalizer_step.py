@@ -357,7 +357,21 @@ class SentenceNormalizerStep(PipelineStep):
                     number = int(number_str)
                     # Limiter à des nombres raisonnables
                     if 0 <= number <= 999999:
-                        words = self.number_converter.number_to_words(number)
+                        # Vérifier si le nombre se termine par 1 (1, 21, 31, 41, 101, etc.)
+                        feminine = False
+                        if number % 10 == 1 and number % 100 != 11:  # Exclure 11, 111, etc.
+                            # Chercher le mot qui suit le nombre dans le texte
+                            start_pos = match.start()
+                            end_pos = match.end()
+                            remaining_text = text_with_ordinals[end_pos:]
+                            
+                            # Extraire le premier mot qui suit
+                            next_word_match = re.match(r'\s*([a-zA-Zàâäéèêëïîôöùûüÿç]+)', remaining_text)
+                            if next_word_match:
+                                next_word = next_word_match.group(1)
+                                feminine = self._is_feminine_word(next_word)
+                        
+                        words = self.number_converter.number_to_words(number, feminine=feminine)
                         return words
                     else:
                         return number_str
@@ -367,7 +381,86 @@ class SentenceNormalizerStep(PipelineStep):
         # Pattern pour détecter les nombres entiers ET décimaux
         number_pattern = r'\b\d{1,6}(?:[.,]\d{1,3})?\b'
         
-        return re.sub(number_pattern, replace_number, text_with_ordinals)
+        result = re.sub(number_pattern, replace_number, text_with_ordinals)
+        
+        # Post-processing : corriger l'accord en genre pour les nombres composés
+        # "vingt-et-un cuillère" → "vingt-et-une cuillère"
+        result = self._fix_gender_agreement_in_numbers(result)
+        
+        return result
+    
+    def _fix_gender_agreement_in_numbers(self, text: str) -> str:
+        """Corrige l'accord en genre dans les nombres composés"""
+        # Pattern pour détecter "...-et-un [mot]" ou "...-un [mot]" ou "cent un [mot]" etc.
+        patterns_to_fix = [
+            r'(-et-un)\s+([a-zA-Zàâäéèêëïîôöùûüÿç]+)',  # vingt-et-un cuillère
+            r'(cent\s+un)\s+([a-zA-Zàâäéèêëïîôöùûüÿç]+)',  # cent un cuillère
+            r'(mille\s+un)\s+([a-zA-Zàâäéèêëïîôöùûüÿç]+)'   # mille un cuillère
+        ]
+        
+        def replace_if_feminine(match):
+            number_part = match.group(1)
+            following_word = match.group(2)
+            
+            if self._is_feminine_word(following_word):
+                if '-et-un' in number_part:
+                    return number_part.replace('-et-un', '-et-une') + ' ' + following_word
+                elif 'cent un' in number_part:
+                    return number_part.replace('cent un', 'cent une') + ' ' + following_word
+                elif 'mille un' in number_part:
+                    return number_part.replace('mille un', 'mille une') + ' ' + following_word
+            
+            return match.group(0)  # Pas de changement si masculin
+        
+        result = text
+        for pattern in patterns_to_fix:
+            result = re.sub(pattern, replace_if_feminine, result)
+        
+        return result
+    
+    def _is_feminine_word(self, word):
+        """Détermine si un mot français est probablement féminin basé sur ses terminaisons"""
+        word = word.lower()
+        
+        # Terminaisons typiquement féminines
+        feminine_endings = [
+            'tion', 'sion', 'ance', 'ence', 'ette', 'elle', 'esse', 'ure',
+            'ière', 'euse', 'rice', 'ade', 'aille', 'aine', 'erie', 'ie'
+        ]
+        
+        # Mots féminins courants qui ne suivent pas les règles
+        irregular_feminines = {
+            'cuillère', 'cuillères', 'tasse', 'tasses', 'bouteille', 'bouteilles',
+            'heure', 'heures', 'minute', 'minutes', 'seconde', 'secondes',
+            'page', 'pages', 'personne', 'personnes', 'chose', 'choses',
+            'fois', 'voiture', 'voitures', 'poussette', 'poussettes',
+            'mongolfière', 'mongolfières', 'table', 'tables'
+        }
+        
+        # Exceptions masculines (mots en -e qui sont masculins)
+        masculine_exceptions = {
+            'homme', 'hommes', 'livre', 'livres', 'groupe', 'groupes',
+            'monde', 'mondes', 'nombre', 'nombres', 'membre', 'membres'
+        }
+        
+        # Vérifier les exceptions masculines d'abord
+        if word in masculine_exceptions:
+            return False
+            
+        # Vérifier les mots irréguliers féminins
+        if word in irregular_feminines:
+            return True
+            
+        # Vérifier les terminaisons
+        for ending in feminine_endings:
+            if word.endswith(ending):
+                return True
+                
+        # Si le mot se termine par 'e' et n'est pas dans les exceptions masculines
+        if word.endswith('e') and len(word) > 3:
+            return True
+            
+        return False
     
     def _expand_abbreviations(self, text: str) -> str:
         """Expanse les abréviations vers leurs formes complètes"""
@@ -460,6 +553,10 @@ class SentenceNormalizerStep(PipelineStep):
         text = re.sub(r'\*\*(.+?)\*\*', r'\1', text)  # **gras** → gras
         text = re.sub(r'\*(.+?)\*', r'\1', text)      # *italique* → italique
         text = re.sub(r'`(.+?)`', r'\1', text)        # `code` → code
+        
+        # Supprimer les tirets de listes
+        text = re.sub(r'^\s*-\s+', '', text, flags=re.MULTILINE)  # Début de ligne - espace
+        text = re.sub(r'\n\s*-\s+', '\n', text)  # Tirets en milieu de texte
         
         # Supprimer TOUS les emojis (toutes les plages Unicode des emojis)
         emoji_pattern = r'[\U0001F600-\U0001F64F\U0001F300-\U0001F5FF\U0001F680-\U0001F6FF\U0001F1E0-\U0001F1FF\U0001F900-\U0001F9FF\U00002600-\U000026FF\U00002700-\U000027BF\U0001F190-\U0001F1FF\U0001FA70-\U0001FAFF\U00002300-\U000023FF\U00002B50\U00002B55\U00002728\U0001F004\U0001F0CF\U0001F170-\U0001F251\U0001F600-\U0001F636\U0001F681-\U0001F6C5\U0001F30D-\U0001F567]'
