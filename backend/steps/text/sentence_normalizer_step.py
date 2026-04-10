@@ -50,6 +50,11 @@ class SentenceNormalizerStep(PipelineStep):
                 'Pr': 'Professeur', 'Pr.': 'Professeur',
                 # Unités temporelles
                 'h': 'heures', 'min': 'minutes', 'min.': 'minutes', 'sec': 'secondes', 'sec.': 'secondes',
+                # Unités de mesure
+                '°': 'degrés', '°C': 'degrés Celsius', '°F': 'degrés Fahrenheit',
+                'mm': 'millimètres', 'cm': 'centimètres', 'm': 'mètres', 'km': 'kilomètres',
+                'mg': 'milligrammes', 'g': 'grammes', 'kg': 'kilogrammes',
+                'ml': 'millilitres', 'l': 'litres',
                 # Autres abréviations courantes
                 'av.': 'avenue', 'bd': 'boulevard', 'bd.': 'boulevard',
                 'ch.': 'chapitre', 'p.': 'page', 'pp.': 'pages',
@@ -174,7 +179,11 @@ class SentenceNormalizerStep(PipelineStep):
         normalized = self._expand_abbreviations(normalized)
         logger.info(f"🔧 Étape 5 (abréviations): {repr(normalized)}")
         
-        # 6. Nettoyage final
+        # 6. Corriger les espaces autour des unités
+        normalized = self._fix_unit_spacing(normalized)
+        logger.info(f"🔧 Étape 6 (espaces unités): {repr(normalized)}")
+        
+        # 7. Nettoyage final
         normalized = self._clean_text_for_tts(normalized)
         logger.info(f"🔧 FIN normalisation: {repr(normalized)}")
         
@@ -255,8 +264,32 @@ class SentenceNormalizerStep(PipelineStep):
         
         # Pattern pour chiffres romains UNIQUEMENT en majuscules
         # Exemples valides: I, II, III, IV, V, VI, VII, VIII, IX, X, XI, XII, XIII, XIV, XV, XVI, etc.
-        pure_pattern = r'(\s|^|[^\w])([IVXLCDM]{1,7})(\s|$|[^\w])'
-        text = re.sub(pure_pattern, replace_roman_safe, text)  # Pas de flag IGNORECASE
+        # Évite les unités de mesure comme °C, mm, cm, etc.
+        def replace_roman_safe_filtered(match):
+            prefix = match.group(1)
+            roman = match.group(2)
+            suffix = match.group(3)
+            
+            # Si c'est une contraction avec apostrophe, ne pas convertir
+            if suffix.startswith("'"):
+                return match.group(0)
+            
+            # Si c'est précédé de °, ne pas convertir (pour °C)
+            if prefix.endswith("°"):
+                return match.group(0)
+                
+            # Si c'est suivi d'une lettre minuscule, c'est probablement une unité (mm, cm, etc.)
+            if suffix and suffix[0].islower():
+                return match.group(0)
+            
+            number = roman_to_int(roman)
+            if number is None or len(roman) > 7:
+                return match.group(0)
+            
+            return prefix + str(number) + suffix
+        
+        pure_pattern = r'(\s|^|[^\w°])([IVXLCDM]{2,7})(\s|$|[^\w])'  # Minimum 2 caractères pour éviter lettres isolées
+        text = re.sub(pure_pattern, replace_roman_safe_filtered, text)
         
         return text
     
@@ -317,6 +350,23 @@ class SentenceNormalizerStep(PipelineStep):
                 result = re.sub(pattern, expansion, result, flags=re.IGNORECASE)
         
         return result
+    
+    def _fix_unit_spacing(self, text: str) -> str:
+        """Corrige les espaces autour des unités de mesure"""
+        # Ajouter un espace avant les unités qui en manquent
+        units = [
+            'degrés', 'heures', 'minutes', 'secondes',
+            'kilomètres', 'mètres', 'centimètres', 'millimètres',
+            'kilogrammes', 'grammes', 'milligrammes',
+            'litres', 'millilitres', 'Celsius', 'Fahrenheit'
+        ]
+        
+        for unit in units:
+            # Pattern pour détecter un mot suivi directement d'une unité
+            pattern = r'([a-zA-Zàâäéèêëïîôöùûüÿç]+)(' + re.escape(unit) + r')'
+            text = re.sub(pattern, r'\1 \2', text)
+        
+        return text
     
     def _clean_text_for_tts(self, text: str) -> str:
         """Nettoie le texte pour la synthèse vocale"""
