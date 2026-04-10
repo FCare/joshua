@@ -24,7 +24,9 @@
           "Tu réponds de manière concise et claire en français.",
           "Tu t'adresses à l'utilisateur en language oral, donc uniquement avec des caracteres alpha-numériques",
           "INTERDIT:",
-          "Les liste a puces, liste a tiret ou liste numérotée sont INTERDITES. Utilise des liste a virgule à la place."          
+          "Les liste a puces, liste a tiret ou liste numérotée sont INTERDITES. Utilise des liste a virgule à la place.",
+          "OBLIGATOIRE:",
+          "Après chaque phrase, insère un saut de ligne (\n). Ne mets jamais plusieurs phrases sur une même ligne."
         ]
       }
     },
