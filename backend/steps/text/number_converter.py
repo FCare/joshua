@@ -209,7 +209,7 @@ class NumberToWordsConverter:
                 separator = 'virgule' if self.language == 'fr' else 'point'
             elif '.' in decimal_str:
                 integer_part, decimal_part = decimal_str.split('.', 1)
-                separator = 'point' if self.language == 'fr' else 'point'
+                separator = 'virgule' if self.language == 'fr' else 'point'
             else:
                 # Pas de partie décimale, traiter comme entier
                 return self.number_to_words(int(decimal_str))
