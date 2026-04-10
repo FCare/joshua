@@ -52,9 +52,10 @@ class SentenceNormalizerStep(PipelineStep):
                 'h': 'heures', 'min': 'minutes', 'min.': 'minutes', 'sec': 'secondes', 'sec.': 'secondes',
                 # Unités de mesure
                 '°': 'degrés', '°C': 'degrés Celsius', '°F': 'degrés Fahrenheit',
-                'mm': 'millimètres', 'cm': 'centimètres', 'm': 'mètres', 'km': 'kilomètres',
-                'mg': 'milligrammes', 'g': 'grammes', 'kg': 'kilogrammes',
-                'ml': 'millilitres', 'l': 'litres',
+                'mm': 'millimètres', 'cm': 'centimètres', 'km': 'kilomètres',
+                'mg': 'milligrammes', 'kg': 'kilogrammes',
+                'ml': 'millilitres',
+                # Note: 'm', 'g', 'l' supprimés car trop courts et causent des faux positifs
                 # Autres abréviations courantes
                 'av.': 'avenue', 'bd': 'boulevard', 'bd.': 'boulevard',
                 'ch.': 'chapitre', 'p.': 'page', 'pp.': 'pages',
@@ -171,13 +172,13 @@ class SentenceNormalizerStep(PipelineStep):
         normalized = self._separate_numbers_from_units(normalized)
         logger.info(f"🔧 Étape 3 (séparation unités): {repr(normalized)}")
         
-        # 4. Convertir les nombres en mots
-        normalized = self._convert_numbers_to_words(normalized)
-        logger.info(f"🔧 Étape 4 (nombres en mots): {repr(normalized)}")
-        
-        # 5. Expansion des abréviations
+        # 4. Expansion des abréviations (AVANT conversion nombres en mots pour garder contexte numérique)
         normalized = self._expand_abbreviations(normalized)
-        logger.info(f"🔧 Étape 5 (abréviations): {repr(normalized)}")
+        logger.info(f"🔧 Étape 4 (abréviations): {repr(normalized)}")
+        
+        # 5. Convertir les nombres en mots
+        normalized = self._convert_numbers_to_words(normalized)
+        logger.info(f"🔧 Étape 5 (nombres en mots): {repr(normalized)}")
         
         # 6. Corriger les espaces autour des unités
         normalized = self._fix_unit_spacing(normalized)
@@ -334,10 +335,31 @@ class SentenceNormalizerStep(PipelineStep):
         """Expanse les abréviations vers leurs formes complètes"""
         expansions = self.abbreviation_expansions.get(self.language_id, {})
         
+        # Unités de mesure qui nécessitent un contexte numérique (précédées de chiffres)
+        numeric_units = {
+            'l': 'litres',
+            'm': 'mètres',
+            'g': 'grammes',
+            'km': 'kilomètres',
+            'mm': 'millimètres',
+            'cm': 'centimètres',
+            'kg': 'kilogrammes',
+            'mg': 'milligrammes',
+            'ml': 'millilitres'
+        }
+        
+        result = text
+        
+        # D'abord traiter les unités avec contexte numérique
+        for unit, expansion in numeric_units.items():
+            # Pattern: nombre + espaces optionnels + unité + frontière de mot
+            pattern = r'\b(\d+)\s*(' + re.escape(unit) + r')\b'
+            result = re.sub(pattern, r'\1 ' + expansion, result, flags=re.IGNORECASE)
+        
+        # Ensuite traiter les autres abréviations normalement
         # Trier par longueur décroissante
         sorted_abbrevs = sorted(expansions.items(), key=lambda x: len(x[0]), reverse=True)
         
-        result = text
         for abbrev, expansion in sorted_abbrevs:
             # Si l'abréviation se termine par un point, l'inclure dans le remplacement
             if abbrev.endswith('.'):
@@ -353,18 +375,32 @@ class SentenceNormalizerStep(PipelineStep):
     
     def _fix_unit_spacing(self, text: str) -> str:
         """Corrige les espaces autour des unités de mesure"""
-        # Ajouter un espace avant les unités qui en manquent
-        units = [
-            'degrés', 'heures', 'minutes', 'secondes',
-            'kilomètres', 'mètres', 'centimètres', 'millimètres',
-            'kilogrammes', 'grammes', 'milligrammes',
-            'litres', 'millilitres', 'Celsius', 'Fahrenheit'
+        # Unités composées à ne pas séparer
+        compound_units = [
+            'millimètres', 'centimètres', 'kilomètres',
+            'milligrammes', 'kilogrammes',
+            'millilitres', 'millimètres'
         ]
         
-        for unit in units:
+        # Ajouter un espace avant les unités simples qui en manquent
+        simple_units = [
+            'degrés', 'heures', 'minutes', 'secondes',
+            'mètres', 'grammes', 'litres', 'Celsius', 'Fahrenheit'
+        ]
+        
+        for unit in simple_units:
             # Pattern pour détecter un mot suivi directement d'une unité
-            pattern = r'([a-zA-Zàâäéèêëïîôöùûüÿç]+)(' + re.escape(unit) + r')'
-            text = re.sub(pattern, r'\1 \2', text)
+            # mais éviter les unités composées
+            pattern = r'(?<![a-zA-Zàâäéèêëïîôöùûüÿç])([a-zA-Zàâäéèêëïîôöùûüÿç]+)(' + re.escape(unit) + r')'
+            
+            # Vérifier que ce n'est pas une unité composée
+            def replacement(match):
+                full_match = match.group(1) + match.group(2)
+                if any(compound in full_match for compound in compound_units):
+                    return match.group(0)  # Ne pas modifier
+                return match.group(1) + ' ' + match.group(2)
+            
+            text = re.sub(pattern, replacement, text)
         
         return text
     
