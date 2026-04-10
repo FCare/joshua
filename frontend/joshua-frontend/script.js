@@ -40,6 +40,9 @@ class JoshuaChat {
         this.updateMuteButton();
         this.updateOutputVisualizerVisibility();
         
+        // Show logout button since Traefik ensures we're authenticated
+        this.showLogoutButton();
+        
         // Traefik handles authentication, directly fetch API key and connect
         this.fetchWebSocketApiKey().then(async (success) => {
             if (success) {
@@ -611,6 +614,13 @@ class JoshuaChat {
             this.disconnect(); // Close WebSocket connection
             // Redirect to current page - Traefik will handle auth redirect
             window.location.reload();
+        }
+    }
+
+    showLogoutButton() {
+        // Show logout button since user is authenticated (Traefik ensures this)
+        if (this.logoutBtn) {
+            this.logoutBtn.style.display = 'flex';
         }
     }
 
