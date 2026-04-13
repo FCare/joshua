@@ -353,7 +353,6 @@ class JoshuaChat {
         this.handleChatResponse(message);
     }
 
-
     sendWebSocketMessage(text) {
         if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
             throw new Error('WebSocket not connected');

@@ -188,7 +188,7 @@ class WebSocketStep(PipelineStep):
                 # Message de transcription ASR - envoyer comme asr_transcription pour différencier
                 logger.info(f"Sending ASR transcription: '{str(data)[:50]}{'...' if len(str(data)) > 50 else ''}'")
                 transcription_message = {
-                    "type": "asr_transcription",
+                    "type": "transcription",
                     "text": data,
                     "is_final": message_data.is_final if hasattr(message_data, 'is_final') else True,
                     "timestamp": time.time(),
@@ -199,7 +199,7 @@ class WebSocketStep(PipelineStep):
                 # Message texte normal - envoyer comme transcription (comportement original)
                 logger.info(f"Sending chat response: '{str(data)[:50]}{'...' if len(str(data)) > 50 else ''}'")
                 chat_response_message = {
-                    "type": "transcription",
+                    "type": "chat_response",
                     "text": data,
                     "timestamp": time.time(),
                 }
