@@ -60,6 +60,15 @@ class Client():
         finally:
             # Remove the client from the set of connected clients
             connected_clients.remove(self)
+            
+            try:
+                if self.pipeline:
+                    logging.info(f"Cleaning up pipeline for disconnected client...")
+                    await self.pipeline.stop()
+                    logging.info(f"Pipeline cleanup completed")
+            except Exception as e:
+                logging.error(f"Error during pipeline cleanup: {e}")
+            
             logging.info(f"remaining number of client: {len(connected_clients)}")
         return
 
