@@ -141,8 +141,8 @@ class OpenAIChatStep(PipelineStep):
         text_data = message.text
         logger.info(f"Chat received text: '{text_data}'")
         
-        if text_data.strip():
-            self._process_chat_request(text_data.strip())
+        if text_data:
+            self._process_chat_request(text_data)
     
     def _handle_image_upload(self, message: ImageUploadMessage):
         """Traite les uploads d'images pour contexte persistant"""
