@@ -360,6 +360,7 @@ class JoshuaChat {
                 // Créer un nouveau message utilisateur pour les transcriptions
                 this.currentTranscriptionDiv = this.addMessage('', 'user');
                 this.currentTranscriptionText = '';
+                this.currentAssistantDiv = null;
             }
             
             if (!isFinal) {
