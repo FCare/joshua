@@ -355,7 +355,7 @@ class JoshuaChat {
         const transcribedText = message.text || '';
         const isFinal = message.is_final || false;
         
-        if (transcribedText.trim()) {
+        if (transcribedText) {
             if (!this.currentTranscriptionDiv) {
                 // Créer un nouveau message utilisateur pour les transcriptions
                 this.currentTranscriptionDiv = this.addMessage('', 'user');
