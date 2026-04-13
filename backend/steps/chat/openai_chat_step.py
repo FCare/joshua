@@ -253,6 +253,8 @@ class OpenAIChatStep(PipelineStep):
         recent_history = self.conversation_history[-max_history:]
         messages.extend(recent_history)
         
+        logger.info(f"LLM called with {messages}")
+
         return messages
     
     def _call_openai_streaming(self, messages):
