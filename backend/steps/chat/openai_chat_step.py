@@ -197,15 +197,15 @@ class OpenAIChatStep(PipelineStep):
             # Utiliser les images du contexte persistant
             if self.persistent_images and len(self.persistent_images) > 0:
                 # Format OpenAI Vision API
-                content = []
-                if text:
-                    content.append({"type": "text", "text": text})
-                
+                content = []          
                 for image_info in self.persistent_images:
                     content.append({
                         "type": "image_url",
                         "image_url": {"url": image_info["data_url"]}
                     })
+
+                if text:
+                    content.append({"type": "text", "text": text})
                 
                 user_message["content"] = content
                 logger.info(f"Prepared vision message: text='{text}', persistent_images={len(self.persistent_images)}")
