@@ -284,6 +284,17 @@ class KyutaiTTS:
         except Exception as e:
             logger.error(f"{self.name}: Error sending EOS to TTS: {e}")
 
+    def _send_audio_finish_signal(self):
+        """Envoie un signal de fin audio pour débloquer le frontend"""
+        if self.output_queue:
+            from messages.tts_message import AudioFinishedMessage
+            finish_message = AudioFinishedMessage(
+                total_chunks=0,
+                total_bytes=0
+            )
+            self.output_queue.enqueue(finish_message)
+            logger.info(f"{self.name}: Audio finish signal sent due to error/disconnection")
+
     def process_text(self, text: str):
         """Traite le texte avec EOS (méthode originale pour compatibilité)"""
         if not self._connected or not self._stream_active:
@@ -431,25 +442,6 @@ class KyutaiTTSStep(PipelineStep):
             import traceback
             logger.error(f"TTS: Traceback: {traceback.format_exc()}")
 
-    def _send_audio_finish_signal(self):
-        """
-        Traite le signal finish du chat et l'envoie au websocket
-        """
-        try:
-            # Envoyer directement le signal finish au websocket
-            from messages.tts_message import AudioFinishedMessage
-            finish_message = AudioFinishedMessage(
-                total_chunks=0,
-                total_bytes=0
-            )
-            
-            if self.output_queue:
-                self.output_queue.enqueue(finish_message)
-                print(f"🎉 TTS envoyé signal CHAT TERMINÉ")
-        
-        except Exception as e:
-            print(f"❌ Erreur envoi finish signal: {e}")
-    
     def cleanup(self):
         print(f"Cleaning up Kyutai TTS {self.name}")
         
