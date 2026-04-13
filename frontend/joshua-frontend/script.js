@@ -363,17 +363,12 @@ class JoshuaChat {
             }
             
             if (!isFinal) {
-                // Transcription partielle : accumuler le texte
-                this.currentTranscriptionText = transcribedText;
+                this.currentTranscriptionText += transcribedText;
                 this.currentTranscriptionDiv.innerHTML = this.formatMessage(this.currentTranscriptionText);
                 this.scrollToBottom();
             } else {
-                // Transcription finale : finaliser le message et reset
-                this.currentTranscriptionText = transcribedText;
-                this.currentTranscriptionDiv.innerHTML = this.formatMessage(this.currentTranscriptionText);
-                this.scrollToBottom();
                 
-                // Reset pour la prochaine transcription
+                // Reset pour la prochaine transcription 
                 this.currentTranscriptionDiv = null;
                 this.currentTranscriptionText = '';
             }
