@@ -10,7 +10,7 @@ import os
 from typing import Optional, Dict, Any
 
 from pipeline_framework import PipelineStep
-from messages.websocket_message import UserConnectionMessage, AudioInputMessage, TextInputMessage
+from messages.websocket_message import UserConnectionMessage, AudioInputMessage, TextInputMessage, ImageUploadMessage
 from utils.chunk_queue import ChunkQueue
 
 logger = logging.getLogger(__name__)
@@ -256,31 +256,36 @@ class WebSocketStep(PipelineStep):
                 logger.info(f"Processing text message: '{message[:100]}{'...' if len(message) > 100 else ''}'")
                 try:
                     data = json.loads(message)
+                    message_type = data.get("type")
+                    
                     # Ne pas traiter les messages audio en mode texte
-                    if data.get("type") == "audio":
+                    if message_type == "audio":
                         return
                         
-                    # Support d'images avec API simplifiée
+                    # Gérer les uploads d'images séparément
+                    if message_type == "image_upload":
+                        image_data = data.get("image_data", "")
+                        filename = data.get("filename", "")
+                        
+                        logger.info(f"Processing image upload: {filename}")
+                        image_message = ImageUploadMessage(
+                            image_data=image_data,
+                            filename=filename
+                        )
+                        self.output_queue.enqueue(image_message)
+                        logger.info(f"Image upload queued: {filename}")
+                        return
+                        
+                    # Traitement des messages texte sans images
                     text_data = data.get("text", "")
-                    image = data.get("image")  # Une seule image
-                    images = data.get("images", [])  # Ou plusieurs images
-                    
-                    # Normaliser vers une liste
-                    if image:
-                        images = [image]
-                    
-                    logger.info(f"Parsed JSON message - text: '{text_data}', images: {len(images)}")
+                    logger.info(f"Parsed JSON text message: '{text_data}'")
                 except:
                     text_data = message
-                    images = []
                     logger.info(f"Using raw text message: '{text_data}'")
                 
-                text_message = TextInputMessage(
-                    text=text_data,
-                    images=images
-                )
+                text_message = TextInputMessage(text=text_data)
                 self.output_queue.enqueue(text_message)
-                logger.info(f"Message queued - text: '{text_data}', images: {len(images)}")
+                logger.info(f"Text message queued: '{text_data}'")
                     
         except Exception as e:
             logger.error(f"Error in websocket_handler: {e}")

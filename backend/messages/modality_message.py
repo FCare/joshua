@@ -35,23 +35,17 @@ class ModalityInputText(BaseMessage):
     """Message d'entrée texte (WebSocket → Chat)"""
     text: str
     client_id: str
-    images: List[str]
     
-    def __init__(self, text: str, client_id: str, images: Optional[List[str]] = None, 
-                 metadata: Optional[Dict] = None):
+    def __init__(self, text: str, client_id: str, metadata: Optional[Dict] = None):
         data = {
-            "text": text,
-            "images": images or []
+            "text": text
         }
         super().__init__(data=data, metadata={
             "client_id": client_id,
-            "has_images": len(images or []) > 0,
-            "image_count": len(images or []),
             **(metadata or {})
         })
         object.__setattr__(self, 'text', text)
         object.__setattr__(self, 'client_id', client_id)
-        object.__setattr__(self, 'images', images or [])
 
 
 @dataclass(frozen=True)

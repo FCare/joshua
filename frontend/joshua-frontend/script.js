@@ -359,34 +359,35 @@ class JoshuaChat {
             throw new Error('WebSocket not connected');
         }
         
-        // ✅ Préparer le message avec texte et images
+        // Messages texte séparés des images
         const message = {
             type: 'user_message',
             text: text
         };
         
-        // ✅ Ajouter les images si il y en a
-        if (this.uploadedFiles.length > 0) {
-            if (this.uploadedFiles.length === 1) {
-                // Une seule image : utiliser le champ "image"
-                message.image = this.uploadedFiles[0].data;
-            } else {
-                // Plusieurs images : utiliser le champ "images"
-                message.images = this.uploadedFiles.map(file => file.data);
-            }
-            
-            console.log(`Sending message with ${this.uploadedFiles.length} image(s)`);
-            
-            // ✅ Vider la liste après envoi
-            this.uploadedFiles = [];
-        }
-        
-        // ✅ Envoyer en JSON au lieu de texte brut
+        // Envoyer en JSON - plus d'images ici car upload immédiat
         this.ws.send(JSON.stringify(message));
         
         // Create assistant message placeholder for response
         this.currentAssistantDiv = this.addMessage('', 'assistant');
         this.currentResponse = '';
+    }
+
+    // Upload immédiat d'images
+    sendImageUpload(imageData, filename) {
+        if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+            console.warn('WebSocket not connected, cannot upload image');
+            return;
+        }
+        
+        const message = {
+            type: 'image_upload',
+            image_data: imageData,
+            filename: filename
+        };
+        
+        this.ws.send(JSON.stringify(message));
+        console.log('Image uploaded immediately:', filename);
     }
 
     handleFileUpload(files) {
@@ -407,19 +408,14 @@ class JoshuaChat {
         reader.onload = (e) => {
             const imageData = e.target.result; // Garde le data URL complet !
             
-            // Add to uploaded files for API - garder le data URL complet
-            this.uploadedFiles.push({
-                data: imageData, // ✅ Garder le préfixe data:image/...;base64,
-                filename: file.name,
-                type: file.type,
-                id: this.uploadedFiles.length + 1
-            });
+            // Upload immédiat au lieu de stocker
+            this.sendImageUpload(imageData, file.name);
             
             // Show image in chat
             const imgElement = `<img src="${imageData}" alt="Uploaded image" style="max-width: 200px; border-radius: 8px; margin: 8px 0;">`;
             this.addMessage(`🖼️ Image uploaded: ${file.name}<br>${imgElement}`, 'user');
             
-            console.log('Image uploaded:', file.name, 'Total images:', this.uploadedFiles.length);
+            console.log('Image uploaded immediately:', file.name);
         };
         reader.readAsDataURL(file);
     }

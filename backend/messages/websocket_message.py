@@ -19,6 +19,12 @@ class AudioInputMessage(BaseMessage):
 
 @dataclass(frozen=True)
 class TextInputMessage(BaseMessage):
-    """Message texte reçu via WebSocket (avec support images)"""
+    """Message texte reçu via WebSocket"""
     text: str
-    images: Optional[List[str]] = None
+
+
+@dataclass(frozen=True)
+class ImageUploadMessage(BaseMessage):
+    """Message d'upload d'image via WebSocket"""
+    image_data: str
+    filename: str

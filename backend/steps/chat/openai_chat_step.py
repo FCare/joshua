@@ -9,7 +9,7 @@ from enum import Enum
 
 from pipeline_framework import PipelineStep
 from messages.base_message import BaseMessage
-from messages.websocket_message import TextInputMessage
+from messages.websocket_message import TextInputMessage, ImageUploadMessage
 from messages.tool_message import ToolResponseMessage
 from messages.chat_message import SystemPromptMessage, ToolsReadyMessage
 from messages.asr_message import TranscriptionMessage
@@ -60,6 +60,9 @@ class OpenAIChatStep(PipelineStep):
         # État de conversation
         self.conversation_history = []
         self.accumulated_text = ""  # Pour accumuler le texte reçu en plusieurs fois
+        
+        # NOUVEAU : Contexte persistant d'images
+        self.persistent_images = []  # Liste des images uploadées dans la session
         
         # Tools management - nouveau
         self.client_tools = None
@@ -117,6 +120,8 @@ class OpenAIChatStep(PipelineStep):
                 # Switch case propre basé sur le type
                 if isinstance(input_message, TextInputMessage):
                     self._handle_text_input(input_message)
+                elif isinstance(input_message, ImageUploadMessage):
+                    self._handle_image_upload(input_message)
                 elif isinstance(input_message, TranscriptionMessage):
                     self._handle_transcription(input_message)
                 elif isinstance(input_message, ToolResponseMessage):
@@ -134,12 +139,22 @@ class OpenAIChatStep(PipelineStep):
         logger.info(f"💬 Chat: Processing text message from frontend")
         
         text_data = message.text
-        images = message.images
+        logger.info(f"Chat received text: '{text_data}'")
         
-        logger.info(f"💬 Chat received text: '{text_data}' with {len(images)} images")
+        if text_data.strip():
+            self._process_chat_request(text_data.strip())
+    
+    def _handle_image_upload(self, message: ImageUploadMessage):
+        """Traite les uploads d'images pour contexte persistant"""
+        logger.info(f"Chat: Processing image upload: {message.filename}")
         
-        if text_data.strip() or images:
-            self._process_chat_request(text_data.strip(), images)
+        # Ajouter l'image au contexte persistant
+        self.persistent_images.append({
+            "filename": message.filename,
+            "data_url": message.image_data  # Déjà un data URL complet
+        })
+        
+        logger.info(f"Image added to persistent context. Total images: {len(self.persistent_images)}")
 
     def _handle_transcription(self, message: TranscriptionMessage):
         """Traite les messages de transcription de l'ASR"""
@@ -152,7 +167,7 @@ class OpenAIChatStep(PipelineStep):
             text_data = message.text
             
             if text_data.strip():
-                self._process_chat_request(text_data.strip(), [])
+                self._process_chat_request(text_data.strip())
 
     def _handle_system_prompt_message(self, message: SystemPromptMessage):
         """Traite les mises à jour de system prompt"""
@@ -173,29 +188,27 @@ class OpenAIChatStep(PipelineStep):
         except Exception as e:
             logger.error(f"Erreur lors de la mise à jour du system prompt: {e}")
     
-    def _process_chat_request(self, text: str, images: list = None):
-        """Traite une requête de chat avec texte et images optionnelles"""
-        if images is None:
-            images = []
-            
+    def _process_chat_request(self, text: str):
+        """Traite une requête de chat avec texte et images persistantes"""
         try:
             # Construction du message utilisateur
             user_message = {"role": "user"}
             
-            if images and len(images) > 0:
+            # Utiliser les images du contexte persistant
+            if self.persistent_images and len(self.persistent_images) > 0:
                 # Format OpenAI Vision API
                 content = []
                 if text:
                     content.append({"type": "text", "text": text})
                 
-                for image_url in images:  # Déjà des data URLs complets !
+                for image_info in self.persistent_images:
                     content.append({
                         "type": "image_url",
-                        "image_url": {"url": image_url}
+                        "image_url": {"url": image_info["data_url"]}
                     })
                 
                 user_message["content"] = content
-                logger.info(f"💬 Prepared vision message: text='{text}', images={len(images)}")
+                logger.info(f"Prepared vision message: text='{text}', persistent_images={len(self.persistent_images)}")
             else:
                 # Message texte simple (format existant)
                 user_message["content"] = text
