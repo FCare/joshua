@@ -164,9 +164,11 @@ class ToolRegistryStep(PipelineStep):
         logger.info(f"🧹 Nettoyage de ToolRegistry {self.name}")
         
         with self._lock:
-            if "timeout_timer" in self.pending_registrations:
-                self.pending_registrations["timeout_timer"].cancel()
-            self.pending_registrations.clear()
+            # Vérifier si pending_registrations existe encore
+            if self.pending_registrations and isinstance(self.pending_registrations, dict):
+                if "timeout_timer" in self.pending_registrations:
+                    self.pending_registrations["timeout_timer"].cancel()
+                self.pending_registrations.clear()
         
         if hasattr(self, 'input_queue') and self.input_queue:
             self.input_queue.stop()

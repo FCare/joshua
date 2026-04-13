@@ -70,8 +70,22 @@ class Pipeline:
     
     async def stop(self):
         self.is_running = False
+        cleanup_errors = []
+        
+        # Nettoyer TOUS les steps même si certains échouent
         for step in self.steps.values():
-            await step.stop()
+            try:
+                await step.stop()
+            except Exception as e:
+                cleanup_errors.append(f"Step {step.name}: {e}")
+                # Continue le nettoyage des autres steps
+                continue
+        
+        # Logger les erreurs à la fin sans interrompre le processus
+        if cleanup_errors:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(f"⚠️ Some steps had cleanup errors: {cleanup_errors}")
     
     def get_step(self, step_name: str) -> Optional[PipelineStep]:
         return self.steps.get(step_name)

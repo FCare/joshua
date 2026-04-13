@@ -61,6 +61,7 @@ class Client():
             # Remove the client from the set of connected clients
             connected_clients.remove(self)
             
+            # CLEANUP: Stop pipeline to free resources (TTS WebSocket, threads, etc.)
             try:
                 if self.pipeline:
                     logging.info(f"Cleaning up pipeline for disconnected client...")
