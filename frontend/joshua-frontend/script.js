@@ -363,6 +363,8 @@ class JoshuaChat {
             }
             
             if (!isFinal) {
+                if (this.currentTranscriptionText)
+                    this.currentTranscriptionText += ' ';
                 this.currentTranscriptionText += transcribedText;
                 this.currentTranscriptionDiv.innerHTML = this.formatMessage(this.currentTranscriptionText);
                 this.scrollToBottom();
