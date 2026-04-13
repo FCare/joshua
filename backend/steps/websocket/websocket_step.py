@@ -11,6 +11,7 @@ from typing import Optional, Dict, Any
 
 from pipeline_framework import PipelineStep
 from messages.websocket_message import UserConnectionMessage, AudioInputMessage, TextInputMessage, ImageUploadMessage
+from messages.asr_message import TranscriptionMessage
 from utils.chunk_queue import ChunkQueue
 
 logger = logging.getLogger(__name__)
@@ -105,7 +106,7 @@ class WebSocketStep(PipelineStep):
         from messages.chat_message import ChatResponseMessage, ChatFinishMessage
         from messages.tts_message import AudioChunkOutputMessage, AudioFinishedMessage
         
-        allowed_classes = (ChatResponseMessage, ChatFinishMessage, AudioChunkOutputMessage, AudioFinishedMessage)
+        allowed_classes = (ChatResponseMessage, ChatFinishMessage, AudioChunkOutputMessage, AudioFinishedMessage, TranscriptionMessage)
         if not isinstance(message_data, allowed_classes):
             return
             
@@ -145,6 +146,9 @@ class WebSocketStep(PipelineStep):
             elif isinstance(message_data, ChatResponseMessage):
                 data = message_data.text
                 message_type = "chat_response"
+            elif isinstance(message_data, TranscriptionMessage):
+                data = message_data.text
+                message_type = "transcription"
             elif isinstance(message_data, AudioChunkOutputMessage):
                 data = message_data.audio_data
                 message_type = "audio_chunk"
@@ -180,8 +184,19 @@ class WebSocketStep(PipelineStep):
                 }
                 await self.send_to_client(json.dumps(chat_finish_message))
                 
+            elif message_type == "transcription":
+                # Message de transcription ASR - envoyer comme asr_transcription pour différencier
+                logger.info(f"Sending ASR transcription: '{str(data)[:50]}{'...' if len(str(data)) > 50 else ''}'")
+                transcription_message = {
+                    "type": "asr_transcription",
+                    "text": data,
+                    "is_final": message_data.is_final if hasattr(message_data, 'is_final') else True,
+                    "timestamp": time.time(),
+                }
+                await self.send_to_client(json.dumps(transcription_message))
+                
             elif  message_type == "chat_response":
-                # Message texte normal - envoyer comme chat_response
+                # Message texte normal - envoyer comme transcription (comportement original)
                 logger.info(f"Sending chat response: '{str(data)[:50]}{'...' if len(str(data)) > 50 else ''}'")
                 chat_response_message = {
                     "type": "transcription",
