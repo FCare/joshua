@@ -166,8 +166,8 @@ class OpenAIChatStep(PipelineStep):
             # Utiliser l'accès direct aux propriétés dataclass
             text_data = message.text
             
-            if text_data.strip():
-                self._process_chat_request(text_data.strip())
+            if text_data:
+                self._process_chat_request(text_data)
 
     def _handle_system_prompt_message(self, message: SystemPromptMessage):
         """Traite les mises à jour de system prompt"""

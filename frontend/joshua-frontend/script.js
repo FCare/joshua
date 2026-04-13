@@ -370,7 +370,6 @@ class JoshuaChat {
                 this.currentTranscriptionDiv.innerHTML = this.formatMessage(this.currentTranscriptionText);
                 this.scrollToBottom();
             } else {
-                
                 // Reset pour la prochaine transcription 
                 this.currentTranscriptionDiv = null;
                 this.currentTranscriptionText = '';
