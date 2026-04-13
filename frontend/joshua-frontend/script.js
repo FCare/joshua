@@ -427,21 +427,120 @@ class JoshuaChat {
         }
     }
 
-    processImageFile(file) {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            const imageData = e.target.result; // Garde le data URL complet !
+    async processImageFile(file) {
+        // Vérifier d'abord la taille originale
+        const maxSizeBytes = 1024 * 1024; // 1MB
+        
+        if (file.size <= maxSizeBytes) {
+            // Image déjà assez petite, traitement normal
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const imageData = e.target.result;
+                this.sendImageUpload(imageData, file.name);
+                this.showImageInChat(imageData, file.name, file.size);
+                console.log('Image uploaded immediately:', file.name);
+            };
+            reader.readAsDataURL(file);
+            return;
+        }
+
+        // Image trop grosse, redimensionner
+        console.log(`Image ${file.name} trop grosse (${(file.size/1024/1024).toFixed(2)}MB), redimensionnement...`);
+        
+        try {
+            const resizedImageData = await this.resizeImageToMaxSize(file, maxSizeBytes);
+            this.sendImageUpload(resizedImageData, file.name);
             
-            // Upload immédiat au lieu de stocker
-            this.sendImageUpload(imageData, file.name);
+            // Calculer la nouvelle taille approximative
+            const newSizeBytes = resizedImageData.length * 0.75; // Approximation base64 -> bytes
+            this.showImageInChat(resizedImageData, file.name, newSizeBytes, true);
             
-            // Show image in chat
-            const imgElement = `<img src="${imageData}" alt="Uploaded image" style="max-width: 200px; border-radius: 8px; margin: 8px 0;">`;
-            this.addMessage(`🖼️ Image uploaded: ${file.name}<br>${imgElement}`, 'user');
+            console.log(`Image redimensionnée et envoyée: ${file.name} (${(newSizeBytes/1024).toFixed(1)}KB)`);
+        } catch (error) {
+            console.error('Erreur lors du redimensionnement:', error);
+            this.addMessage(`❌ Erreur lors du redimensionnement de ${file.name}: ${error.message}`, 'user');
+        }
+    }
+
+    // Nouvelle fonction pour afficher l'image dans le chat
+    showImageInChat(imageData, filename, sizeBytes, wasResized = false) {
+        const sizeText = sizeBytes ? ` (${(sizeBytes/1024).toFixed(1)}KB)` : '';
+        const resizeIndicator = wasResized ? ' 📏' : '';
+        const imgElement = `<img src="${imageData}" alt="Uploaded image" style="max-width: 200px; border-radius: 8px; margin: 8px 0;">`;
+        
+        this.addMessage(`🖼️ Image uploaded: ${filename}${sizeText}${resizeIndicator}<br>${imgElement}`, 'user');
+    }
+
+    // Nouvelle fonction pour redimensionner l'image
+    async resizeImageToMaxSize(file, maxSizeBytes) {
+        return new Promise((resolve, reject) => {
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                
+                // Calculer les nouvelles dimensions en gardant le ratio
+                const { width, height } = this.calculateResizeDimensions(img.width, img.height, maxSizeBytes);
+                
+                canvas.width = width;
+                canvas.height = height;
+                
+                // Dessiner l'image redimensionnée
+                ctx.drawImage(img, 0, 0, width, height);
+                
+                // Convertir en base64 avec compression progressive
+                this.compressToTargetSize(canvas, maxSizeBytes, resolve, reject);
+            };
             
-            console.log('Image uploaded immediately:', file.name);
+            img.onerror = () => reject(new Error('Impossible de charger l\'image'));
+            img.src = URL.createObjectURL(file);
+        });
+    }
+
+    // Fonction pour calculer les dimensions optimales
+    calculateResizeDimensions(originalWidth, originalHeight, maxSizeBytes) {
+        // Estimation: 1 pixel ≈ 3-4 bytes en moyenne pour JPEG
+        const estimatedBytesPerPixel = 3;
+        const maxPixels = Math.floor(maxSizeBytes / estimatedBytesPerPixel);
+        const originalPixels = originalWidth * originalHeight;
+        
+        if (originalPixels <= maxPixels) {
+            return { width: originalWidth, height: originalHeight };
+        }
+        
+        // Calculer le ratio de réduction nécessaire
+        const ratio = Math.sqrt(maxPixels / originalPixels);
+        
+        return {
+            width: Math.floor(originalWidth * ratio),
+            height: Math.floor(originalHeight * ratio)
         };
-        reader.readAsDataURL(file);
+    }
+
+    // Compression progressive jusqu'à atteindre la taille cible
+    compressToTargetSize(canvas, maxSizeBytes, resolve, reject) {
+        let quality = 0.9;
+        const minQuality = 0.1;
+        
+        const tryCompress = () => {
+            const dataUrl = canvas.toDataURL('image/jpeg', quality);
+            const sizeBytes = dataUrl.length * 0.75; // Approximation base64 -> bytes
+            
+            if (sizeBytes <= maxSizeBytes || quality <= minQuality) {
+                if (sizeBytes > maxSizeBytes && quality <= minQuality) {
+                    reject(new Error(`Impossible de compresser l'image en dessous de ${(maxSizeBytes/1024).toFixed(0)}KB`));
+                    return;
+                }
+                resolve(dataUrl);
+                return;
+            }
+            
+            // Réduire la qualité et réessayer
+            quality -= 0.1;
+            setTimeout(tryCompress, 0); // Async pour éviter le blocage UI
+        };
+        
+        tryCompress();
     }
 
     updateConnectionStatus() {
