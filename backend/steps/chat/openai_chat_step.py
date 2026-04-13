@@ -147,11 +147,12 @@ class OpenAIChatStep(PipelineStep):
         # Plus de distinction partial/complete via metadata
         logger.info(f"💬 Chat: Processing transcription - starting chat generation")
         
-        # Utiliser l'accès direct aux propriétés dataclass
-        text_data = message.text
+        if message.is_final:
+            # Utiliser l'accès direct aux propriétés dataclass
+            text_data = message.text
             
-        if text_data.strip():
-            self._process_chat_request(text_data.strip(), [])
+            if text_data.strip():
+                self._process_chat_request(text_data.strip(), [])
 
     def _handle_system_prompt_message(self, message: SystemPromptMessage):
         """Traite les mises à jour de system prompt"""
