@@ -207,6 +207,7 @@ class KyutaiTTS:
             elif message_type == 'Error':
                 error_msg = message_dict.get('message', 'Unknown TTS error')
                 logger.error(f"{self.name}: TTS Error: {error_msg}")
+                self._send_audio_finish_signal()
             else:
                 logger.error(f"{self.name}: TTS Error: unknown message: {message_dict}")
                 
@@ -246,10 +247,12 @@ class KyutaiTTS:
 
     def on_error(self, ws, error):
         logger.error(f"{self.name}: WebSocket error: {error}")
+        self._send_audio_finish_signal()
 
     def on_close(self, ws, close_status_code, close_msg):
         self._connected = False
         self._stream_active = False
+        self._send_audio_finish_signal()
         logger.info(f"{self.name}: WebSocket disconnected")
 
     def _send_text(self, text: str):
