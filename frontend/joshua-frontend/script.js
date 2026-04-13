@@ -346,11 +346,15 @@ class JoshuaChat {
     }
 
     handleTranscription(message) {
-        // Handle transcription comme une réponse de chat
+        // Handle transcription comme un message utilisateur
         console.log('Transcription:', message.text);
         
-        // Traiter comme une réponse de chat pour l'affichage
-        this.handleChatResponse(message);
+        const transcribedText = message.text || '';
+        if (transcribedText.trim()) {
+            // Afficher la transcription comme un message utilisateur
+            // Le serveur gère automatiquement le pipeline vers la réponse
+            this.addMessage(transcribedText, 'user');
+        }
     }
 
     sendWebSocketMessage(text) {
