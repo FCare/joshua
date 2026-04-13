@@ -200,7 +200,7 @@ class MoshiASR:
         """WebSocket message received callback."""
         try:
             message_dict = msgpack.unpackb(message)
-            
+            logger.info(f"ASR msg is {message_dict}")
             if message_dict.get("type") == "Ready":
                 self._stream_active = True
                 return
