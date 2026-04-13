@@ -32,6 +32,10 @@ class JoshuaChat {
             output: null
         };
         
+        // Transcription state
+        this.currentTranscriptionDiv = null;
+        this.currentTranscriptionText = '';
+        
         this.initElements();
         this.bindEvents();
         this.autoResizeTextarea();
@@ -346,14 +350,33 @@ class JoshuaChat {
     }
 
     handleTranscription(message) {
-        // Handle transcription comme un message utilisateur
-        console.log('Transcription:', message.text);
+        console.log('Transcription:', message.text, 'is_final:', message.is_final);
         
         const transcribedText = message.text || '';
+        const isFinal = message.is_final || false;
+        
         if (transcribedText.trim()) {
-            // Afficher la transcription comme un message utilisateur
-            // Le serveur gère automatiquement le pipeline vers la réponse
-            this.addMessage(transcribedText, 'user');
+            if (!this.currentTranscriptionDiv) {
+                // Créer un nouveau message utilisateur pour les transcriptions
+                this.currentTranscriptionDiv = this.addMessage('', 'user');
+                this.currentTranscriptionText = '';
+            }
+            
+            if (!isFinal) {
+                // Transcription partielle : accumuler le texte
+                this.currentTranscriptionText = transcribedText;
+                this.currentTranscriptionDiv.innerHTML = this.formatMessage(this.currentTranscriptionText);
+                this.scrollToBottom();
+            } else {
+                // Transcription finale : finaliser le message et reset
+                this.currentTranscriptionText = transcribedText;
+                this.currentTranscriptionDiv.innerHTML = this.formatMessage(this.currentTranscriptionText);
+                this.scrollToBottom();
+                
+                // Reset pour la prochaine transcription
+                this.currentTranscriptionDiv = null;
+                this.currentTranscriptionText = '';
+            }
         }
     }
 
