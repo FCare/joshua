@@ -154,7 +154,13 @@ class OpenAIChatStep(PipelineStep):
             "data_url": message.image_data  # Déjà un data URL complet
         })
         
-        logger.info(f"Image added to persistent context. Total images: {len(self.persistent_images)}")
+        # Buffer circulaire : garder seulement les 3 dernières images
+        max_images = 3
+        if len(self.persistent_images) > max_images:
+            removed_image = self.persistent_images.pop(0)  # Supprimer la plus ancienne
+            logger.info(f"Removed oldest image from buffer: {removed_image['filename']}")
+        
+        logger.info(f"Image added to persistent context. Total images: {len(self.persistent_images)}/{max_images}")
 
     def _handle_transcription(self, message: TranscriptionMessage):
         """Traite les messages de transcription de l'ASR"""

@@ -521,15 +521,19 @@ class JoshuaChat {
         let quality = 0.9;
         const minQuality = 0.1;
         
+        // Calculer la limite pour la taille base64 finale (ce qui est vraiment envoyé)
+        const maxBase64Size = maxSizeBytes; // La limite WebSocket s'applique au message final
+        
         const tryCompress = () => {
             const dataUrl = canvas.toDataURL('image/jpeg', quality);
-            const sizeBytes = dataUrl.length * 0.75; // Approximation base64 -> bytes
+            const base64SizeBytes = dataUrl.length; // Taille réelle du base64
             
-            if (sizeBytes <= maxSizeBytes || quality <= minQuality) {
-                if (sizeBytes > maxSizeBytes && quality <= minQuality) {
-                    reject(new Error(`Impossible de compresser l'image en dessous de ${(maxSizeBytes/1024).toFixed(0)}KB`));
+            if (base64SizeBytes <= maxBase64Size || quality <= minQuality) {
+                if (base64SizeBytes > maxBase64Size && quality <= minQuality) {
+                    reject(new Error(`Impossible de compresser l'image en dessous de ${(maxBase64Size/1024).toFixed(0)}KB (base64: ${(base64SizeBytes/1024).toFixed(0)}KB)`));
                     return;
                 }
+                console.log(`Image compressée: qualité ${quality.toFixed(1)}, taille base64: ${(base64SizeBytes/1024).toFixed(0)}KB`);
                 resolve(dataUrl);
                 return;
             }
