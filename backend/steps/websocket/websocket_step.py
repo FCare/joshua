@@ -1,5 +1,6 @@
 import asyncio
 import json
+
 import logging
 import threading
 import time
@@ -74,7 +75,7 @@ class WebSocketStep(PipelineStep):
     def init(self) -> bool:
         return True
 
-    def set_ws_callback(self, callback):
+    def set_ws_callback(self, callback, username: str = "anonymous", nexus=None):
         if (not self.ws_send):
             self.ws_send = callback
             connection_message = {
@@ -92,13 +93,21 @@ class WebSocketStep(PipelineStep):
             }
             callback(json.dumps(connection_message))
 
-             # 🚀 NOUVEAU : Notifier le pipeline de la nouvelle connexion
             if self.output_queue:
-                user_connection_message = UserConnectionMessage(
-                    username="global"
-                )
+                user_connection_message = UserConnectionMessage(username=username)
                 self.output_queue.enqueue(user_connection_message)
-                logger.info(f"🔌 User connection notification sent")
+                logger.info(f"🔌 User connection notification sent: {username}")
+
+            if nexus:
+                try:
+                    loop = asyncio.get_event_loop()
+                    loop.create_task(nexus.publish("common/user_connected", {
+                        "event": "user_connected",
+                        "username": nexus.username,
+                        "password": nexus.password,
+                    }))
+                except Exception as e:
+                    logger.warning(f"MQTT publish user_connected échoué: {e}")
 
     async def _handle_input_message_async(self, message_data):
         """Handler ASYNC pour traiter les réponses du ChatStep - ChunkQueue gère la boucle !"""
