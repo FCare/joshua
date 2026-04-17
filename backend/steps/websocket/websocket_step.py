@@ -101,10 +101,15 @@ class WebSocketStep(PipelineStep):
             if nexus:
                 try:
                     loop = asyncio.get_event_loop()
+                    _username = nexus.username
                     loop.create_task(nexus.publish("common/user_connected", {
                         "event": "user_connected",
-                        "username": nexus.username,
+                        "username": _username,
                         "password": nexus.password,
+                        "private_topics": [
+                            f"users/{_username}/discussions",
+                            f"users/{_username}/agent_topics",
+                        ],
                     }))
                 except Exception as e:
                     logger.warning(f"MQTT publish user_connected échoué: {e}")

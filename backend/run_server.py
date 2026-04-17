@@ -25,6 +25,7 @@ MANIFEST = {
                 "event": "user_connected",
                 "username": "string",
                 "password": "string (cookie de session VK — utilisable comme mot de passe MQTT)",
+                "private_topics": "list[string] — topics privés de l'utilisateur (discussions, agent_topics, …)",
             },
         }
     ],
