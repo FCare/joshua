@@ -141,7 +141,7 @@ async def start_server():
     sys.exit("Server closed")
 
 async def handle_client(websocket):
-    cookie_header = websocket.request_headers.get("Cookie", "")
+    cookie_header = websocket.request.headers.get("Cookie", "")
     session_cookie = _extract_cookie(cookie_header, "vk_session")
 
     nexus = None
