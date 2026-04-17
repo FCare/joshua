@@ -1,0 +1,13 @@
+{
+  "name": "mqtt_step",
+  "class_name": "MqttStep",
+  "module_path": "steps.mqtt.mqtt_step",
+  "description": "Publie les événements de connexion utilisateur sur MQTT via Nexus",
+  "category": "integration",
+  "version": "1.0.0",
+  "config_schema": {
+    "type": "object",
+    "properties": {},
+    "additionalProperties": false
+  }
+}

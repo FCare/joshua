@@ -109,6 +109,11 @@
       "instance_id": "weather_tool_duplicator",
       "step_definition": "Duplicator Step",
       "config_overrides": {}
+    },
+    {
+      "instance_id": "mqtt_step",
+      "step_definition": "mqtt_step",
+      "config_overrides": {}
     }
   ],
   "connections": [
@@ -122,7 +127,7 @@
     },
     {
       "from": "websocket_duplicator",
-      "to": ["asr_step", "openai_chat", "tool_registry"]
+      "to": ["asr_step", "openai_chat", "tool_registry", "mqtt_step"]
     },
     {
       "from": "tool_registry",

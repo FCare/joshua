@@ -75,7 +75,7 @@ class WebSocketStep(PipelineStep):
     def init(self) -> bool:
         return True
 
-    def set_ws_callback(self, callback, username: str = "anonymous", nexus=None):
+    def set_ws_callback(self, callback, username: str = "anonymous"):
         if (not self.ws_send):
             self.ws_send = callback
             connection_message = {
@@ -97,37 +97,6 @@ class WebSocketStep(PipelineStep):
                 user_connection_message = UserConnectionMessage(username=username)
                 self.output_queue.enqueue(user_connection_message)
                 logger.info(f"🔌 User connection notification sent: {username}")
-
-            if nexus:
-                try:
-                    loop = asyncio.get_event_loop()
-                    _username = nexus.username
-                    loop.create_task(nexus.publish("common/user_connected", {
-                        "event": "user_connected",
-                        "username": _username,
-                        "password": nexus.password,
-                        "private_topics": [
-                            {
-                                "agent": "joshua",
-                                "topics": [
-                                    {
-                                        "topic": f"users/{_username}/discussions",
-                                        "description": "Historique de conversation",
-                                        "access": "read",
-                                        "format": [{"role": "user | assistant", "content": "string"}],
-                                    },
-                                    {
-                                        "topic": f"users/{_username}/agent_topics",
-                                        "description": "Topics publiés par les agents",
-                                        "access": "write",
-                                        "format": [{"agent": "string", "topics": [{"topic": "string", "description": "string", "access": "read | write | readwrite", "format": {}}]}],
-                                    },
-                                ],
-                            }
-                        ],
-                    }))
-                except Exception as e:
-                    logger.warning(f"MQTT publish user_connected échoué: {e}")
 
     async def _handle_input_message_async(self, message_data):
         """Handler ASYNC pour traiter les réponses du ChatStep - ChunkQueue gère la boucle !"""
