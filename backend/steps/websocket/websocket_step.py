@@ -107,8 +107,23 @@ class WebSocketStep(PipelineStep):
                         "username": _username,
                         "password": nexus.password,
                         "private_topics": [
-                            f"users/{_username}/discussions",
-                            f"users/{_username}/agent_topics",
+                            {
+                                "agent": "joshua",
+                                "topics": [
+                                    {
+                                        "topic": f"users/{_username}/discussions",
+                                        "description": "Historique de conversation",
+                                        "access": "read",
+                                        "format": [{"role": "user | assistant", "content": "string"}],
+                                    },
+                                    {
+                                        "topic": f"users/{_username}/agent_topics",
+                                        "description": "Topics publiés par les agents",
+                                        "access": "write",
+                                        "format": [{"agent": "string", "topics": [{"topic": "string", "description": "string", "access": "read | write | readwrite", "format": {}}]}],
+                                    },
+                                ],
+                            }
                         ],
                     }))
                 except Exception as e:
