@@ -13,4 +13,4 @@ openai>=1.0.0
 # Optional dependencies for better performance
 python-dotenv>=1.0.0
 
-git+https://github.com/FCare/nexus-client.git@main
+git+https://github.com/FCare/nexus-client.git@master
