@@ -10,7 +10,7 @@
       "processing": ["text-to-speech"]
     },
     "features": ["streaming", "french-voice"],
-    "models": ["kyutai-tts"]
+    "models": ["pocket-tts"]
   },
   "step_instances": [
     {
@@ -22,18 +22,18 @@
       }
     },
     {
-      "instance_id": "kyutai_tts",
-      "step_definition": "kyutai_tts",
+      "instance_id": "pocket_tts",
+      "step_definition": "pocket_tts",
       "config_overrides": {}
     }
   ],
   "connections": [
     {
       "from": "websocket_server",
-      "to": "kyutai_tts"
+      "to": "pocket_tts"
     },
     {
-      "from": "kyutai_tts",
+      "from": "pocket_tts",
       "to": "websocket_server"
     }
   ]

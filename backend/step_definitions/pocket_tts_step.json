@@ -17,7 +17,7 @@
       },
       "voice": {
         "type": "string",
-        "default": null,
+        "default": "fip1",
         "description": "Voix à utiliser : nom stocké sur le serveur, URL http/https/hf://, ou null pour la voix par défaut du serveur"
       },
       "sample_rate": {

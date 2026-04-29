@@ -97,7 +97,7 @@
     },
     {
       "instance_id": "tts_step",
-      "step_definition": "kyutai_tts",
+      "step_definition": "pocket_tts",
       "config_overrides": {}
     },
     {

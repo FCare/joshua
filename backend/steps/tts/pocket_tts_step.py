@@ -24,7 +24,7 @@ class PocketTTSStep(PipelineStep):
         self.host = config.get("host", "https://pocket-tts.caronboulme.fr") if config else "https://pocket-tts.caronboulme.fr"
 
         # voice: server-stored name, http/https/hf:// URL, or None for server default
-        self.voice = config.get("voice", None) if config else None
+        self.voice = config.get("voice", "fip1") if config else "fip1"
         self.sample_rate = config.get("sample_rate", SAMPLE_RATE) if config else SAMPLE_RATE
 
         # Session HTTP persistante — gère automatiquement les cookies de session
