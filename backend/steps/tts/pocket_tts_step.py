@@ -123,7 +123,7 @@ class PocketTTSStep(PipelineStep):
                     self._send_audio_finished()
                     return
 
-                for chunk in response.iter_content(chunk_size=4096):
+                for chunk in response:
                     with self._lock:
                         if self._interrupted:
                             break
