@@ -1,0 +1,32 @@
+{
+  "name": "pocket_tts",
+  "class_name": "PocketTTSStep",
+  "module_path": "steps.tts.pocket_tts_step",
+  "description": "TTS Pocket TTS (Kyutai) pour synthèse vocale avec clonage de voix",
+  "version": "1.0",
+  "category": "tts",
+  "input_formats": ["text"],
+  "output_formats": ["audio_chunk"],
+  "config_schema": {
+    "type": "object",
+    "properties": {
+      "host": {
+        "type": "string",
+        "default": "https://pocket-tts.caronboulme.fr",
+        "description": "URL du serveur Pocket TTS"
+      },
+      "voice": {
+        "type": "string",
+        "default": null,
+        "description": "Voix à utiliser : nom stocké sur le serveur, URL http/https/hf://, ou null pour la voix par défaut du serveur"
+      },
+      "sample_rate": {
+        "type": "integer",
+        "default": 24000,
+        "description": "Taux d'échantillonnage (dépend du codec Mimi du modèle)",
+        "enum": [24000]
+      }
+    },
+    "additionalProperties": false
+  }
+}
