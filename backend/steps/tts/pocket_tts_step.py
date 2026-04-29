@@ -27,8 +27,18 @@ class PocketTTSStep(PipelineStep):
         self.voice = config.get("voice", "fip1") if config else "fip1"
         self.sample_rate = config.get("sample_rate", SAMPLE_RATE) if config else SAMPLE_RATE
 
-        # Session HTTP persistante — gère automatiquement les cookies de session
+        env_api_key = os.getenv("POCKET_TTS_API_KEY")
+        config_api_key = config.get("api_key") if config else None
+        if env_api_key:
+            self.api_key = env_api_key
+        elif config_api_key and config_api_key != "your_tts_api_key_here":
+            self.api_key = config_api_key
+        else:
+            self.api_key = None
+
         self._session = requests.Session()
+        if self.api_key:
+            self._session.headers.update({"X-API-Key": self.api_key})
 
         self._lock = threading.Lock()
         self._current_response = None

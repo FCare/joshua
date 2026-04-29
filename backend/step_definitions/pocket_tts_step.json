@@ -15,6 +15,11 @@
         "default": "https://pocket-tts.caronboulme.fr",
         "description": "URL du serveur Pocket TTS"
       },
+      "api_key": {
+        "type": "string",
+        "default": "your_tts_api_key_here",
+        "description": "Clé API Pocket TTS (définir POCKET_TTS_API_KEY dans .env)"
+      },
       "voice": {
         "type": "string",
         "default": "fip1",

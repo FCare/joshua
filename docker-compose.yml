@@ -16,6 +16,7 @@ services:
       - LLAMACPP_API_KEY=${LLAMACPP_API_KEY}
       - ASR_API_KEY=${ASR_API_KEY}
       - TTS_API_KEY=${TTS_API_KEY}
+      - POCKET_TTS_API_KEY=${POCKET_TTS_API_KEY}
       
       # MQTT / Nexus
       - MQTT_HOST=${MQTT_HOST:-mosquitto-broker}
