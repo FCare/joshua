@@ -44,6 +44,10 @@ class PocketTTSStep(PipelineStep):
         self._current_response = None
         self._interrupted = False
 
+        self._audio_buffer = bytearray()
+        self._last_flush_time = 0.0
+        self._flush_interval = config.get("flush_interval_ms", 100) / 1000.0 if config else 0.1
+
         self._debug_wav_file = None
         self._debug_wav_lock = threading.Lock()
         if DEBUG_WAV:
@@ -108,6 +112,9 @@ class PocketTTSStep(PipelineStep):
 
         logger.info(f"PocketTTS: Synthesizing '{text[:60]}'")
 
+        self._audio_buffer = bytearray()
+        self._last_flush_time = start_time
+
         try:
             with self._session.post(
                 f"{self.host}/tts",
@@ -145,7 +152,10 @@ class PocketTTSStep(PipelineStep):
                         header_bytes_remaining = 0
 
                     total_audio_bytes += len(chunk)
-                    self._send_audio_chunk(chunk)
+                    self._audio_buffer.extend(chunk)
+
+                    if time.time() - self._last_flush_time >= self._flush_interval:
+                        self._flush_audio_buffer()
 
                 end_time = time.time()
                 audio_duration = total_audio_bytes / (self.sample_rate * 2)
@@ -157,7 +167,16 @@ class PocketTTSStep(PipelineStep):
         finally:
             with self._lock:
                 self._current_response = None
+            self._flush_audio_buffer()
             self._send_audio_finished()
+
+    def _flush_audio_buffer(self):
+        if not self._audio_buffer:
+            return
+        data = bytes(self._audio_buffer)
+        self._audio_buffer = bytearray()
+        self._last_flush_time = time.time()
+        self._send_audio_chunk(data)
 
     def _send_audio_chunk(self, chunk: bytes):
         if DEBUG_WAV and self._debug_wav_file:
