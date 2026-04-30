@@ -1,0 +1,47 @@
+{
+  "name": "voxcpm2",
+  "class_name": "VoxCPM2Step",
+  "module_path": "steps.tts.voxcpm2_step",
+  "description": "TTS VoxCPM2 pour synthèse vocale avec clonage de voix et contrôle de style",
+  "version": "1.0",
+  "category": "tts",
+  "input_formats": ["text"],
+  "output_formats": ["audio_chunk"],
+  "config_schema": {
+    "type": "object",
+    "properties": {
+      "host": {
+        "type": "string",
+        "default": "https://voxcpm2.caronboulme.fr",
+        "description": "URL du serveur VoxCPM2"
+      },
+      "voice_id": {
+        "type": "string",
+        "default": null,
+        "description": "ID d'une voix préenregistrée sur le serveur (via POST /voices)"
+      },
+      "control_instruction": {
+        "type": "string",
+        "default": "",
+        "description": "Description du style vocal (ex: 'voix féminine chaleureuse', 'voix grave et lente')"
+      },
+      "cfg_value": {
+        "type": "number",
+        "default": 2.0,
+        "description": "Échelle de guidance (classifier-free guidance scale), entre 1.0 et 5.0"
+      },
+      "inference_timesteps": {
+        "type": "integer",
+        "default": 10,
+        "description": "Nombre de pas d'inférence du DiT (entre 1 et 50). Plus élevé = meilleure qualité, plus lent."
+      },
+      "sample_rate": {
+        "type": "integer",
+        "default": 48000,
+        "description": "Taux d'échantillonnage du modèle VoxCPM2",
+        "enum": [48000]
+      }
+    },
+    "additionalProperties": false
+  }
+}
