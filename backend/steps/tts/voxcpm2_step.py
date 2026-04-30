@@ -69,9 +69,9 @@ class VoxCPM2Step(PipelineStep):
             self._debug_wav_file.setnchannels(1)
             self._debug_wav_file.setsampwidth(2)
             self._debug_wav_file.setframerate(OUTPUT_SAMPLE_RATE)
-            logger.info(f"VoxCPM2 DEBUG_WAV: Recording to {wav_filename}")
+            print(f"VoxCPM2 DEBUG_WAV: Recording to {wav_filename}")
         except Exception as e:
-            logger.error(f"VoxCPM2 DEBUG_WAV: Error initializing WAV file: {e}")
+            print(f"VoxCPM2 DEBUG_WAV: Error initializing WAV file: {e}")
             self._debug_wav_file = None
 
     def init(self) -> bool:
@@ -83,17 +83,17 @@ class VoxCPM2Step(PipelineStep):
         try:
             response = self._session.get(f"{self.host}/voices", timeout=10)
             if not response.ok:
-                logger.error(f"VoxCPM2: Failed to fetch voices: HTTP {response.status_code}")
+                print(f"VoxCPM2: Failed to fetch voices: HTTP {response.status_code}")
                 return None
             voices = response.json()
             for voice in voices:
                 if voice.get("name") == name:
                     voice_id = voice["voice_id"]
-                    logger.info(f"VoxCPM2: Resolved voice '{name}' -> {voice_id}")
+                    print(f"VoxCPM2: Resolved voice '{name}' -> {voice_id}")
                     return voice_id
-            logger.warning(f"VoxCPM2: Voice '{name}' not found on server")
+            print(f"VoxCPM2: Voice '{name}' not found on server")
         except Exception as e:
-            logger.error(f"VoxCPM2: Error resolving voice name: {e}")
+            print(f"VoxCPM2: Error resolving voice name: {e}")
         return None
 
     def _handle_input_message(self, message: BaseMessage):
@@ -116,9 +116,9 @@ class VoxCPM2Step(PipelineStep):
                 self._synthesize_text(text_data.strip())
 
         except Exception as e:
-            logger.error(f"VoxCPM2: Error handling input: {e}")
+            print(f"VoxCPM2: Error handling input: {e}")
             import traceback
-            logger.error(traceback.format_exc())
+            print(traceback.format_exc())
 
     def _synthesize_text(self, text: str):
         start_time = time.time()
@@ -141,7 +141,7 @@ class VoxCPM2Step(PipelineStep):
         if self.control_instruction:
             payload["control_instruction"] = self.control_instruction
 
-        logger.info(f"VoxCPM2: Synthesizing '{text[:60]}'")
+        print(f"VoxCPM2: Synthesizing '{text[:60]}'")
 
         self._audio_buffer = bytearray()
         self._last_flush_time = start_time
@@ -157,7 +157,7 @@ class VoxCPM2Step(PipelineStep):
                     self._current_response = response
 
                 if not response.ok:
-                    logger.error(f"VoxCPM2: HTTP {response.status_code}: {response.text[:200]}")
+                    print(f"VoxCPM2: HTTP {response.status_code}: {response.text[:200]}")
                     self._send_audio_finished()
                     return
 
@@ -172,7 +172,7 @@ class VoxCPM2Step(PipelineStep):
                     if first_chunk_time is None:
                         first_chunk_time = time.time()
                         ttft_ms = (first_chunk_time - start_time) * 1000
-                        logger.info(f"VoxCPM2 TTFT: {ttft_ms:.1f}ms")
+                        print(f"VoxCPM2 TTFT: {ttft_ms:.1f}ms")
 
                     if header_bytes_remaining > 0:
                         if len(chunk) <= header_bytes_remaining:
@@ -193,10 +193,10 @@ class VoxCPM2Step(PipelineStep):
                 end_time = time.time()
                 audio_duration = total_audio_bytes / (self.sample_rate * 2)
                 rtf = (end_time - start_time) / audio_duration if audio_duration > 0 else 0
-                logger.info(f"VoxCPM2: {total_audio_bytes} bytes ({audio_duration:.2f}s audio) RTF={rtf:.2f}x")
+                print(f"VoxCPM2: {total_audio_bytes} bytes ({audio_duration:.2f}s audio) RTF={rtf:.2f}x")
 
         except Exception as e:
-            logger.error(f"VoxCPM2: Error during synthesis: {e}")
+            print(f"VoxCPM2: Error during synthesis: {e}")
         finally:
             with self._lock:
                 self._current_response = None
@@ -218,20 +218,19 @@ class VoxCPM2Step(PipelineStep):
                     self._debug_wav_file.writeframes(chunk)
                     self._debug_wav_file._file.flush()
             except Exception as e:
-                logger.error(f"VoxCPM2 DEBUG_WAV: Error writing chunk: {e}")
+                print(f"VoxCPM2 DEBUG_WAV: Error writing chunk: {e}")
 
         from messages.tts_message import AudioChunkOutputMessage
         message = AudioChunkOutputMessage(audio_data=chunk)
         if self.output_queue:
             self.output_queue.enqueue(message)
-        logger.info(f"VoxCPM2: Sent audio chunk ({len(chunk)} bytes)")
 
     def _send_audio_finished(self):
         from messages.tts_message import AudioFinishedMessage
         finish_message = AudioFinishedMessage(total_chunks=0, total_bytes=0)
         if self.output_queue:
             self.output_queue.enqueue(finish_message)
-        logger.info("VoxCPM2: Audio finish signal sent")
+        print("VoxCPM2: Audio finish signal sent")
 
     def cleanup(self):
         with self._lock:
@@ -249,7 +248,7 @@ class VoxCPM2Step(PipelineStep):
                 with self._debug_wav_lock:
                     self._debug_wav_file.close()
             except Exception as e:
-                logger.error(f"VoxCPM2 DEBUG_WAV: Error closing WAV file: {e}")
+                print(f"VoxCPM2 DEBUG_WAV: Error closing WAV file: {e}")
             finally:
                 self._debug_wav_file = None
 
