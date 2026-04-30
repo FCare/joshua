@@ -24,6 +24,7 @@ class VoxCPM2Step(PipelineStep):
         super().__init__(name, config, handler=self._handle_input_message)
 
         self.host = config.get("host", "https://voxcpm2.caronboulme.fr") if config else "https://voxcpm2.caronboulme.fr"
+        self.voice_name = config.get("voice_name", None) if config else None
         self.voice_id = config.get("voice_id", None) if config else None
         self.control_instruction = config.get("control_instruction", "") if config else ""
         self.cfg_value = config.get("cfg_value", 2.0) if config else 2.0
@@ -74,7 +75,26 @@ class VoxCPM2Step(PipelineStep):
             self._debug_wav_file = None
 
     def init(self) -> bool:
+        if self.voice_name and not self.voice_id:
+            self.voice_id = self._resolve_voice_id(self.voice_name)
         return True
+
+    def _resolve_voice_id(self, name: str) -> Optional[str]:
+        try:
+            response = self._session.get(f"{self.host}/voices", timeout=10)
+            if not response.ok:
+                logger.error(f"VoxCPM2: Failed to fetch voices: HTTP {response.status_code}")
+                return None
+            voices = response.json()
+            for voice in voices:
+                if voice.get("name") == name:
+                    voice_id = voice["voice_id"]
+                    logger.info(f"VoxCPM2: Resolved voice '{name}' -> {voice_id}")
+                    return voice_id
+            logger.warning(f"VoxCPM2: Voice '{name}' not found on server")
+        except Exception as e:
+            logger.error(f"VoxCPM2: Error resolving voice name: {e}")
+        return None
 
     def _handle_input_message(self, message: BaseMessage):
         from messages.text_message import SentenceMessage
