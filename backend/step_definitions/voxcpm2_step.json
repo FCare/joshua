@@ -22,7 +22,7 @@
       },
       "voice_name": {
         "type": "string",
-        "default": "fip1",
+        "default": "Fip1",
         "description": "Nom d'une voix préenregistrée sur le serveur — résolu en voice_id au démarrage"
       },
       "voice_id": {
