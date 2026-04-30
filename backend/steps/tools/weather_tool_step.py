@@ -102,7 +102,7 @@ class WeatherToolStep(BaseToolStep):
             logger.info(f"🌍 GEOCODING - Requête: {url}")
             logger.info(f"🌍 GEOCODING - Paramètres: {params}")
             
-            response = requests.get(url, params=params, timeout=10)
+            response = requests.get(url, params=params, timeout=60)
             
             logger.info(f"🌍 GEOCODING - Réponse HTTP {response.status_code}")
             logger.info(f"🌍 GEOCODING - URL finale: {response.url}")
@@ -154,7 +154,7 @@ class WeatherToolStep(BaseToolStep):
             logger.info(f"🌤️ WEATHER API - Requête: {url}")
             logger.info(f"🌤️ WEATHER API - Paramètres: {params}")
             
-            response = requests.get(url, params=params, timeout=10)
+            response = requests.get(url, params=params, timeout=60)
             
             logger.info(f"🌤️ WEATHER API - Réponse HTTP {response.status_code}")
             logger.info(f"🌤️ WEATHER API - URL finale: {response.url}")
