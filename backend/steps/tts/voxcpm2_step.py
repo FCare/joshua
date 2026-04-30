@@ -105,15 +105,11 @@ class VoxCPM2Step(PipelineStep):
         try:
             text_data = message.text
 
-            if message.is_last:
-                if text_data and text_data.strip():
-                    self._synthesize_text(text_data.strip())
-                else:
-                    self._send_audio_finished()
-                return
-
             if text_data and text_data.strip():
                 self._synthesize_text(text_data.strip())
+
+            if message.is_last:
+                self._send_audio_finished()
 
         except Exception as e:
             print(f"VoxCPM2: Error handling input: {e}")
