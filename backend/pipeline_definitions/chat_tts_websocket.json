@@ -97,7 +97,7 @@
     },
     {
       "instance_id": "tts_step",
-      "step_definition": "pocket_tts",
+      "step_definition": "voxcpm2",
       "config_overrides": {}
     },
     {

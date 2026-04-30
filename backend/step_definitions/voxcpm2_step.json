@@ -15,6 +15,11 @@
         "default": "https://voxcpm2.caronboulme.fr",
         "description": "URL du serveur VoxCPM2"
       },
+      "api_key": {
+        "type": "string",
+        "default": "your_api_key_here",
+        "description": "Clé API VoxCPM2 (définir VOXCPM2_API_KEY dans .env)"
+      },
       "voice_id": {
         "type": "string",
         "default": null,

@@ -10,7 +10,7 @@
       "processing": ["text-to-speech"]
     },
     "features": ["streaming", "french-voice"],
-    "models": ["pocket-tts"]
+    "models": ["voxcpm2"]
   },
   "step_instances": [
     {
@@ -22,18 +22,18 @@
       }
     },
     {
-      "instance_id": "pocket_tts",
-      "step_definition": "pocket_tts",
+      "instance_id": "voxcpm2",
+      "step_definition": "voxcpm2",
       "config_overrides": {}
     }
   ],
   "connections": [
     {
       "from": "websocket_server",
-      "to": "pocket_tts"
+      "to": "voxcpm2"
     },
     {
-      "from": "pocket_tts",
+      "from": "voxcpm2",
       "to": "websocket_server"
     }
   ]
