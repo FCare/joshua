@@ -305,7 +305,9 @@ class MoshiASR:
                 # Reset buffer after sending complete transcript
                 self.text_buffer = []
             elif isinstance(event, StartEvent):
-                logger.info(f"{self.name}: Voice start detected")
+                logger.info(f"{self.name}: Voice start detected - interrupting TTS")
+                from messages.asr_message import SpeechStartMessage
+                self.output_queue.enqueue(SpeechStartMessage())
             else:
                 logger.info(f"{self.name}: Ignoring event type {type(event).__name__}")
         else:

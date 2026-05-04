@@ -98,6 +98,11 @@ class VoxCPM2Step(PipelineStep):
 
     def _handle_input_message(self, message: BaseMessage):
         from messages.text_message import SentenceMessage
+        from messages.asr_message import SpeechStartMessage
+
+        if isinstance(message, SpeechStartMessage):
+            self._interrupt()
+            return
 
         if not isinstance(message, SentenceMessage):
             return
@@ -115,6 +120,17 @@ class VoxCPM2Step(PipelineStep):
             print(f"VoxCPM2: Error handling input: {e}")
             import traceback
             print(traceback.format_exc())
+
+    def _interrupt(self):
+        """Interrompt la synthèse en cours en coupant la connexion HTTP."""
+        print("VoxCPM2: Interrupting TTS due to speech start")
+        with self._lock:
+            self._interrupted = True
+            if self._current_response:
+                try:
+                    self._current_response.close()
+                except Exception:
+                    pass
 
     def _synthesize_text(self, text: str):
         start_time = time.time()

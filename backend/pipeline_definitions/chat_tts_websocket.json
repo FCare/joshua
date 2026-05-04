@@ -151,7 +151,7 @@
     },
     {
       "from": "asr_duplicator",
-      "to": ["websocket_server", "openai_chat"]
+      "to": ["websocket_server", "openai_chat", "tts_step"]
     },
     {
       "from": "openai_chat",

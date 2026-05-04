@@ -23,3 +23,9 @@ class SpeechEventMessage(BaseMessage):
     """Message d'événement de parole ASR"""
     event_type: str
     timestamp: float
+
+
+@dataclass(frozen=True)
+class SpeechStartMessage(BaseMessage):
+    """Signal que l'utilisateur a commencé à parler — interrompt le TTS"""
+    pass

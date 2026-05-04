@@ -42,6 +42,7 @@ class WebSocketStep(PipelineStep):
         # output_queue sera définie par le pipeline builder (= input_queue du step suivant)
         self.input_queue = ChunkQueue(handler=self._handle_input_message_async)
         self.ws_send = None
+        self._audio_flushing = False  # True when discarding in-flight audio chunks after interrupt
         
         # Enregistrement WAV pour debug
         self.debug_wav_file = None
@@ -104,7 +105,8 @@ class WebSocketStep(PipelineStep):
         from messages.chat_message import ChatResponseMessage, ChatFinishMessage
         from messages.tts_message import AudioChunkOutputMessage, AudioFinishedMessage
         
-        allowed_classes = (ChatResponseMessage, ChatFinishMessage, AudioChunkOutputMessage, AudioFinishedMessage, TranscriptionMessage)
+        from messages.asr_message import SpeechStartMessage
+        allowed_classes = (ChatResponseMessage, ChatFinishMessage, AudioChunkOutputMessage, AudioFinishedMessage, TranscriptionMessage, SpeechStartMessage)
         if not isinstance(message_data, allowed_classes):
             return
             
@@ -118,6 +120,12 @@ class WebSocketStep(PipelineStep):
                 return
             
             # Gestion spéciale pour les messages de contrôle (comme audio_finished)
+            if isinstance(message_data, SpeechStartMessage):
+                self._audio_flushing = True
+                logger.info("Sending speech_start signal to frontend - discarding in-flight audio chunks")
+                await self.send_to_client(json.dumps({"type": "speech_start", "timestamp": time.time()}))
+                return
+
             if isinstance(message_data, dict) and message_data.get('type') == 'audio_finished':
                 # Message de fin d'audio - le routage se fait via le duplicateur
                 logger.info(f"Sending audio_finished signal to all connected clients")
@@ -148,9 +156,13 @@ class WebSocketStep(PipelineStep):
                 data = message_data.text
                 message_type = "transcription"
             elif isinstance(message_data, AudioChunkOutputMessage):
+                if self._audio_flushing:
+                    logger.info("Discarding audio chunk (flush in progress)")
+                    return
                 data = message_data.audio_data
                 message_type = "audio_chunk"
             elif isinstance(message_data, AudioFinishedMessage):
+                self._audio_flushing = False
                 data = {"type": "audio_finished"}
                 message_type = "audio_finished"
             else:
