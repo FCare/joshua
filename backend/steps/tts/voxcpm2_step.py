@@ -126,11 +126,16 @@ class VoxCPM2Step(PipelineStep):
         print("VoxCPM2: Interrupting TTS due to speech start")
         with self._lock:
             self._interrupted = True
-            if self._current_response:
+            had_active_response = self._current_response is not None
+            if had_active_response:
                 try:
                     self._current_response.close()
                 except Exception:
                     pass
+
+        if not had_active_response:
+            # Rien en cours : réinitialise immédiatement _audio_flushing côté websocket
+            self._send_audio_finished()
 
     def _synthesize_text(self, text: str):
         start_time = time.time()
