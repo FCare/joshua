@@ -49,7 +49,7 @@ class SentenceNormalizerStep(PipelineStep):
                 'St': 'Saint', 'St.': 'Saint', 'Ste': 'Sainte', 'Ste.': 'Sainte',
                 'Pr': 'Professeur', 'Pr.': 'Professeur',
                 # Unités temporelles
-                'h': 'heures', 'min': 'minutes', 'min.': 'minutes', 'sec': 'secondes', 'sec.': 'secondes',
+                # h, min, sec : traités séparément avec contexte numérique obligatoire
                 # Unités de mesure
                 '°': 'degrés', '°C': 'degrés', '°F': 'degrés',
                 'mm': 'millimètres', 'cm': 'centimètres', 'km': 'kilomètres',
@@ -471,6 +471,11 @@ class SentenceNormalizerStep(PipelineStep):
         # D'abord traiter les unités composées spéciales
         # km/h → kilomètres heure
         result = re.sub(r'\b(\d+(?:[.,]\d+)?)\s*km/h\b', r'\1 kilomètres heure', result, flags=re.IGNORECASE)
+
+        # Unités temporelles : seulement avec un chiffre devant (ou suivi d'un point)
+        result = re.sub(r'\b(\d+(?:[.,]\d+)?)\s*h\b', r'\1 heures', result)
+        result = re.sub(r'\b(\d+(?:[.,]\d+)?)\s*min\.?', r'\1 minutes', result)
+        result = re.sub(r'\b(\d+(?:[.,]\d+)?)\s*sec\.?', r'\1 secondes', result)
         
         # Températures avec contexte numérique
         result = re.sub(r'\b(\d+(?:[.,]\d+)?)\s*°C\b', r'\1 degrés', result, flags=re.IGNORECASE)
