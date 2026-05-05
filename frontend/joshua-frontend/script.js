@@ -300,7 +300,13 @@ class JoshuaChat {
                     this.setGenerating(false);
                     // Ne pas afficher ce message dans l'interface
                     return; // Sortir immédiatement sans traitement supplémentaire
-                    
+
+                case 'speech_start':
+                    if (this.audioProcessor) {
+                        this.audioProcessor.port.postMessage({ type: 'reset' });
+                    }
+                    break;
+
                 default:
                     console.log('Unknown message type:', message.type);
             }
