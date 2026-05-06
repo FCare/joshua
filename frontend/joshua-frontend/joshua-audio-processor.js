@@ -37,8 +37,9 @@ class JoshuaAudioProcessor extends AudioWorkletProcessor {
 
     this.port.onmessage = (event) => {
       if (event.data.type == "reset") {
-        debug("Reset audio processor state.");
+        console.log('[worklet] reset received, frames in buffer:', this.frames.length, 'started:', this.started);
         this.initState();
+        console.log('[worklet] after reset, frames:', this.frames.length);
         return;
       }
       

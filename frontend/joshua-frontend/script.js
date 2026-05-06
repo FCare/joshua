@@ -302,8 +302,10 @@ class JoshuaChat {
                     return; // Sortir immédiatement sans traitement supplémentaire
 
                 case 'speech_start':
+                    console.log('[interrupt] speech_start received, audioProcessor:', this.audioProcessor ? 'set' : 'NULL');
                     if (this.audioProcessor) {
                         this.audioProcessor.port.postMessage({ type: 'reset' });
+                        console.log('[interrupt] reset posted to worklet');
                     }
                     break;
 
