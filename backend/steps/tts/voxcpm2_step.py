@@ -48,8 +48,6 @@ class VoxCPM2Step(PipelineStep):
         self._interrupted = False
 
         self._audio_buffer = bytearray()
-        self._last_flush_time = 0.0
-        self._flush_interval = config.get("flush_interval_ms", 100) / 1000.0 if config else 0.1
         self._resample_state = None
 
         self._debug_wav_file = None
@@ -133,9 +131,9 @@ class VoxCPM2Step(PipelineStep):
                 except Exception:
                     pass
 
-        if not had_active_response:
-            # Rien en cours : réinitialise immédiatement _audio_flushing côté websocket
-            self._send_audio_finished()
+        if self._audio_buffer:
+            self._audio_buffer = bytearray()
+        self._send_audio_finished()
 
     def _synthesize_text(self, text: str):
         start_time = time.time()
@@ -161,7 +159,6 @@ class VoxCPM2Step(PipelineStep):
         print(f"VoxCPM2: Synthesizing '{text[:60]}'")
 
         self._audio_buffer = bytearray()
-        self._last_flush_time = start_time
 
         try:
             with self._session.post(
@@ -204,9 +201,6 @@ class VoxCPM2Step(PipelineStep):
                     )
                     self._audio_buffer.extend(chunk)
 
-                    if time.time() - self._last_flush_time >= self._flush_interval:
-                        self._flush_audio_buffer()
-
                 end_time = time.time()
                 audio_duration = total_audio_bytes / (self.sample_rate * 2)
                 rtf = (end_time - start_time) / audio_duration if audio_duration > 0 else 0
@@ -217,15 +211,15 @@ class VoxCPM2Step(PipelineStep):
         finally:
             with self._lock:
                 self._current_response = None
-            self._flush_audio_buffer()
-            self._send_audio_finished()
+                self._flush_audio_buffer()
+                if self._audio_buffer:
+                    self._audio_buffer = bytearray()
+                self._send_audio_finished()
 
     def _flush_audio_buffer(self):
         if not self._audio_buffer:
             return
         data = bytes(self._audio_buffer)
-        self._audio_buffer = bytearray()
-        self._last_flush_time = time.time()
         self._send_audio_chunk(data)
 
     def _send_audio_chunk(self, chunk: bytes):
@@ -244,6 +238,7 @@ class VoxCPM2Step(PipelineStep):
 
     def _send_audio_finished(self):
         from messages.tts_message import AudioFinishedMessage
+        data = bytes(self._audio_buffer)
         finish_message = AudioFinishedMessage(total_chunks=0, total_bytes=0)
         if self.output_queue:
             self.output_queue.enqueue(finish_message)
