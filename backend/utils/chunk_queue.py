@@ -53,7 +53,7 @@ class ChunkQueue(queue.PriorityQueue):
             except queue.Empty:
                 continue
 
-    def __init__(self, size = 0, handler = None, priority = 2):
+    def __init__(self, size = 0, handler = None, priority = 20):
         super().__init__(size)
         self.is_running = threading.Event()
         self.is_running.clear()  # Initialise à False pour que les workers démarrent

@@ -11,8 +11,6 @@ class BaseMessage(ABC):
     Empêche l'instanciation directe et force l'utilisation des sous-classes spécialisées.
     Les instances sont immutables après création.
     """
-    # Priorité du message (0 = critique, 10 = haute, 20 = normale, 30 = basse)
-    priority: int = 20
     
     def __new__(cls, *args, **kwargs):
         # Empêche l'instanciation directe de BaseMessage
