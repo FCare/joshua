@@ -99,6 +99,7 @@ class VoxCPM2Step(PipelineStep):
         from messages.asr_message import SpeechStartMessage
 
         if isinstance(message, SpeechStartMessage):
+            print(f"VoxCPM2: Received SpeechStart - Interrupt")
             self._interrupt()
             return
 
@@ -107,6 +108,7 @@ class VoxCPM2Step(PipelineStep):
 
         try:
             text_data = message.text
+            print(f"VoxCPM2: Received Sentence - {text_data}")
 
             if text_data and text_data.strip():
                 self._synthesize_text(text_data.strip())
