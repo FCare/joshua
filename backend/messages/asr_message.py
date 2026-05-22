@@ -28,4 +28,5 @@ class SpeechEventMessage(BaseMessage):
 @dataclass(frozen=True)
 class SpeechStartMessage(BaseMessage):
     """Signal que l'utilisateur a commencé à parler — interrompt le TTS"""
+    priority: int = 10
     pass

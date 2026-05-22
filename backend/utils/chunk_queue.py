@@ -94,9 +94,17 @@ class ChunkQueue(queue.PriorityQueue):
         with self._mutex:
             # Incrémenter le compteur pour éviter la comparaison directe d'objets
             self._counter += 1
+                    # Utiliser la priorité du message si disponible, sinon priorité par défaut de la queue
+            if hasattr(chunk, 'priority'):
+                message_priority = chunk.priority
+                print(f"ChunkQueue: Message {type(chunk).__name__} with priority {message_priority}")
+            else:
+                message_priority = self.priority
+                print(f"ChunkQueue: Non-message object {type(chunk).__name__} with default priority {message_priority}")
+
             # Tuple à 4 éléments : (priorité, timestamp, compteur, chunk)
             # Le compteur garantit qu'aucune comparaison directe d'objets n'aura lieu
-            item = (self.priority, time.time(), self._counter, chunk)
+            item = (message_priority, time.time(), self._counter, chunk)
             self.put(item)
             # Automatic yield: Allow worker thread to process immediately
             time.sleep(0)  # Force scheduler yield for real-time streaming
