@@ -122,6 +122,10 @@ class VoxCPM2Step(PipelineStep):
     def _interrupt(self):
         """Interrompt la synthèse en cours en coupant la connexion HTTP."""
         print("VoxCPM2: Interrupting TTS due to speech start")
+         # Vider la queue des SentenceMessage en attente
+        if self.input_queue:
+            self.input_queue.flush()
+            print("VoxCPM2: Input queue flushed - removed pending SentenceMessages")
         with self._lock:
             self._interrupted = True
             had_active_response = self._current_response is not None
