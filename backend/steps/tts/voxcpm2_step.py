@@ -49,6 +49,7 @@ class VoxCPM2Step(PipelineStep):
 
         self._audio_buffer = bytearray()
         self._resample_state = None
+        self._current_start = None
 
         self._debug_wav_file = None
         self._debug_wav_lock = threading.Lock()
@@ -100,10 +101,20 @@ class VoxCPM2Step(PipelineStep):
 
         if isinstance(message, SpeechStartMessage):
             print(f"VoxCPM2: Received SpeechStart - Interrupt")
+            self._current_start = message
             self._interrupt()
             return
 
         if not isinstance(message, SentenceMessage):
+            return
+
+        if (
+            self._current_start is not None
+            and self._current_start.id is not None
+            and message.id is not None
+            and self._current_start.is_more_recent_than(message)
+        ):
+            print(f"VoxCPM2: Dropping outdated SentenceMessage (session antérieure au dernier SpeechStart)")
             return
 
         try:

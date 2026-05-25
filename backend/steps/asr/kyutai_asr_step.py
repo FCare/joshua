@@ -113,9 +113,10 @@ class MoshiASR:
         
         self.packets_sent = 0
         self.packets_received = 0
-        
+
         self.output_queue = None
         self.text_buffer = []
+        self.current_session_id = None
 
         # Queue pour les paquets audio en attente de connexion
         self.pending_audio_queue = deque()
@@ -277,37 +278,38 @@ class MoshiASR:
         """Architecture dataclass pure : utilise isinstance() au lieu de .type"""
         logger.info(f"{self.name}: _enqueue_event called with {type(event).__name__}")
         if self.output_queue:
-            if isinstance(event, TextEvent):
-                # Ajouter le mot au buffer d'abord
+            if isinstance(event, StartEvent):
+                from messages.message_uuid import MessageUUID
+                from messages.asr_message import SpeechStartMessage
+                self.current_session_id = MessageUUID()
+                logger.info(f"{self.name}: Voice start detected - new session {self.current_session_id}")
+                self.output_queue.enqueue(SpeechStartMessage(id=self.current_session_id))
+
+            elif isinstance(event, TextEvent):
                 self.text_buffer.append(event.text)
                 logger.info(f"{self.name}: Added word '{event.text}' to buffer, buffer now: {self.text_buffer}")
-                
-                # Message transcript_chunk pour streaming
                 from messages.asr_message import TranscriptionMessage
                 message = TranscriptionMessage(
                     text=event.text,
-                    is_final=False  # partial transcription
+                    is_final=False,
+                    id=self.current_session_id,
                 )
                 self.output_queue.enqueue(message)
                 logger.info(f"{self.name}: Sent transcript_chunk: '{event.text}'")
-                
+
             elif isinstance(event, EndEvent):
-                # Message transcript_done pour LLM
                 full_text = ' '.join(self.text_buffer).strip()
                 logger.info(f"{self.name}: Creating transcript_done from buffer: '{full_text}'")
                 from messages.asr_message import TranscriptionMessage
                 message = TranscriptionMessage(
                     text=full_text,
-                    is_final=True   # complete transcription
+                    is_final=True,
+                    id=self.current_session_id,
                 )
                 self.output_queue.enqueue(message)
                 logger.info(f"{self.name}: Sent transcript_done: '{full_text}'")
-                # Reset buffer after sending complete transcript
                 self.text_buffer = []
-            elif isinstance(event, StartEvent):
-                logger.info(f"{self.name}: Voice start detected - interrupting TTS")
-                from messages.asr_message import SpeechStartMessage
-                self.output_queue.enqueue(SpeechStartMessage())
+
             else:
                 logger.info(f"{self.name}: Ignoring event type {type(event).__name__}")
         else:
@@ -439,7 +441,8 @@ class MoshiASR:
             self.pause_prediction.value = 1.0
             self.flushing_limit = 0
             self.flushing_mode = False
-            
+            self.current_session_id = None
+
             logger.info(f"{self.name}: Reset completed")
             # Vider la queue en cas de reset
             self.pending_audio_queue.clear()
