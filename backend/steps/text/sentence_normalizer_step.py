@@ -553,31 +553,36 @@ class SentenceNormalizerStep(PipelineStep):
         """Nettoie le texte pour la synthèse vocale"""
         # Supprimer le contenu entre parenthèses
         text = re.sub(r'\([^)]*\)', '', text)
-        
+
         # Supprimer formatage markdown
         text = re.sub(r'\*\*(.+?)\*\*', r'\1', text)  # **gras** → gras
         text = re.sub(r'\*(.+?)\*', r'\1', text)      # *italique* → italique
         text = re.sub(r'`(.+?)`', r'\1', text)        # `code` → code
-        
+
         # Supprimer les tirets de listes
-        text = re.sub(r'^\s*-\s+', '', text, flags=re.MULTILINE)  # Début de ligne - espace
-        text = re.sub(r'\n\s*-\s+', '\n', text)  # Tirets en milieu de texte
-        
-        # Supprimer TOUS les emojis (toutes les plages Unicode des emojis)
-        emoji_pattern = r'[\U0001F600-\U0001F64F\U0001F300-\U0001F5FF\U0001F680-\U0001F6FF\U0001F1E0-\U0001F1FF\U0001F900-\U0001F9FF\U00002600-\U000026FF\U00002700-\U000027BF\U0001F190-\U0001F1FF\U0001FA70-\U0001FAFF\U00002300-\U000023FF\U00002B50\U00002B55\U00002728\U0001F004\U0001F0CF\U0001F170-\U0001F251\U0001F600-\U0001F636\U0001F681-\U0001F6C5\U0001F30D-\U0001F567]'
-        text = re.sub(emoji_pattern, '', text)
-        
-        # Approche conservatrice : garder tout sauf les caractères vraiment indésirables
-        # Supprimer seulement les caractères de contrôle et symboles problématiques
-        text = re.sub(r'[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F]', '', text)  # Caractères de contrôle
-        text = re.sub(r'[©®™°²³¼½¾±×÷√∞≈≠≤≥◊]', '', text)  # Symboles mathématiques/spéciaux
-        
-        # Supprimer caractères de formatage indésirables (mais garder ` qui peut être une apostrophe)
-        text = re.sub(r'[_~]', ' ', text)
-        
+        text = re.sub(r'^\s*-\s+', '', text, flags=re.MULTILINE)
+        text = re.sub(r'\n\s*-\s+', '\n', text)
+
+        # Convertir les variantes Unicode en équivalents ASCII avant le filtre
+        text = text.replace('…', '...')   # … ellipse
+        text = text.replace('—', ',')     # — tiret cadratin
+        text = text.replace('–', '-')     # – tiret demi-cadratin
+        text = text.replace('‘', "'")     # ' apostrophe gauche
+        text = text.replace('’', "'")     # ' apostrophe droite (critique: l'histoire)
+        text = text.replace('“', '"')     # " guillemet gauche
+        text = text.replace('”', '"')     # " guillemet droit
+        text = text.replace(' ', ' ')     # espace insécable
+
+        # Garder uniquement : lettres Unicode, chiffres, espaces et ponctuation TTS essentielle.
+        # Supprime emojis, symboles, caractères de contrôle et tout caractère non vocal.
+        text = re.sub(r'[^\w\s.,!?;:\'\"\-«»\n]', '', text, flags=re.UNICODE)
+
+        # \w inclut l'underscore — le remplacer par un espace
+        text = re.sub(r'_', ' ', text)
+
         # Normaliser les espaces multiples
         text = re.sub(r'\s+', ' ', text)
-        
+
         return text.strip()
     
     def cleanup(self):
