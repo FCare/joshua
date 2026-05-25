@@ -1,6 +1,7 @@
 import audioop
 import time
 import threading
+import queue as stdlib_queue
 import requests
 import os
 import wave
@@ -46,10 +47,14 @@ class VoxCPM2Step(PipelineStep):
         self._lock = threading.Lock()
         self._current_response = None
         self._interrupted = False
-
-        self._audio_buffer = bytearray()
         self._resample_state = None
         self._current_start = None
+
+        # Dedicated background thread processes synthesis requests sequentially,
+        # keeping the ChunkQueue worker thread free to handle SpeechStartMessage.
+        self._synth_queue = stdlib_queue.Queue()
+        self._synth_thread = threading.Thread(target=self._synth_worker, daemon=True)
+        self._synth_thread.start()
 
         self._debug_wav_file = None
         self._debug_wav_lock = threading.Lock()
@@ -122,9 +127,9 @@ class VoxCPM2Step(PipelineStep):
             print(f"VoxCPM2: Received Sentence - {text_data}")
 
             if text_data and text_data.strip():
-                self._synthesize_text(text_data.strip())
-
-            if message.is_last:
+                self._synth_queue.put((text_data.strip(), message.is_last))
+            elif message.is_last:
+                # Empty text on last sentence — still signal end of audio
                 self._send_audio_finished()
 
         except Exception as e:
@@ -132,24 +137,53 @@ class VoxCPM2Step(PipelineStep):
             import traceback
             print(traceback.format_exc())
 
+    def _synth_worker(self):
+        """Processes synthesis requests sequentially in a dedicated thread."""
+        while True:
+            item = self._synth_queue.get()
+            if item is None:  # shutdown signal from cleanup()
+                break
+            text, is_last = item
+
+            # Reset interrupt flag and resampler state for this new sentence.
+            with self._lock:
+                self._interrupted = False
+            self._resample_state = None
+
+            self._synthesize_text(text)
+
+            # Send audio_finished only after the last sentence and only if we
+            # completed without being interrupted (_interrupt sends its own).
+            with self._lock:
+                interrupted = self._interrupted
+            if is_last and not interrupted:
+                self._send_audio_finished()
+
     def _interrupt(self):
-        """Interrompt la synthèse en cours en coupant la connexion HTTP."""
+        """Interrupts ongoing synthesis by closing the HTTP connection."""
         print("VoxCPM2: Interrupting TTS due to speech start")
-         # Vider la queue des SentenceMessage en attente
+
+        # Drop pending SentenceMessages from the ChunkQueue handler
         if self.input_queue:
             self.input_queue.flush()
             print("VoxCPM2: Input queue flushed - removed pending SentenceMessages")
+
+        # Drop pending synthesis requests from the background worker queue
+        while True:
+            try:
+                self._synth_queue.get_nowait()
+            except stdlib_queue.Empty:
+                break
+
+        # Close the active HTTP response to unblock the streaming loop
         with self._lock:
             self._interrupted = True
-            had_active_response = self._current_response is not None
-            if had_active_response:
+            if self._current_response is not None:
                 try:
                     self._current_response.close()
                 except Exception:
                     pass
 
-        if self._audio_buffer:
-            self._audio_buffer = bytearray()
         self._send_audio_finished()
 
     def _synthesize_text(self, text: str):
@@ -157,10 +191,6 @@ class VoxCPM2Step(PipelineStep):
         first_chunk_time = None
         total_audio_bytes = 0
         header_bytes_remaining = WAV_HEADER_SIZE
-
-        with self._lock:
-            self._interrupted = False
-        self._resample_state = None
 
         payload = {
             "text": text,
@@ -175,8 +205,6 @@ class VoxCPM2Step(PipelineStep):
 
         print(f"VoxCPM2: Synthesizing '{text[:60]}'")
 
-        self._audio_buffer = bytearray()
-
         try:
             with self._session.post(
                 f"{self.host}/tts",
@@ -189,7 +217,6 @@ class VoxCPM2Step(PipelineStep):
 
                 if not response.ok:
                     print(f"VoxCPM2: HTTP {response.status_code}: {response.text[:200]}")
-                    self._send_audio_finished()
                     return
 
                 for chunk in response:
@@ -216,7 +243,7 @@ class VoxCPM2Step(PipelineStep):
                     chunk, self._resample_state = audioop.ratecv(
                         chunk, 2, 1, SAMPLE_RATE, OUTPUT_SAMPLE_RATE, self._resample_state
                     )
-                    self._audio_buffer.extend(chunk)
+                    self._send_audio_chunk(chunk)
 
                 end_time = time.time()
                 audio_duration = total_audio_bytes / (self.sample_rate * 2)
@@ -228,16 +255,6 @@ class VoxCPM2Step(PipelineStep):
         finally:
             with self._lock:
                 self._current_response = None
-                self._flush_audio_buffer()
-                if self._audio_buffer:
-                    self._audio_buffer = bytearray()
-                self._send_audio_finished()
-
-    def _flush_audio_buffer(self):
-        if not self._audio_buffer:
-            return
-        data = bytes(self._audio_buffer)
-        self._send_audio_chunk(data)
 
     def _send_audio_chunk(self, chunk: bytes):
         if DEBUG_WAV and self._debug_wav_file:
@@ -255,7 +272,6 @@ class VoxCPM2Step(PipelineStep):
 
     def _send_audio_finished(self):
         from messages.tts_message import AudioFinishedMessage
-        data = bytes(self._audio_buffer)
         finish_message = AudioFinishedMessage(total_chunks=0, total_bytes=0)
         if self.output_queue:
             self.output_queue.enqueue(finish_message)
@@ -270,6 +286,7 @@ class VoxCPM2Step(PipelineStep):
                 except Exception:
                     pass
 
+        self._synth_queue.put(None)  # unblock and stop _synth_worker
         self._session.close()
 
         if DEBUG_WAV and self._debug_wav_file:
