@@ -80,6 +80,10 @@ class Client():
         username = nexus.username if nexus else "anonymous"
         self.pipeline_input.set_ws_callback(self.sendToClient, username)
 
+        tts_step = self.pipeline.get_step("tts_step")
+        if tts_step:
+            self.pipeline_input.register_interrupt_queue(tts_step.input_queue)
+
         mqtt_step = self.pipeline.get_step("mqtt_step")
         if mqtt_step and nexus:
             mqtt_step.set_nexus(nexus)

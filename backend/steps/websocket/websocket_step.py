@@ -43,6 +43,7 @@ class WebSocketStep(PipelineStep):
         self.input_queue = ChunkQueue(handler=self._handle_input_message_async)
         self.ws_send = None
         self._audio_flushing = False  # True when discarding in-flight audio chunks after interrupt
+        self._interrupt_queues = []  # Queues to notify on client-triggered interrupt (e.g. TTS step)
         
         # Enregistrement WAV pour debug
         self.debug_wav_file = None
@@ -75,6 +76,18 @@ class WebSocketStep(PipelineStep):
 
     def init(self) -> bool:
         return True
+
+    def register_interrupt_queue(self, queue):
+        """Register a queue that receives SpeechStartMessage on client-triggered interrupt."""
+        self._interrupt_queues.append(queue)
+
+    def _handle_client_interrupt(self):
+        """Client clicked stop-mic: flush in-flight audio and interrupt TTS."""
+        from messages.asr_message import SpeechStartMessage
+        self._audio_flushing = True
+        logger.info("Client interrupt received - flushing in-flight audio and notifying TTS")
+        for queue in self._interrupt_queues:
+            queue.enqueue(SpeechStartMessage())
 
     def set_ws_callback(self, callback, username: str = "anonymous"):
         if (not self.ws_send):
@@ -244,12 +257,15 @@ class WebSocketStep(PipelineStep):
                 # Mode audio : traiter les messages JSON avec audio encodé
                 try:
                     data = json.loads(message)
+                    if data.get("type") == "interrupt":
+                        self._handle_client_interrupt()
+                        return
                     if data.get("type") == "audio" and "data" in data:
                         # Décoder l'audio base64
                         audio_b64 = data["data"]
                         audio_bytes = base64.b64decode(audio_b64)
                         metadata = data.get("metadata", {})
-                        
+
                         logger.info(f"Processing JSON audio message: {len(audio_bytes)} bytes")
                         audio_message = AudioInputMessage(
                             audio_data=audio_bytes,

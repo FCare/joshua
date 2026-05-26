@@ -27,6 +27,7 @@ class JoshuaChat {
         this.isRecording = false;
         this.isAudioEnabled = false;
         this.isMuted = false; // Par défaut, le son est activé
+        this.audioOutputEnabled = true; // False quand l'utilisateur stoppe le micro (interrupt actif)
         this.animationFrames = {
             input: null,
             output: null
@@ -1040,6 +1041,7 @@ class JoshuaChat {
         }
 
         this.isRecording = true;
+        this.audioOutputEnabled = true;
         this.micBtn.classList.add('recording');
         
         // Afficher les visualiseurs quand l'enregistrement commence
@@ -1059,10 +1061,11 @@ class JoshuaChat {
 
     stopRecording() {
         if (!this.isRecording) return;
-        
+
         this.isRecording = false;
+        this.audioOutputEnabled = false;
         this.micBtn.classList.remove('recording');
-        
+
         // Masquer les visualiseurs quand l'enregistrement s'arrête
         this.inputVisualizerContainer.classList.remove('active');
         this.outputVisualizerContainer.classList.remove('active');
@@ -1070,15 +1073,23 @@ class JoshuaChat {
             this.inputVisualizerContainer.style.display = 'none';
             this.outputVisualizerContainer.style.display = 'none';
         }, 300); // Attendre la fin de la transition CSS
-        
+
         // Stop recording in microphone processor
         if (this.micProcessor) {
             this.micProcessor.port.postMessage({ command: 'stop' });
         }
-        
+
+        // Flush le buffer du worklet audio et signaler le backend
+        if (this.audioProcessor) {
+            this.audioProcessor.port.postMessage({ type: 'reset' });
+        }
+        if (this.ws && this.isConnected) {
+            this.ws.send(JSON.stringify({ type: 'interrupt' }));
+        }
+
         // Libérer complètement le microphone et nettoyer
         this.cleanup();
-        
+
         console.log('🎙️ Recording stopped and microphone fully released');
     }
 
@@ -1107,18 +1118,23 @@ class JoshuaChat {
     }
 
     async handleAudioResponse(audioData) {
-        
+
+        // Chunk arrivant après un interrupt — ignorer
+        if (!this.audioOutputEnabled) {
+            return;
+        }
+
         // Si le micro est actif, désactiver automatiquement le mute pour éviter le feedback
         if (this.isRecording && this.isMuted) {
             this.isMuted = false;
             this.updateMuteButton();
         }
-        
+
         // Si c'est muted, ne pas jouer l'audio et ne pas afficher le visualiseur
         if (this.isMuted) {
             return;
         }
-        
+
         // Initialize audio output automatically if not already done
         if (!this.audioProcessor) {
             try {
