@@ -10,6 +10,12 @@ class UserConnectionMessage(BaseMessage):
 
 
 @dataclass(frozen=True)
+class UserDisconnectedMessage(BaseMessage):
+    """Message de déconnexion d'un utilisateur via WebSocket"""
+    pass
+
+
+@dataclass(frozen=True)
 class AudioInputMessage(BaseMessage):
     """Message audio reçu via WebSocket"""
     audio_data: bytes

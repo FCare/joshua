@@ -4,6 +4,7 @@ from typing import Optional, Dict
 
 from pipeline_framework import PipelineStep
 from messages.websocket_message import UserConnectionMessage
+from messages.chat_message import DiscussionHistoryMessage
 
 logger = logging.getLogger(__name__)
 
@@ -47,12 +48,16 @@ class MqttStep(PipelineStep):
             self.input_queue.stop()
 
     def _handle_message(self, message):
-        if not isinstance(message, UserConnectionMessage):
-            return
         if not self._nexus or not self._loop:
-            logger.warning("MqttStep: nexus non configuré, user_connected non publié")
+            logger.warning("MqttStep: nexus non configuré, message ignoré")
             return
 
+        if isinstance(message, UserConnectionMessage):
+            self._handle_user_connected(message)
+        elif isinstance(message, DiscussionHistoryMessage):
+            self._handle_discussion_history(message)
+
+    def _handle_user_connected(self, message: UserConnectionMessage):
         username = message.username
         payload = {
             "event": "user_connected",
@@ -74,3 +79,12 @@ class MqttStep(PipelineStep):
             self._loop,
         )
         logger.info(f"MQTT user_connected publié pour {username}")
+
+    def _handle_discussion_history(self, message: DiscussionHistoryMessage):
+        username = self._nexus.username
+        topic = f"users/{username}/discussions"
+        asyncio.run_coroutine_threadsafe(
+            self._nexus.publish(topic, list(message.history)),
+            self._loop,
+        )
+        logger.info(f"MQTT discussion history publiée sur {topic} ({len(message.history)} messages)")

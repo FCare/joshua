@@ -23,3 +23,9 @@ class ChatFinishMessage(BaseMessage):
 class ToolsReadyMessage(BaseMessage):
     """Message indiquant que tous les outils sont prêts"""
     tools_definitions: Dict[str, Any]
+
+
+@dataclass(frozen=True)
+class DiscussionHistoryMessage(BaseMessage):
+    """Historique complet d'une session, émis à la déconnexion"""
+    history: tuple

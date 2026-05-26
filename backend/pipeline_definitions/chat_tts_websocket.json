@@ -159,7 +159,7 @@
     },
     {
       "from": "duplicator",
-      "to": ["websocket_server", "sentence_normalizer", "tts_step", "weather_tool"]
+      "to": ["websocket_server", "sentence_normalizer", "tts_step", "weather_tool", "mqtt_step"]
     },
     {
       "from": "sentence_normalizer",

@@ -9,7 +9,7 @@ from enum import Enum
 
 from pipeline_framework import PipelineStep
 from messages.base_message import BaseMessage
-from messages.websocket_message import TextInputMessage, ImageUploadMessage
+from messages.websocket_message import TextInputMessage, ImageUploadMessage, UserDisconnectedMessage
 from messages.tool_message import ToolResponseMessage
 from messages.chat_message import SystemPromptMessage, ToolsReadyMessage
 from messages.asr_message import TranscriptionMessage
@@ -70,7 +70,7 @@ class OpenAIChatStep(PipelineStep):
         
         # Thread safety
         self._lock = threading.Lock()
-        
+
         # Client OpenAI
         self.client = None
         
@@ -130,6 +130,8 @@ class OpenAIChatStep(PipelineStep):
                     self._handle_system_prompt_message(input_message)
                 elif isinstance(input_message, ToolsReadyMessage):
                     self._handle_tools_ready(input_message)
+                elif isinstance(input_message, UserDisconnectedMessage):
+                    self._publish_history()
                     
         except Exception as e:
             logger.error(f"Erreur handling input event: {e}")
@@ -254,10 +256,7 @@ class OpenAIChatStep(PipelineStep):
             "content": f"Current date and time: {current_time}"
         })
         
-        # Ajoute l'historique de conversation (limité aux N derniers messages)
-        max_history = 10  # Limite pour éviter des contextes trop longs
-        recent_history = self.conversation_history[-max_history:]
-        messages.extend(recent_history)
+        messages.extend(self.conversation_history)
         
         logger.info(f"LLM called with {messages}")
 
@@ -386,6 +385,14 @@ class OpenAIChatStep(PipelineStep):
         )
         self._send_output_message(error_message)
     
+    def _publish_history(self):
+        if not self.conversation_history:
+            return
+        from messages.chat_message import DiscussionHistoryMessage
+        msg = DiscussionHistoryMessage(history=tuple(self.conversation_history))
+        self._send_output_message(msg)
+        logger.info(f"DiscussionHistoryMessage émis ({len(self.conversation_history)} messages)")
+
     def reset_conversation(self):
         """Remet à zéro la conversation"""
         try:

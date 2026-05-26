@@ -102,6 +102,14 @@ class Client():
             # Remove the client from the set of connected clients
             connected_clients.remove(self)
             
+            # Signal de fin de session pour déclencher la publication de l'historique
+            try:
+                if self.pipeline_input:
+                    from messages.websocket_message import UserDisconnectedMessage
+                    self.pipeline_input.output_queue.enqueue(UserDisconnectedMessage())
+            except Exception as e:
+                logging.error(f"Error sending UserDisconnectedMessage: {e}")
+
             # CLEANUP: Stop pipeline to free resources (TTS WebSocket, threads, etc.)
             try:
                 if self.pipeline:
