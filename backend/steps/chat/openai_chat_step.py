@@ -9,7 +9,7 @@ from enum import Enum
 
 from pipeline_framework import PipelineStep
 from messages.base_message import BaseMessage
-from messages.websocket_message import TextInputMessage, ImageUploadMessage, UserDisconnectedMessage
+from messages.websocket_message import TextInputMessage, ImageUploadMessage
 from messages.tool_message import ToolResponseMessage
 from messages.chat_message import SystemPromptMessage, ToolsReadyMessage
 from messages.asr_message import TranscriptionMessage
@@ -130,9 +130,6 @@ class OpenAIChatStep(PipelineStep):
                     self._handle_system_prompt_message(input_message)
                 elif isinstance(input_message, ToolsReadyMessage):
                     self._handle_tools_ready(input_message)
-                elif isinstance(input_message, UserDisconnectedMessage):
-                    self._publish_history()
-                    
         except Exception as e:
             logger.error(f"Erreur handling input event: {e}")
 
@@ -539,15 +536,18 @@ class OpenAIChatStep(PipelineStep):
     def cleanup(self):
         """Nettoie les ressources du chat"""
         print(f"Nettoyage OpenAI Chat {self.name}")
-        
+
         if hasattr(self, 'input_queue') and self.input_queue:
             self.input_queue.stop()
-        
+
+        # Publier l'historique avant de l'effacer
+        self._publish_history()
+
         # Nettoie l'état
         with self._lock:
             self.conversation_history = []
             self.accumulated_text = ""
             self.client_tools = None  # Nettoyer les outils clients
             self.client_prompts = None  # Nettoyer les prompts enrichis
-        
+
         print(f"OpenAI Chat {self.name} nettoyé")
