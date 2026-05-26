@@ -77,8 +77,8 @@ class Client():
         self.pipeline = pipeline
         self.pipeline_input = self.pipeline.get_step("websocket_server")
         self.ws = websocket
-        username = nexus.username if nexus else "anonymous"
-        self.pipeline_input.set_ws_callback(self.sendToClient, username)
+        self.username = nexus.username if nexus else "anonymous"
+        self.pipeline_input.set_ws_callback(self.sendToClient, self.username)
 
         tts_step = self.pipeline.get_step("tts_step")
         if tts_step:
@@ -161,6 +161,14 @@ async def handle_client(websocket):
         logging.info("Nouvelle connexion WebSocket: pas de session cookie")
 
     client = await Client.create(pipeline_args, websocket, nexus)
+
+    # Close any existing pipeline for this user (stale reconnections)
+    username = nexus.username if nexus else "anonymous"
+    stale = [c for c in connected_clients if c.username == username]
+    for stale_client in stale:
+        logging.info(f"Closing stale connection for {username}")
+        await stale_client.ws.close()
+
     connected_clients.add(client)
     await client.handle_message(websocket)
     
