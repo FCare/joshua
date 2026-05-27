@@ -93,12 +93,16 @@ class MqttStep(PipelineStep):
             for t in agent_entry.get("topics", []):
                 if t.get("access") == "read":
                     read_topic = t["topic"]
+                    already_subscribed = read_topic in self._read_topics_meta
                     self._read_topics_meta[read_topic] = {
                         "description": t.get("description", ""),
                         "format": t.get("format", {}),
                     }
-                    logger.info(f"MqttStep: souscription topic read-access: {read_topic} ({t.get('description', '')})")
-                    self._nexus.subscribe(read_topic, self._on_read_topic)
+                    if not already_subscribed:
+                        logger.info(f"MqttStep: souscription topic read-access: {read_topic} ({t.get('description', '')})")
+                        self._nexus.subscribe(read_topic, self._on_read_topic)
+                    else:
+                        logger.debug(f"MqttStep: déjà souscrit à {read_topic}, skip")
 
     async def _on_read_topic(self, topic: str, payload):
         if not isinstance(payload, dict):
