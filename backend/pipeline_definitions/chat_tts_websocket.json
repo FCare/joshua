@@ -168,6 +168,10 @@
     {
       "from": "tts_step",
       "to": "websocket_server"
+    },
+    {
+      "from": "mqtt_step",
+      "to": "openai_chat"
     }
   ]
 }

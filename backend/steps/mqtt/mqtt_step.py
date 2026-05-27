@@ -35,10 +35,16 @@ class MqttStep(PipelineStep):
         super().__init__(name, config, handler=self._handle_message)
         self._nexus = None
         self._loop = None
+        self._read_topics_meta: dict = {}
 
     def set_nexus(self, nexus) -> None:
         self._nexus = nexus
         self._loop = asyncio.get_event_loop()
+        username = nexus.username
+        agent_topics_topic = f"users/{username}/agent_topics"
+        nexus.subscribe(agent_topics_topic, self._on_agent_topics)
+        nexus.start_listening()
+        logger.info(f"MqttStep: souscrit à {agent_topics_topic}")
 
     def init(self) -> bool:
         return True
@@ -79,6 +85,33 @@ class MqttStep(PipelineStep):
             self._loop,
         )
         logger.info(f"MQTT user_connected publié pour {username}")
+
+    async def _on_agent_topics(self, topic: str, payload):
+        if not isinstance(payload, list):
+            return
+        for agent_entry in payload:
+            for t in agent_entry.get("topics", []):
+                if t.get("access") == "read":
+                    read_topic = t["topic"]
+                    self._read_topics_meta[read_topic] = {
+                        "description": t.get("description", ""),
+                        "format": t.get("format", {}),
+                    }
+                    logger.info(f"MqttStep: souscription topic read-access: {read_topic} ({t.get('description', '')})")
+                    self._nexus.subscribe(read_topic, self._on_read_topic)
+
+    async def _on_read_topic(self, topic: str, payload):
+        if not isinstance(payload, dict):
+            return
+        meta = self._read_topics_meta.get(topic, {})
+        logger.info(f"MqttStep: données reçues sur {topic} ({meta.get('description', '')})")
+        from messages.chat_message import AgentTopicMessage
+        if self.output_queue:
+            self.output_queue.enqueue(AgentTopicMessage(
+                topic=topic,
+                description=meta.get("description", ""),
+                payload=payload,
+            ))
 
     def _handle_discussion_history(self, message: DiscussionHistoryMessage):
         username = self._nexus.username

@@ -11,7 +11,7 @@ from pipeline_framework import PipelineStep
 from messages.base_message import BaseMessage
 from messages.websocket_message import TextInputMessage, ImageUploadMessage
 from messages.tool_message import ToolResponseMessage
-from messages.chat_message import SystemPromptMessage, ToolsReadyMessage
+from messages.chat_message import SystemPromptMessage, ToolsReadyMessage, AgentTopicMessage
 from messages.asr_message import TranscriptionMessage
 
 try:
@@ -56,7 +56,8 @@ class OpenAIChatStep(PipelineStep):
         self.temperature = config.get("temperature", 0.7) if config else 0.7
         self.max_tokens = config.get("max_tokens", 1000) if config else 1000
         self.system_prompt = ""
-        
+        self.profile = ""
+
         # État de conversation
         self.conversation_history = []
         self.accumulated_text = ""  # Pour accumuler le texte reçu en plusieurs fois
@@ -130,6 +131,8 @@ class OpenAIChatStep(PipelineStep):
                     self._handle_system_prompt_message(input_message)
                 elif isinstance(input_message, ToolsReadyMessage):
                     self._handle_tools_ready(input_message)
+                elif isinstance(input_message, AgentTopicMessage):
+                    self._handle_agent_topic(input_message)
         except Exception as e:
             logger.error(f"Erreur handling input event: {e}")
 
@@ -175,10 +178,20 @@ class OpenAIChatStep(PipelineStep):
                 self._process_chat_request(text_data)
 
     def _handle_system_prompt_message(self, message: SystemPromptMessage):
-        """Traite les mises à jour de system prompt"""
         logger.info(f"💬 Chat: Processing system prompt update")
         self.system_prompt = message.prompt
+        self.client_prompts = self._generate_enhanced_prompt(self.client_tools or [])
         logger.info(f"System prompt updated: {self.system_prompt[:100]}...")
+
+    def _handle_agent_topic(self, message: AgentTopicMessage):
+        logger.info(f"💬 Chat: Agent topic received — {message.topic} ({message.description})")
+        summary = message.payload.get("summary", "")
+        if summary:
+            self.profile = summary
+            self.client_prompts = self._generate_enhanced_prompt(self.client_tools or [])
+            logger.info(f"Profile integrated into system prompt: {self.profile[:100]}...")
+        else:
+            logger.info(f"💬 Chat: No handler for topic payload — topic={message.topic}")
     
     def _handle_system_prompt_update(self, input_message):
         """Traite les mises à jour de system prompt"""
@@ -449,25 +462,21 @@ class OpenAIChatStep(PipelineStep):
             raise
     
     def _generate_enhanced_prompt(self, tools_definitions):
-        """Génère un prompt enrichi avec les descriptions des outils disponibles"""
-        if not tools_definitions:
-            return self.system_prompt
-        
-        # Construire la section des outils
-        tools_descriptions = ["Tu as accès aux outils suivants :"]
-        
-        for tool_def in tools_definitions:
-            func = tool_def['function']
-            name = func['name']
-            description = func['description']
-            tools_descriptions.append(f"- {name}: {description}")
-        
-        tools_descriptions.append("Utilise ces outils quand cela peut aider à répondre aux questions de l'utilisateur.")
-        
-        # Combiner le prompt de base avec les descriptions d'outils
-        tools_section = "\n".join(tools_descriptions)
-        enhanced_prompt = f"{self.system_prompt}\n\n{tools_section}"
-        
+        """Génère un prompt enrichi avec le profil utilisateur et les outils disponibles"""
+        parts = [self.system_prompt]
+
+        if self.profile:
+            parts.append(f"\nUser profile:\n{self.profile}")
+
+        if tools_definitions:
+            tools_descriptions = ["Tu as accès aux outils suivants :"]
+            for tool_def in tools_definitions:
+                func = tool_def['function']
+                tools_descriptions.append(f"- {func['name']}: {func['description']}")
+            tools_descriptions.append("Utilise ces outils quand cela peut aider à répondre aux questions de l'utilisateur.")
+            parts.append("\n" + "\n".join(tools_descriptions))
+
+        enhanced_prompt = "\n".join(parts)
         logger.info(f"Prompt enrichi généré: {enhanced_prompt[:100]}...")
         return enhanced_prompt
     
