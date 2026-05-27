@@ -11,7 +11,7 @@ from pipeline_framework import PipelineStep
 from messages.base_message import BaseMessage
 from messages.websocket_message import TextInputMessage, ImageUploadMessage
 from messages.tool_message import ToolResponseMessage
-from messages.chat_message import SystemPromptMessage, ToolsReadyMessage, AgentTopicMessage
+from messages.chat_message import SystemPromptMessage, ToolsReadyMessage, AgentTopicMessage, MqttToolUpdateMessage, MqttWriteMessage
 from messages.asr_message import TranscriptionMessage
 
 try:
@@ -133,6 +133,8 @@ class OpenAIChatStep(PipelineStep):
                     self._handle_tools_ready(input_message)
                 elif isinstance(input_message, AgentTopicMessage):
                     self._handle_agent_topic(input_message)
+                elif isinstance(input_message, MqttToolUpdateMessage):
+                    self._handle_mqtt_tool_update(input_message)
         except Exception as e:
             logger.error(f"Erreur handling input event: {e}")
 
@@ -184,14 +186,33 @@ class OpenAIChatStep(PipelineStep):
         logger.info(f"System prompt updated: {self.system_prompt[:100]}...")
 
     def _handle_agent_topic(self, message: AgentTopicMessage):
-        logger.info(f"💬 Chat: Agent topic received — {message.topic} ({message.description})")
-        summary = message.payload.get("summary", "")
-        if summary:
-            self.profile = summary
-            self.client_prompts = self._generate_enhanced_prompt(self.client_tools or [])
-            logger.info(f"Profile integrated into system prompt: {self.profile[:100]}...")
-        else:
-            logger.info(f"💬 Chat: No handler for topic payload — topic={message.topic}")
+        logger.info(f"💬 Chat: Agent topic received — {message.topic} (is_response={message.is_response})")
+        if message.is_response:
+            content = (
+                f"[Réponse MQTT — {message.description} ({message.topic})] : "
+                f"{json.dumps(message.payload, ensure_ascii=False)}"
+            )
+            self.conversation_history.append({"role": "system", "content": content})
+            messages = self._prepare_messages()
+            self._call_openai_streaming(messages)
+        elif isinstance(message.payload, dict):
+            summary = message.payload.get("summary", "")
+            if summary:
+                self.profile = summary
+                self.client_prompts = self._generate_enhanced_prompt(self.client_tools or [])
+                logger.info(f"Profile integrated into system prompt: {self.profile[:100]}...")
+            else:
+                logger.info(f"💬 Chat: No handler for topic payload — topic={message.topic}")
+
+    def _handle_mqtt_tool_update(self, message: MqttToolUpdateMessage):
+        new_tool = message.tool_definition
+        tool_name = new_tool["function"]["name"]
+        if self.client_tools is None:
+            self.client_tools = []
+        self.client_tools = [t for t in self.client_tools if t["function"]["name"] != tool_name]
+        self.client_tools.append(new_tool)
+        self.client_prompts = self._generate_enhanced_prompt(self.client_tools)
+        logger.info(f"🔧 Tool '{tool_name}' mis à jour via MQTT")
     
     def _handle_system_prompt_update(self, input_message):
         """Traite les mises à jour de system prompt"""
@@ -503,42 +524,58 @@ class OpenAIChatStep(PipelineStep):
     def _handle_tool_calls(self, tool_calls, assistant_response):
         """Gère les appels d'outils demandés par le LLM"""
         try:
-            # Ajouter à l'historique avec les tool calls
             self.conversation_history.append({
                 "role": "assistant",
                 "content": assistant_response,
-                "tool_calls": tool_calls
+                "tool_calls": tool_calls,
             })
-            
+
             logger.info(f"🛠️ Processing {len(tool_calls)} tool calls")
-            
-            # Envoyer les appels d'outils
+
+            external_calls = []
             for tool_call in tool_calls:
+                tool_name = tool_call["function"]["name"]
                 try:
                     parameters = json.loads(tool_call["function"]["arguments"])
-                    from messages.tool_message import ToolCallMessage
-                    tool_call_message = ToolCallMessage(
-                        tool_name=tool_call["function"]["name"],
-                        tool_call_id=tool_call["id"],
-                        parameters=parameters
-                    )
-                    
-                    if self.output_queue:
-                        self.output_queue.enqueue(tool_call_message)
-                        logger.info(f"📤 Tool call sent: {tool_call['function']['name']}")
-                        
                 except json.JSONDecodeError as e:
                     logger.error(f"Erreur parsing arguments tool call: {e}")
-                    # Envoyer une réponse d'erreur pour ce tool call
                     from messages.tool_message import ToolResponseMessage
-                    error_response = ToolResponseMessage(
+                    self._handle_tool_response(ToolResponseMessage(
                         tool_call_id=tool_call["id"],
-                        tool_name=tool_call["function"]["name"],
+                        tool_name=tool_name,
                         result=None,
-                        error=f"Arguments invalides: {e}"
-                    )
-                    self._handle_tool_response(error_response)
-                    
+                        error=f"Arguments invalides: {e}",
+                    ))
+                    continue
+
+                if tool_name == "write_topic":
+                    topic = parameters.get("topic", "")
+                    payload = parameters.get("payload", {})
+                    if self.output_queue:
+                        self.output_queue.enqueue(MqttWriteMessage(topic=topic, payload=payload))
+                    self.conversation_history.append({
+                        "role": "tool",
+                        "content": json.dumps({"status": "sent"}),
+                        "tool_call_id": tool_call["id"],
+                    })
+                    logger.info(f"📤 write_topic → {topic} (fire-and-forget)")
+                else:
+                    from messages.tool_message import ToolCallMessage
+                    if self.output_queue:
+                        self.output_queue.enqueue(ToolCallMessage(
+                            tool_name=tool_name,
+                            tool_call_id=tool_call["id"],
+                            parameters=parameters,
+                        ))
+                        logger.info(f"📤 Tool call sent: {tool_name}")
+                    external_calls.append(tool_call)
+
+            # If all calls were write_topic (handled locally), continue LLM now.
+            # Otherwise, wait for ToolResponseMessage(s) to arrive.
+            if not external_calls:
+                messages = self._prepare_messages()
+                self._call_openai_streaming(messages)
+
         except Exception as e:
             logger.error(f"Erreur handling tool calls: {e}")
     

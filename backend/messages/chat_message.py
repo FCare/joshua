@@ -36,5 +36,19 @@ class AgentTopicMessage(BaseMessage):
     """Données reçues sur un topic read-access annoncé par un agent via agent_topics"""
     topic: str
     description: str
-    payload: dict
+    payload: Any
     priority: int = 20
+    is_response: bool = False
+
+
+@dataclass(frozen=True)
+class MqttWriteMessage(BaseMessage):
+    """Demande d'écriture sur un topic MQTT write-access"""
+    topic: str
+    payload: Any
+
+
+@dataclass(frozen=True)
+class MqttToolUpdateMessage(BaseMessage):
+    """Mise à jour de la définition du tool générique write_topic"""
+    tool_definition: Dict[str, Any]
