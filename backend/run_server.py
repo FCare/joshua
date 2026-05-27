@@ -78,15 +78,19 @@ class Client():
         self.pipeline_input = self.pipeline.get_step("websocket_server")
         self.ws = websocket
         self.username = nexus.username if nexus else "anonymous"
+
+        # set_nexus must happen before set_ws_callback: set_ws_callback sends
+        # UserConnectionMessage which triggers user_connected on MQTT; the
+        # mqtt_step must already be subscribed to agent_topics at that point.
+        mqtt_step = self.pipeline.get_step("mqtt_step")
+        if mqtt_step and nexus:
+            mqtt_step.set_nexus(nexus)
+
         self.pipeline_input.set_ws_callback(self.sendToClient, self.username)
 
         tts_step = self.pipeline.get_step("tts_step")
         if tts_step:
             self.pipeline_input.register_interrupt_queue(tts_step.input_queue)
-
-        mqtt_step = self.pipeline.get_step("mqtt_step")
-        if mqtt_step and nexus:
-            mqtt_step.set_nexus(nexus)
 
     def sendToClient(self, message):
         asyncio.get_running_loop().create_task(self.ws.send(message))
