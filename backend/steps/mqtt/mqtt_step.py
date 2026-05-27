@@ -145,13 +145,18 @@ class MqttStep(PipelineStep):
             self._send_write_tool_update()
 
     def _send_write_tool_update(self):
-        lines = ["Publie un message sur un topic MQTT. Topics disponibles :"]
+        topic_lines = []
         for write_topic, meta in self._write_topics_meta.items():
             line = f"- {write_topic} : {meta['description']}. Format: {json.dumps(meta['format'], ensure_ascii=False)}"
             if meta.get("response_topic"):
-                line += f". Réponse asynchrone sur: {meta['response_topic']}"
-            lines.append(line)
-        description = "\n".join(lines)
+                line += f". La réponse arrive ensuite automatiquement via: {meta['response_topic']}"
+            topic_lines.append(line)
+        description = (
+            "Accède aux données personnelles de l'utilisateur stockées en mémoire, ou effectue des actions sur celles-ci. "
+            "QUAND UTILISER : dès que l'utilisateur pose une question sur ses propres goûts, préférences, habitudes ou informations personnelles, "
+            "ou demande de supprimer des informations le concernant. "
+            "Topics disponibles :\n" + "\n".join(topic_lines)
+        )
 
         tool_definition = {
             "type": "function",

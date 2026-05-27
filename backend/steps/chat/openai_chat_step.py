@@ -189,8 +189,8 @@ class OpenAIChatStep(PipelineStep):
         logger.info(f"💬 Chat: Agent topic received — {message.topic} (is_response={message.is_response})")
         if message.is_response:
             content = (
-                f"[Réponse MQTT — {message.description} ({message.topic})] : "
-                f"{json.dumps(message.payload, ensure_ascii=False)}"
+                f"Résultats de la mémoire utilisateur ({message.description}) :\n"
+                f"{json.dumps(message.payload, ensure_ascii=False, indent=2)}"
             )
             self.conversation_history.append({"role": "system", "content": content})
             messages = self._prepare_messages()
