@@ -37,3 +37,4 @@ class AgentTopicMessage(BaseMessage):
     topic: str
     description: str
     payload: dict
+    priority: int = 20
