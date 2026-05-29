@@ -19,7 +19,7 @@ class WeatherToolStep(BaseToolStep):
             "type": "function",
             "function": {
                 "name": "get_weather",
-                "description": "Obtient les informations météorologiques actuelles et prévisions pour une ville. OBLIGATOIRE: présenter le resultat à l'utilisateur sous forme concise et non technique, pas sous forme de liste.",
+                "description": "Obtient les informations météorologiques actuelles et prévisions pour une ville. Si plusieurs villes sont concernées, appelle cet outil une fois par ville. OBLIGATOIRE: présenter le resultat à l'utilisateur sous forme concise et non technique, pas sous forme de liste.",
                 "parameters": {
                     "type": "object",
                     "properties": {
