@@ -153,8 +153,10 @@ class MqttStep(PipelineStep):
             topic_lines.append(line)
         description = (
             "Accède aux données personnelles de l'utilisateur stockées en mémoire, ou effectue des actions sur celles-ci. "
-            "QUAND UTILISER : dès que l'utilisateur pose une question sur ses propres goûts, préférences, habitudes ou informations personnelles, "
-            "ou demande de supprimer des informations le concernant. "
+            "QUAND UTILISER : dès que la question contient 'mes X', 'mon X', ou fait référence à des informations personnelles. "
+            "IMPORTANT : si une question nécessite d'abord une information personnelle (ex: 'météo de mes lieux habituels' → "
+            "chercher 'lieux habituels' en mémoire AVANT de répondre à la question principale), "
+            "utilise search_preference en premier. "
             "Topics disponibles :\n" + "\n".join(topic_lines)
         )
 
