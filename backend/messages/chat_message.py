@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Dict, Any, Optional
 from .base_message import BaseMessage
 
@@ -52,3 +52,4 @@ class MqttWriteMessage(BaseMessage):
 class MqttToolUpdateMessage(BaseMessage):
     """Mise à jour de la définition du tool générique write_topic"""
     tool_definition: Dict[str, Any]
+    response_map: Dict[str, str] = field(default_factory=dict)

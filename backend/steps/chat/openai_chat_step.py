@@ -68,6 +68,8 @@ class OpenAIChatStep(PipelineStep):
         # Tools management - nouveau
         self.client_tools = None
         self.client_prompts = None
+        self._topic_response_map: dict = {}      # write_topic → response_topic
+        self._pending_tool_responses: dict = {}  # response_topic → tool_call_id
         
         # Thread safety
         self._lock = threading.Lock()
@@ -188,11 +190,21 @@ class OpenAIChatStep(PipelineStep):
     def _handle_agent_topic(self, message: AgentTopicMessage):
         logger.info(f"💬 Chat: Agent topic received — {message.topic} (is_response={message.is_response})")
         if message.is_response:
-            content = (
-                f"Résultats de la mémoire utilisateur ({message.description}) :\n"
-                f"{json.dumps(message.payload, ensure_ascii=False, indent=2)}"
-            )
-            self.conversation_history.append({"role": "system", "content": content})
+            tool_call_id = self._pending_tool_responses.pop(message.topic, None)
+            if tool_call_id:
+                self.conversation_history.append({
+                    "role": "tool",
+                    "content": json.dumps(message.payload, ensure_ascii=False),
+                    "tool_call_id": tool_call_id,
+                })
+                logger.info(f"💬 Chat: résultat tool injecté pour {message.topic} (call_id={tool_call_id})")
+            else:
+                content = (
+                    f"Résultats de la mémoire utilisateur ({message.description}) :\n"
+                    f"{json.dumps(message.payload, ensure_ascii=False, indent=2)}"
+                )
+                self.conversation_history.append({"role": "system", "content": content})
+                logger.info(f"💬 Chat: résultat injecté comme message système (pas de pending call)")
             messages = self._prepare_messages()
             self._call_openai_streaming(messages)
         elif isinstance(message.payload, dict):
@@ -212,7 +224,8 @@ class OpenAIChatStep(PipelineStep):
         self.client_tools = [t for t in self.client_tools if t["function"]["name"] != tool_name]
         self.client_tools.append(new_tool)
         self.client_prompts = self._generate_enhanced_prompt(self.client_tools)
-        logger.info(f"🔧 Tool '{tool_name}' mis à jour via MQTT")
+        self._topic_response_map.update(message.response_map)
+        logger.info(f"🔧 Tool '{tool_name}' mis à jour — response_map: {message.response_map}")
     
     def _handle_system_prompt_update(self, input_message):
         """Traite les mises à jour de system prompt"""
@@ -551,14 +564,20 @@ class OpenAIChatStep(PipelineStep):
                 if tool_name == "write_topic":
                     topic = parameters.get("topic", "")
                     payload = parameters.get("payload", {})
+                    response_topic = self._topic_response_map.get(topic)
                     if self.output_queue:
                         self.output_queue.enqueue(MqttWriteMessage(topic=topic, payload=payload))
-                    self.conversation_history.append({
-                        "role": "tool",
-                        "content": json.dumps({"status": "sent"}),
-                        "tool_call_id": tool_call["id"],
-                    })
-                    logger.info(f"📤 write_topic → {topic} (fire-and-forget)")
+                    if response_topic:
+                        # Defer: inject the real response when it arrives on response_topic
+                        self._pending_tool_responses[response_topic] = tool_call["id"]
+                        logger.info(f"📤 write_topic → {topic} (deferred, awaiting {response_topic})")
+                    else:
+                        self.conversation_history.append({
+                            "role": "tool",
+                            "content": json.dumps({"status": "sent"}),
+                            "tool_call_id": tool_call["id"],
+                        })
+                        logger.info(f"📤 write_topic → {topic} (fire-and-forget)")
                 else:
                     from messages.tool_message import ToolCallMessage
                     if self.output_queue:
@@ -570,9 +589,16 @@ class OpenAIChatStep(PipelineStep):
                         logger.info(f"📤 Tool call sent: {tool_name}")
                     external_calls.append(tool_call)
 
-            # If all calls were write_topic (handled locally), continue LLM now.
-            # Otherwise, wait for ToolResponseMessage(s) to arrive.
-            if not external_calls:
+            # Continue only if all write_topic calls are fire-and-forget (no deferred)
+            # and there are no external tool calls waiting for responses.
+            has_deferred = any(
+                self._topic_response_map.get(
+                    json.loads(tc["function"]["arguments"]).get("topic", "")
+                )
+                for tc in tool_calls
+                if tc["function"]["name"] == "write_topic"
+            )
+            if not external_calls and not has_deferred:
                 messages = self._prepare_messages()
                 self._call_openai_streaming(messages)
 

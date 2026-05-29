@@ -182,10 +182,18 @@ class MqttStep(PipelineStep):
             },
         }
 
+        response_map = {
+            topic: meta["response_topic"]
+            for topic, meta in self._write_topics_meta.items()
+            if meta.get("response_topic")
+        }
         from messages.chat_message import MqttToolUpdateMessage
         if self.output_queue:
-            self.output_queue.enqueue(MqttToolUpdateMessage(tool_definition=tool_definition))
-            logger.info(f"MqttStep: tool write_topic mis à jour ({len(self._write_topics_meta)} topics write)")
+            self.output_queue.enqueue(MqttToolUpdateMessage(
+                tool_definition=tool_definition,
+                response_map=response_map,
+            ))
+            logger.info(f"MqttStep: tool write_topic mis à jour ({len(self._write_topics_meta)} topics write, {len(response_map)} avec réponse)")
 
     async def _on_read_topic(self, topic: str, payload):
         if not isinstance(payload, (dict, list)):
