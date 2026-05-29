@@ -153,7 +153,10 @@ class MqttStep(PipelineStep):
             topic_lines.append(line)
         description = (
             "Accède aux données personnelles de l'utilisateur stockées en mémoire, ou effectue des actions sur celles-ci. "
-            "QUAND UTILISER : dès que la question contient 'mes X', 'mon X', ou fait référence à des informations personnelles. "
+            "QUAND UTILISER : (1) la question contient 'mes X', 'mon X', ou fait référence à des informations personnelles ; "
+            "(2) l'utilisateur exprime un désintérêt ou une préférence changeante "
+            "(ex: 'je ne suis pas intéressé par X', 'X ne m'intéresse plus', 'je n'aime plus X') → utiliser delete_facts ; "
+            "(3) l'utilisateur demande de supprimer, effacer ou oublier quelque chose. "
             "IMPORTANT : si une question nécessite d'abord une information personnelle (ex: 'météo de mes lieux habituels' → "
             "chercher 'lieux habituels' en mémoire AVANT de répondre à la question principale), "
             "utilise search_preference en premier. "
