@@ -503,11 +503,25 @@ class OpenAIChatStep(PipelineStep):
             parts.append(f"\nUser profile:\n{self.profile}")
 
         if tools_definitions:
+            has_search = any("search/request" in str(t) for t in tools_definitions)
             tools_descriptions = ["Tu as accès aux outils suivants :"]
             for tool_def in tools_definitions:
                 func = tool_def['function']
                 tools_descriptions.append(f"- {func['name']}: {func['description']}")
-            tools_descriptions.append("Utilise ces outils quand cela peut aider à répondre aux questions de l'utilisateur.")
+            directive = (
+                "RÈGLES D'UTILISATION DES OUTILS :\n"
+                "Tes connaissances ont une date de coupure et peuvent être obsolètes. "
+            )
+            if has_search:
+                directive += (
+                    "Pour TOUTE question factuelle, actualité, événement, personne, lieu, science, sport, politique, économie, "
+                    "ou tout sujet qui peut avoir évolué : utilise search/request EN PREMIER, avant de répondre. "
+                    "Ne réponds JAMAIS de mémoire sur ces sujets — cherche toujours. "
+                    "N'utilise ta mémoire que pour les questions purement conversationnelles ou personnelles."
+                )
+            else:
+                directive += "Utilise ces outils quand cela peut aider à répondre aux questions de l'utilisateur."
+            tools_descriptions.append(directive)
             parts.append("\n" + "\n".join(tools_descriptions))
 
         enhanced_prompt = "\n".join(parts)
