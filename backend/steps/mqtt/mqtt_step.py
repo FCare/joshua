@@ -152,13 +152,16 @@ class MqttStep(PipelineStep):
                 line += f". La réponse arrive ensuite automatiquement via: {meta['response_topic']}"
             topic_lines.append(line)
         description = (
-            "Accède aux données personnelles de l'utilisateur stockées en mémoire, ou effectue des actions sur celles-ci. "
-            "QUAND UTILISER : (1) la question contient 'mes X', 'mon X', ou fait référence à des informations personnelles ; "
-            "(2) l'utilisateur exprime un désintérêt ou une préférence changeante "
-            "(ex: 'je ne suis pas intéressé par X', 'X ne m'intéresse plus', 'je n'aime plus X') → utiliser delete_facts ; "
-            "(3) l'utilisateur demande de supprimer, effacer ou oublier quelque chose. "
-            "IMPORTANT : si une question nécessite d'abord une information personnelle (ex: 'météo de mes lieux habituels' → "
-            "chercher 'lieux habituels' en mémoire AVANT de répondre à la question principale), "
+            "Accède aux données personnelles de l'utilisateur ou les modifie en mémoire. "
+            "QUAND UTILISER — dès que l'utilisateur exprime QUOI QUE CE SOIT sur lui-même : "
+            "goûts, aversions, préférences, intérêts, désintérêts, informations personnelles. "
+            "Règle : toute déclaration positive ou neutre → l'information est déjà retenue via les discussions. "
+            "Toute déclaration négative ou de rejet sur un sujet déjà connu → delete_facts "
+            "(ex: 'je n'aime pas X', 'X ne m'intéresse pas/plus', 'je ne veux plus entendre parler de X', "
+            "'X c'est nul', 'je déteste X', 'je ne mange plus X', 'je n'habite plus à X'). "
+            "Toute question sur ses propres données → search_preference d'abord. "
+            "IMPORTANT : si une question nécessite une information personnelle pour y répondre "
+            "(ex: 'météo de mes lieux habituels' → chercher 'lieux habituels' AVANT de répondre), "
             "utilise search_preference en premier. "
             "Topics disponibles :\n" + "\n".join(topic_lines)
         )
