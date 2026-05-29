@@ -298,7 +298,7 @@ class OpenAIChatStep(PipelineStep):
         try:
             logger.info(f"💬 Calling OpenAI API with model {self.model}")
             logger.info(f"💬 Messages to send: {len(messages)} messages")
-            
+
             # Paramètres de base
             call_params = {
                 "model": self.model,
@@ -307,7 +307,7 @@ class OpenAIChatStep(PipelineStep):
                 "max_tokens": self.max_tokens,
                 "stream": True
             }
-            
+
             # Ajouter les outils spécifiques au client actuel
             call_params["tools"] = self.client_tools
             logger.info(f"🔧 Using {len(call_params['tools'])} tools")
