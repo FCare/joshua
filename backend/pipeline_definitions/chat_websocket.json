@@ -22,70 +22,17 @@
             }
         },
         {
-            "instance_id": "tool_registry",
-            "step_definition": "Tool Registry Step",
-            "config_overrides": {
-                "expected_tools": ["weather_tool"],
-                "registration_timeout": 5.0,
-                "llm_step_name": "openai_chat"
-            }
-        },
-        {
-            "instance_id": "weather_tool",
-            "step_definition": "Weather Tool Step",
-            "config_overrides": {
-                "user_permissions": {
-                    "allowed_users": [],
-                    "denied_users": []
-                }
-            }
-        },
-        {
             "instance_id": "openai_chat",
             "step_definition": "OpenAI Chat Step",
             "config_overrides": {
                 "max_tokens": 1500
             }
-        },
-        {
-            "instance_id": "tool_registry_duplicator",
-            "step_definition": "Duplicator Step",
-            "config_overrides": {}
-        },
-        {
-            "instance_id": "weather_tool_duplicator",
-            "step_definition": "Duplicator Step",
-            "config_overrides": {}
         }
     ],
     "connections": [
         {
             "from": "websocket_server",
-            "to": "tool_registry"
-        },
-        {
-            "from": "tool_registry",
-            "to": "tool_registry_duplicator"
-        },
-        {
-            "from": "tool_registry_duplicator",
-            "to": ["weather_tool", "openai_chat"]
-        },
-        {
-            "from": "weather_tool",
-            "to": "weather_tool_duplicator"
-        },
-        {
-            "from": "weather_tool_duplicator",
-            "to": ["tool_registry", "openai_chat"]
-        },
-        {
-            "from": "websocket_server",
             "to": "openai_chat"
-        },
-        {
-            "from": "openai_chat",
-            "to": "weather_tool"
         },
         {
             "from": "openai_chat",

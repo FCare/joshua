@@ -42,25 +42,6 @@
       }
     },
     {
-      "instance_id": "tool_registry",
-      "step_definition": "Tool Registry Step",
-      "config_overrides": {
-        "expected_tools": ["weather_tool"],
-        "registration_timeout": 5.0,
-        "llm_step_name": "openai_chat"
-      }
-    },
-    {
-      "instance_id": "weather_tool",
-      "step_definition": "Weather Tool Step",
-      "config_overrides": {
-        "user_permissions": {
-          "allowed_users": [],
-          "denied_users": []
-        }
-      }
-    },
-    {
       "instance_id": "asr_step",
       "step_definition": "Kyutai ASR Step",
       "config_overrides": {
@@ -101,16 +82,6 @@
       "config_overrides": {}
     },
     {
-      "instance_id": "tool_registry_duplicator",
-      "step_definition": "Duplicator Step",
-      "config_overrides": {}
-    },
-    {
-      "instance_id": "weather_tool_duplicator",
-      "step_definition": "Duplicator Step",
-      "config_overrides": {}
-    },
-    {
       "instance_id": "mqtt_step",
       "step_definition": "mqtt_step",
       "config_overrides": {}
@@ -127,23 +98,7 @@
     },
     {
       "from": "websocket_duplicator",
-      "to": ["asr_step", "openai_chat", "tool_registry", "mqtt_step"]
-    },
-    {
-      "from": "tool_registry",
-      "to": "tool_registry_duplicator"
-    },
-    {
-      "from": "tool_registry_duplicator",
-      "to": ["weather_tool", "openai_chat"]
-    },
-    {
-      "from": "weather_tool",
-      "to": "weather_tool_duplicator"
-    },
-    {
-      "from": "weather_tool_duplicator",
-      "to": ["tool_registry", "openai_chat"]
+      "to": ["asr_step", "openai_chat", "mqtt_step"]
     },
     {
       "from": "asr_step",
@@ -159,7 +114,7 @@
     },
     {
       "from": "duplicator",
-      "to": ["websocket_server", "sentence_normalizer", "tts_step", "weather_tool", "mqtt_step"]
+      "to": ["websocket_server", "sentence_normalizer", "tts_step", "mqtt_step"]
     },
     {
       "from": "sentence_normalizer",
