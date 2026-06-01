@@ -5,8 +5,8 @@ from .base_message import BaseMessage
 
 @dataclass(frozen=True)
 class SystemPromptMessage(BaseMessage):
-    """Message de mise à jour du system prompt"""
-    prompt: str
+    """Message de mise à jour du system prompt. prompt=None → restaure le prompt original."""
+    prompt: Optional[str]
 
 
 @dataclass(frozen=True)

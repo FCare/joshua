@@ -1,7 +1,10 @@
 import asyncio
 import json
 import logging
+import time
 from typing import Optional, Dict
+
+CONTEXT_OVERRIDE_TTL = 30 * 60  # 30 min watchdog
 
 from pipeline_framework import PipelineStep
 from messages.websocket_message import UserConnectionMessage
@@ -38,6 +41,8 @@ class MqttStep(PipelineStep):
         self._loop = None
         self._read_topics_meta: dict = {}
         self._write_topics_meta: dict = {}
+        self._context_override_topics: set = set()
+        self._watchdog_task: asyncio.Task | None = None
 
     def set_nexus(self, nexus) -> None:
         self._nexus = nexus
@@ -124,7 +129,17 @@ class MqttStep(PipelineStep):
                     if response_topic:
                         response_topic_set.add(response_topic)
 
-        # Second pass: subscribe to read topics
+        # Second pass: subscribe to context_override topics
+        for agent_entry in payload:
+            for t in agent_entry.get("topics", []):
+                if t.get("access") == "context_override":
+                    ctx_topic = t["topic"]
+                    if ctx_topic not in self._context_override_topics:
+                        self._context_override_topics.add(ctx_topic)
+                        self._nexus.subscribe(ctx_topic, self._on_context_override)
+                        logger.info(f"MqttStep: souscription context_override: {ctx_topic}")
+
+        # Third pass: subscribe to read topics
         for agent_entry in payload:
             for t in agent_entry.get("topics", []):
                 if t.get("access") == "read":
@@ -205,6 +220,30 @@ class MqttStep(PipelineStep):
                 payload=payload,
                 is_response=meta.get("is_response", False),
             ))
+
+    async def _on_context_override(self, topic: str, payload):
+        if not isinstance(payload, dict):
+            return
+        from messages.chat_message import SystemPromptMessage
+        prompt = payload.get("prompt")
+        if self._watchdog_task and not self._watchdog_task.done():
+            self._watchdog_task.cancel()
+            self._watchdog_task = None
+        if self.output_queue:
+            self.output_queue.enqueue(SystemPromptMessage(prompt=prompt))
+        if prompt is not None:
+            logger.info(f"MqttStep: context override activé — watchdog {CONTEXT_OVERRIDE_TTL}s")
+            self._watchdog_task = asyncio.create_task(self._context_watchdog())
+        else:
+            logger.info("MqttStep: context override restauré")
+
+    async def _context_watchdog(self):
+        await asyncio.sleep(CONTEXT_OVERRIDE_TTL)
+        logger.warning("MqttStep: watchdog context override déclenché — restauration du prompt original")
+        from messages.chat_message import SystemPromptMessage
+        if self.output_queue:
+            self.output_queue.enqueue(SystemPromptMessage(prompt=None))
+        self._watchdog_task = None
 
     def _handle_discussion_history(self, message: DiscussionHistoryMessage):
         username = self._nexus.username

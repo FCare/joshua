@@ -56,6 +56,7 @@ class OpenAIChatStep(PipelineStep):
         self.temperature = config.get("temperature", 0.7) if config else 0.7
         self.max_tokens = config.get("max_tokens", 1000) if config else 1000
         self.system_prompt = ""
+        self._original_system_prompt: str | None = None
         self.profile = ""
 
         # État de conversation
@@ -183,9 +184,16 @@ class OpenAIChatStep(PipelineStep):
 
     def _handle_system_prompt_message(self, message: SystemPromptMessage):
         logger.info(f"💬 Chat: Processing system prompt update")
-        self.system_prompt = message.prompt
+        if message.prompt is None:
+            if self._original_system_prompt is not None:
+                self.system_prompt = self._original_system_prompt
+                logger.info("System prompt restauré (original)")
+        else:
+            if self._original_system_prompt is None:
+                self._original_system_prompt = self.system_prompt
+            self.system_prompt = message.prompt
+            logger.info(f"System prompt mis à jour: {self.system_prompt[:100]}...")
         self.client_prompts = self._generate_enhanced_prompt(self.client_tools or [])
-        logger.info(f"System prompt updated: {self.system_prompt[:100]}...")
 
     def _handle_agent_topic(self, message: AgentTopicMessage):
         logger.info(f"💬 Chat: Agent topic received — {message.topic} (is_response={message.is_response})")
