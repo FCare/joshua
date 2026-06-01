@@ -152,17 +152,8 @@ class MqttStep(PipelineStep):
                 line += f". La réponse arrive ensuite automatiquement via: {meta['response_topic']}"
             topic_lines.append(line)
         description = (
-            "Accède aux données personnelles de l'utilisateur ou les modifie en mémoire. "
-            "QUAND UTILISER — dès que l'utilisateur exprime QUOI QUE CE SOIT sur lui-même : "
-            "goûts, aversions, préférences, intérêts, désintérêts, informations personnelles. "
-            "Règle : toute déclaration positive ou neutre → l'information est déjà retenue via les discussions. "
-            "Toute déclaration négative ou de rejet sur un sujet déjà connu → delete_facts "
-            "(ex: 'je n'aime pas X', 'X ne m'intéresse pas/plus', 'je ne veux plus entendre parler de X', "
-            "'X c'est nul', 'je déteste X', 'je ne mange plus X', 'je n'habite plus à X'). "
-            "Toute question sur ses propres données → search_preference d'abord. "
-            "IMPORTANT : si une question nécessite une information personnelle pour y répondre "
-            "(ex: 'météo de mes lieux habituels' → chercher 'lieux habituels' AVANT de répondre), "
-            "utilise search_preference en premier. "
+            "Envoie une requête à l'un des agents disponibles. "
+            "Choisis le topic correspondant au service demandé selon les descriptions ci-dessous.\n"
             "Topics disponibles :\n" + "\n".join(topic_lines)
         )
 
