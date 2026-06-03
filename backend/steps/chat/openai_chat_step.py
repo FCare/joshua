@@ -71,6 +71,7 @@ class OpenAIChatStep(PipelineStep):
         self.client_prompts = None
         self._topic_response_map: dict = {}      # write_topic → response_topic
         self._pending_tool_responses: dict = {}  # response_topic → tool_call_id
+        self._my_tool_call_ids: set = set()      # tool_call_ids générés par ce client
         
         # Thread safety
         self._lock = threading.Lock()
@@ -199,22 +200,18 @@ class OpenAIChatStep(PipelineStep):
         logger.info(f"💬 Chat: Agent topic received — {message.topic} (is_response={message.is_response})")
         if message.is_response:
             tool_call_id = self._pending_tool_responses.pop(message.topic, None)
-            if tool_call_id:
+            if tool_call_id and tool_call_id in self._my_tool_call_ids:
+                self._my_tool_call_ids.discard(tool_call_id)
                 self.conversation_history.append({
                     "role": "tool",
                     "content": json.dumps(message.payload, ensure_ascii=False),
                     "tool_call_id": tool_call_id,
                 })
                 logger.info(f"💬 Chat: résultat tool injecté pour {message.topic} (call_id={tool_call_id})")
+                messages = self._prepare_messages()
+                self._call_openai_streaming(messages)
             else:
-                content = (
-                    f"Résultats de la mémoire utilisateur ({message.description}) :\n"
-                    f"{json.dumps(message.payload, ensure_ascii=False, indent=2)}"
-                )
-                self.conversation_history.append({"role": "system", "content": content})
-                logger.info(f"💬 Chat: résultat injecté comme message système (pas de pending call)")
-            messages = self._prepare_messages()
-            self._call_openai_streaming(messages)
+                logger.info(f"💬 Chat: résultat ignoré sur {message.topic} (call_id={tool_call_id} non émis par ce client)")
         elif isinstance(message.payload, dict):
             summary = message.payload.get("summary", "")
             if summary:
@@ -453,6 +450,8 @@ class OpenAIChatStep(PipelineStep):
             with self._lock:
                 self.conversation_history = []
                 self.accumulated_text = ""
+                self._pending_tool_responses.clear()
+                self._my_tool_call_ids.clear()
             
             logger.info("Conversation reset")
             
@@ -586,6 +585,7 @@ class OpenAIChatStep(PipelineStep):
                     if response_topic:
                         # Defer: inject the real response when it arrives on response_topic
                         self._pending_tool_responses[response_topic] = tool_call["id"]
+                        self._my_tool_call_ids.add(tool_call["id"])
                         logger.info(f"📤 write_topic → {topic} (deferred, awaiting {response_topic})")
                     else:
                         self.conversation_history.append({
