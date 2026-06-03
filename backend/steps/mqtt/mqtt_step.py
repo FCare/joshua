@@ -182,6 +182,7 @@ class MqttStep(PipelineStep):
                     "properties": {
                         "topic": {
                             "type": "string",
+                            "enum": sorted(list(self._write_topics_meta.keys())),
                             "description": "Le topic MQTT à cibler parmi ceux listés",
                         },
                         "payload": {
