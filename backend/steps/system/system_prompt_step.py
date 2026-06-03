@@ -1,7 +1,7 @@
-import time
 import logging
 from typing import Optional, Dict
 from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from pipeline_framework import PipelineStep
 from messages.base_message import BaseMessage
@@ -51,7 +51,7 @@ class SystemPromptStep(PipelineStep):
         """Génère et envoie un system prompt au chat"""
         try:
             # Utiliser le template configuré + date/heure courante
-            now = datetime.now()
+            now = datetime.now(ZoneInfo("Europe/Paris"))
             date_str = now.strftime("%-d %B %Y").replace(
                 "January", "janvier").replace("February", "février").replace(
                 "March", "mars").replace("April", "avril").replace(
