@@ -50,8 +50,19 @@ class SystemPromptStep(PipelineStep):
     def _generate_and_send_system_prompt(self):
         """Génère et envoie un system prompt au chat"""
         try:
-            # Utiliser le template configuré
-            system_prompt = self.prompt or "Tu es un assistant virtuel intelligent et bienveillant."
+            # Utiliser le template configuré + date/heure courante
+            now = datetime.now()
+            date_str = now.strftime("%-d %B %Y").replace(
+                "January", "janvier").replace("February", "février").replace(
+                "March", "mars").replace("April", "avril").replace(
+                "May", "mai").replace("June", "juin").replace(
+                "July", "juillet").replace("August", "août").replace(
+                "September", "septembre").replace("October", "octobre").replace(
+                "November", "novembre").replace("December", "décembre")
+            time_str = now.strftime("%Hh%M")
+            datetime_info = f"Nous sommes le {date_str}, il est {time_str}."
+            base_prompt = self.prompt or "Tu es un assistant virtuel intelligent et bienveillant."
+            system_prompt = f"{datetime_info} {base_prompt}"
             
             # Créer le message de mise à jour
             from messages.chat_message import SystemPromptMessage
