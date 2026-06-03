@@ -331,7 +331,8 @@ class OpenAIChatStep(PipelineStep):
 
             # Ajouter les outils spécifiques au client actuel
             call_params["tools"] = self.client_tools
-            logger.info(f"🔧 Using {len(call_params['tools'])} tools")
+            call_params["tool_choice"] = "required"
+            logger.info(f"🔧 Using {len(call_params['tools'])} tools (tool_choice=required)")
             
             response = self.client.chat.completions.create(**call_params)
             
