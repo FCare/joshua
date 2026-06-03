@@ -511,12 +511,12 @@ class OpenAIChatStep(PipelineStep):
             parts.append(f"\nUser profile:\n{self.profile}")
 
         if tools_definitions:
-            has_search = any("search/request" in str(t) for t in tools_definitions)
             tools_descriptions = []
-            if has_search:
+            if tools_definitions:
                 tools_descriptions.append(
-                    "IMPORTANT : pour toute question factuelle, actualité, événement, personne, science, sport, politique ou économie, "
-                    "utilise TOUJOURS l'outil search/request avant de répondre. Ne réponds jamais de mémoire sur ces sujets."
+                    "IMPORTANT : utilise TOUJOURS l'outil le plus adapté avant de répondre. "
+                    "Lis attentivement la description de chaque outil et choisis celui dont le domaine correspond exactement à la question. "
+                    "Ne réponds jamais de mémoire sur un sujet couvert par un outil disponible."
                 )
             tools_descriptions.append("Outils disponibles :")
             for tool_def in tools_definitions:
