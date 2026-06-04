@@ -230,8 +230,8 @@ class NLUStep(PipelineStep):
         payload = {}
         for k, v in intent.get("payload", {}).items():
             if isinstance(v, str) and v.startswith("{") and v.endswith("}"):
-                slot = v[1:-1]
-                payload[k] = params.get(slot, "")
+                # The outer key IS the slot name; the template value {xxx} is just a hint
+                payload[k] = params.get(k, "")
             else:
                 payload[k] = v
         return payload
