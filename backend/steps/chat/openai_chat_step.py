@@ -601,19 +601,33 @@ class OpenAIChatStep(PipelineStep):
             messages = self._prepare_messages()
             self._call_openai_streaming(messages)
 
+    def _format_nlu_result(self, payload) -> str:
+        """Extrait le contenu utile d'un résultat d'agent pour l'injection en contexte."""
+        if not isinstance(payload, dict):
+            return str(payload)[:1000]
+        for key in ("content", "bulletin", "report", "answer"):
+            if key in payload and isinstance(payload[key], str):
+                return payload[key][:3000]
+        if "saved" in payload:
+            fact = payload.get("fact", {})
+            if payload.get("saved"):
+                return f"Préférence mémorisée : type={fact.get('type','?')}, valeur={fact.get('value','?')}"
+            return "Mémorisation échouée."
+        return json.dumps(payload, ensure_ascii=False)[:1000]
+
     def _call_llm_with_nlu_group(self, group: dict):
         """Injecte les résultats NLU comme contexte système et appelle le LLM une seule fois."""
         self.conversation_history.append({"role": "user", "content": group["user_text"]})
 
-        lines = ["Résultats des agents activés automatiquement pour ce message :"]
+        lines = ["Informations obtenues par les agents pour ce message. Utilise-les pour répondre :"]
         for response_topic, payload in group["received"].items():
             match = group["matches_by_topic"].get(response_topic, {})
             phrase = match.get("phrase", response_topic)
-            lines.append(f'- "{phrase}" → {json.dumps(payload, ensure_ascii=False)}')
-        context_block = "\n".join(lines)
+            content = self._format_nlu_result(payload)
+            lines.append(f'[{phrase}]\n{content}')
+        context_block = "\n\n".join(lines)
 
         messages = self._prepare_messages()
-        # Insert ephemeral agent context just before the user message (last entry)
         messages.insert(-1, {"role": "system", "content": context_block})
         logger.info(f"💬 LLM appelé avec {len(group['received'])} résultat(s) NLU en contexte système")
         self._call_openai_streaming(messages)
