@@ -69,3 +69,11 @@ class NLUToolCallMessage(BaseMessage):
     payload: Dict[str, Any]
     response_topic: str
     tool_call_id: str
+
+
+@dataclass(frozen=True)
+class NLUMultiIntentMessage(BaseMessage):
+    """Groupe d'intents détectés par le NLU dans un seul message utilisateur.
+    openai_chat collecte tous les résultats puis appelle le LLM une seule fois."""
+    user_text: str
+    matches: tuple  # tuple of dicts: {name, phrase, write_topic, payload, response_topic, tool_call_id}

@@ -11,7 +11,7 @@ from pipeline_framework import PipelineStep
 from messages.base_message import BaseMessage
 from messages.websocket_message import TextInputMessage
 from messages.asr_message import TranscriptionMessage
-from messages.chat_message import IntentsUpdateMessage, NLUToolCallMessage, MqttWriteMessage, AgentTopicMessage
+from messages.chat_message import IntentsUpdateMessage, NLUToolCallMessage, NLUMultiIntentMessage, MqttWriteMessage, AgentTopicMessage
 
 logger = logging.getLogger(__name__)
 
@@ -93,8 +93,8 @@ class NLUStep(PipelineStep):
                 self._passthrough(source)
                 return
 
-            # Step 2 — For each phrase: similarity → intent + param extraction → tool call
-            matched_any = False
+            # Step 2 — collect all matching intents
+            matches = []
             for phrase in phrases:
                 intent, score = self._match_intent(phrase)
                 if intent is None or score < SIMILARITY_THRESHOLD:
@@ -107,24 +107,28 @@ class NLUStep(PipelineStep):
                 response_topic = intent.get("response_topic")
                 if not write_topic:
                     continue
-
-                tool_call_id = f"nlu-{uuid.uuid4().hex[:12]}"
-                if self.output_queue:
-                    # NLUToolCallMessage must arrive first so openai_chat registers the pending
-                    # response before MqttWriteMessage is forwarded to mqtt_step (race condition)
-                    self.output_queue.enqueue(NLUToolCallMessage(
-                        user_text=text,
-                        write_topic=write_topic,
-                        payload=payload,
-                        response_topic=response_topic or "",
-                        tool_call_id=tool_call_id,
-                    ))
-                    self.output_queue.enqueue(MqttWriteMessage(topic=write_topic, payload=payload))
+                matches.append({
+                    "name": intent["name"],
+                    "phrase": phrase,
+                    "write_topic": write_topic,
+                    "payload": payload,
+                    "response_topic": response_topic or "",
+                    "tool_call_id": f"nlu-{uuid.uuid4().hex[:12]}",
+                })
                 logger.info(f"NLUStep: intent={intent['name']} score={score:.2f} params={params}")
-                matched_any = True
 
-            if not matched_any:
+            if not matches:
                 self._passthrough(source)
+                return
+
+            # Step 3 — send group message first (race-condition safe), then MQTT writes
+            if self.output_queue:
+                self.output_queue.enqueue(NLUMultiIntentMessage(
+                    user_text=text,
+                    matches=tuple(matches),
+                ))
+                for m in matches:
+                    self.output_queue.enqueue(MqttWriteMessage(topic=m["write_topic"], payload=m["payload"]))
 
         except Exception as e:
             logger.error(f"NLUStep error: {e}")

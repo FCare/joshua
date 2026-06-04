@@ -11,7 +11,7 @@ from pipeline_framework import PipelineStep
 from messages.base_message import BaseMessage
 from messages.websocket_message import TextInputMessage, ImageUploadMessage
 from messages.tool_message import ToolResponseMessage
-from messages.chat_message import SystemPromptMessage, ToolsReadyMessage, AgentTopicMessage, MqttToolUpdateMessage, MqttWriteMessage, NLUToolCallMessage, IntentsUpdateMessage
+from messages.chat_message import SystemPromptMessage, ToolsReadyMessage, AgentTopicMessage, MqttToolUpdateMessage, MqttWriteMessage, NLUToolCallMessage, NLUMultiIntentMessage, IntentsUpdateMessage
 from messages.asr_message import TranscriptionMessage
 
 try:
@@ -74,6 +74,7 @@ class OpenAIChatStep(PipelineStep):
         self._my_tool_call_ids: set = set()      # tool_call_ids générés par ce client
         self._nlu_tool_call_ids: set = set()     # tool_call_ids émis par le NLUStep
         self._capabilities_desc: str = ""        # description des agents disponibles (depuis IntentsUpdateMessage)
+        self._nlu_groups: dict = {}              # group_id → {user_text, matches_by_topic, received}
         
         # Thread safety
         self._lock = threading.Lock()
@@ -141,6 +142,8 @@ class OpenAIChatStep(PipelineStep):
                     self._handle_agent_topic(input_message)
                 elif isinstance(input_message, MqttToolUpdateMessage):
                     self._handle_mqtt_tool_update(input_message)
+                elif isinstance(input_message, NLUMultiIntentMessage):
+                    self._handle_nlu_multi_intent(input_message)
                 elif isinstance(input_message, NLUToolCallMessage):
                     self._handle_nlu_tool_call(input_message)
                 elif isinstance(input_message, IntentsUpdateMessage):
@@ -210,8 +213,26 @@ class OpenAIChatStep(PipelineStep):
     def _handle_agent_topic(self, message: AgentTopicMessage):
         logger.info(f"💬 Chat: Agent topic received — {message.topic} (is_response={message.is_response})")
         if message.is_response:
-            tool_call_id = self._pending_tool_responses.pop(message.topic, None)
-            if tool_call_id and tool_call_id in self._my_tool_call_ids:
+            pending = self._pending_tool_responses.pop(message.topic, None)
+            if pending is None:
+                logger.info(f"💬 Chat: résultat ignoré sur {message.topic} (non attendu)")
+                return
+
+            # NLU group result
+            if isinstance(pending, tuple):
+                group_id, _tool_call_id = pending
+                group = self._nlu_groups.get(group_id)
+                if group:
+                    group["received"][message.topic] = message.payload
+                    logger.info(f"💬 Chat: résultat groupe {group_id} reçu sur {message.topic} ({len(group['received'])}/{group['total']})")
+                    if len(group["received"]) >= group["total"]:
+                        del self._nlu_groups[group_id]
+                        self._call_llm_with_nlu_group(group)
+                return
+
+            # Legacy single tool call (NLUToolCallMessage path)
+            tool_call_id = pending
+            if tool_call_id in self._my_tool_call_ids:
                 is_nlu = tool_call_id in self._nlu_tool_call_ids
                 self._my_tool_call_ids.discard(tool_call_id)
                 self._nlu_tool_call_ids.discard(tool_call_id)
@@ -554,9 +575,54 @@ class OpenAIChatStep(PipelineStep):
         logger.info(f"Prompt enrichi généré: {enhanced_prompt[:100]}...")
         return enhanced_prompt
     
+    def _handle_nlu_multi_intent(self, message: NLUMultiIntentMessage):
+        """Groupe d'intents NLU : enregistre les pendings, attend tous les résultats."""
+        import uuid as _uuid
+        group_id = _uuid.uuid4().hex[:8]
+        matches_by_topic = {m["response_topic"]: m for m in message.matches if m.get("response_topic")}
+        total = len(matches_by_topic)
+
+        self._nlu_groups[group_id] = {
+            "user_text": message.user_text,
+            "matches_by_topic": matches_by_topic,
+            "received": {},
+            "total": total,
+        }
+
+        for m in message.matches:
+            if m.get("response_topic"):
+                self._pending_tool_responses[m["response_topic"]] = (group_id, m["tool_call_id"])
+
+        logger.info(f"💬 NLU groupe {group_id}: {len(message.matches)} intent(s), attente de {total} résultat(s)")
+
+        # Fire-and-forget intents (no response_topic): call LLM immediately if all are F&F
+        if total == 0:
+            self.conversation_history.append({"role": "user", "content": message.user_text})
+            messages = self._prepare_messages()
+            self._call_openai_streaming(messages)
+
+    def _call_llm_with_nlu_group(self, group: dict):
+        """Injecte les résultats NLU comme contexte système et appelle le LLM une seule fois."""
+        self.conversation_history.append({"role": "user", "content": group["user_text"]})
+
+        lines = ["Résultats des agents activés automatiquement pour ce message :"]
+        for response_topic, payload in group["received"].items():
+            match = group["matches_by_topic"].get(response_topic, {})
+            phrase = match.get("phrase", response_topic)
+            lines.append(f'- "{phrase}" → {json.dumps(payload, ensure_ascii=False)}')
+        context_block = "\n".join(lines)
+
+        messages = self._prepare_messages()
+        # Insert ephemeral agent context just before the user message (last entry)
+        messages.insert(-1, {"role": "system", "content": context_block})
+        logger.info(f"💬 LLM appelé avec {len(group['received'])} résultat(s) NLU en contexte système")
+        self._call_openai_streaming(messages)
+
     def _handle_nlu_tool_call(self, message: NLUToolCallMessage):
         """Injecte un tool call pré-émis par le NLUStep dans l'historique et attend la réponse."""
-        self.conversation_history.append({"role": "user", "content": message.user_text})
+        last_user = next((m for m in reversed(self.conversation_history) if m.get("role") == "user"), None)
+        if last_user is None or last_user.get("content") != message.user_text:
+            self.conversation_history.append({"role": "user", "content": message.user_text})
         self.conversation_history.append({
             "role": "assistant",
             "content": "",
