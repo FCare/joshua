@@ -53,3 +53,19 @@ class MqttToolUpdateMessage(BaseMessage):
     """Mise à jour de la définition du tool générique write_topic"""
     tool_definition: Dict[str, Any]
     response_map: Dict[str, str] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class IntentsUpdateMessage(BaseMessage):
+    """Liste consolidée des intents déclarés par tous les agents connectés"""
+    intents: tuple  # tuple of dicts: {name, description, examples, payload, write_topic, response_topic}
+
+
+@dataclass(frozen=True)
+class NLUToolCallMessage(BaseMessage):
+    """Tool call déjà émis par le NLUStep — openai_chat doit attendre la réponse et générer la réplique"""
+    user_text: str
+    write_topic: str
+    payload: Dict[str, Any]
+    response_topic: str
+    tool_call_id: str

@@ -44,6 +44,7 @@ class MqttStep(PipelineStep):
         self._context_override_topics: set = set()
         self._watchdog_task: asyncio.Task | None = None
         self._pending_writes: dict = {}  # response_topic → (write_topic, payload)
+        self._agent_intents: dict = {}   # agent_name → list of intents
 
     def set_nexus(self, nexus) -> None:
         self._nexus = nexus
@@ -162,6 +163,31 @@ class MqttStep(PipelineStep):
                     else:
                         logger.debug(f"MqttStep: déjà souscrit à {read_topic}, skip")
 
+        # Collect intents declared by agents
+        intents_changed = False
+        for agent_entry in payload:
+            agent_name = agent_entry.get("agent", "")
+            agent_intents = agent_entry.get("intents", [])
+            if not agent_intents:
+                continue
+            # Enrich each intent with its resolved write_topic and response_topic
+            enriched = []
+            for intent in agent_intents:
+                write_topic = None
+                response_topic = None
+                for t in agent_entry.get("topics", []):
+                    if t.get("access") == "write":
+                        write_topic = t["topic"]
+                        response_topic = t.get("response_topic")
+                        break
+                enriched.append({**intent, "write_topic": write_topic, "response_topic": response_topic})
+            if self._agent_intents.get(agent_name) != enriched:
+                self._agent_intents[agent_name] = enriched
+                intents_changed = True
+
+        if intents_changed:
+            self._send_intents_update()
+
         if write_changed and self._write_topics_meta:
             self._send_write_tool_update()
             # Replay any pending requests that agents may have missed (e.g. after agent restart)
@@ -174,6 +200,13 @@ class MqttStep(PipelineStep):
                             self._loop,
                         )
                         logger.info(f"MqttStep: republié {write_topic} (en attente de {response_topic})")
+
+    def _send_intents_update(self):
+        all_intents = [i for intents in self._agent_intents.values() for i in intents]
+        from messages.chat_message import IntentsUpdateMessage
+        if self.output_queue:
+            self.output_queue.enqueue(IntentsUpdateMessage(intents=tuple(all_intents)))
+            logger.info(f"MqttStep: IntentsUpdateMessage émis ({len(all_intents)} intents)")
 
     def _send_write_tool_update(self):
         topic_lines = []

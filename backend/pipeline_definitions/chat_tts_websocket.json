@@ -85,6 +85,16 @@
       "instance_id": "mqtt_step",
       "step_definition": "mqtt_step",
       "config_overrides": {}
+    },
+    {
+      "instance_id": "nlu_step",
+      "step_definition": "NLU Step",
+      "config_overrides": {}
+    },
+    {
+      "instance_id": "mqtt_duplicator",
+      "step_definition": "Duplicator Step",
+      "config_overrides": {}
     }
   ],
   "connections": [
@@ -98,7 +108,7 @@
     },
     {
       "from": "websocket_duplicator",
-      "to": ["asr_step", "openai_chat", "mqtt_step"]
+      "to": ["asr_step", "nlu_step", "mqtt_step"]
     },
     {
       "from": "asr_step",
@@ -106,7 +116,7 @@
     },
     {
       "from": "asr_duplicator",
-      "to": ["websocket_server", "openai_chat", "tts_step"]
+      "to": ["websocket_server", "nlu_step", "tts_step"]
     },
     {
       "from": "openai_chat",
@@ -126,6 +136,14 @@
     },
     {
       "from": "mqtt_step",
+      "to": "mqtt_duplicator"
+    },
+    {
+      "from": "mqtt_duplicator",
+      "to": ["openai_chat", "nlu_step"]
+    },
+    {
+      "from": "nlu_step",
       "to": "openai_chat"
     }
   ]

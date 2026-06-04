@@ -1,0 +1,26 @@
+{
+  "name": "NLU Step",
+  "class_name": "NLUStep",
+  "module_path": "steps.nlu.nlu_step",
+  "description": "Reformulation LLM + similarity pour la détection d'intent et l'extraction de paramètres",
+  "config_schema": {
+    "type": "object",
+    "properties": {
+      "endpoint": {
+        "type": "string",
+        "default": "http://thebrain.caronboulme.fr/v1",
+        "description": "URL du LLM pour la reformulation"
+      },
+      "model": {
+        "type": "string",
+        "default": "qwen3-vl-8b-instruct",
+        "description": "Modèle LLM pour la reformulation et l'extraction"
+      },
+      "similarity_threshold": {
+        "type": "number",
+        "default": 0.60,
+        "description": "Seuil de similarité cosine pour accepter un intent"
+      }
+    }
+  }
+}

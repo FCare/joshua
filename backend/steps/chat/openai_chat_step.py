@@ -11,7 +11,7 @@ from pipeline_framework import PipelineStep
 from messages.base_message import BaseMessage
 from messages.websocket_message import TextInputMessage, ImageUploadMessage
 from messages.tool_message import ToolResponseMessage
-from messages.chat_message import SystemPromptMessage, ToolsReadyMessage, AgentTopicMessage, MqttToolUpdateMessage, MqttWriteMessage
+from messages.chat_message import SystemPromptMessage, ToolsReadyMessage, AgentTopicMessage, MqttToolUpdateMessage, MqttWriteMessage, NLUToolCallMessage, IntentsUpdateMessage
 from messages.asr_message import TranscriptionMessage
 
 try:
@@ -139,6 +139,10 @@ class OpenAIChatStep(PipelineStep):
                     self._handle_agent_topic(input_message)
                 elif isinstance(input_message, MqttToolUpdateMessage):
                     self._handle_mqtt_tool_update(input_message)
+                elif isinstance(input_message, NLUToolCallMessage):
+                    self._handle_nlu_tool_call(input_message)
+                elif isinstance(input_message, IntentsUpdateMessage):
+                    pass  # openai_chat n'utilise pas les intents directement
         except Exception as e:
             logger.error(f"Erreur handling input event: {e}")
 
@@ -529,6 +533,34 @@ class OpenAIChatStep(PipelineStep):
         logger.info(f"Prompt enrichi généré: {enhanced_prompt[:100]}...")
         return enhanced_prompt
     
+    def _handle_nlu_tool_call(self, message: NLUToolCallMessage):
+        """Injecte un tool call pré-émis par le NLUStep dans l'historique et attend la réponse."""
+        self.conversation_history.append({"role": "user", "content": message.user_text})
+        self.conversation_history.append({
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [{
+                "id": message.tool_call_id,
+                "type": "function",
+                "function": {
+                    "name": "write_topic",
+                    "arguments": json.dumps({"topic": message.write_topic, "payload": message.payload}, ensure_ascii=False),
+                },
+            }],
+        })
+        if message.response_topic:
+            self._pending_tool_responses[message.response_topic] = message.tool_call_id
+            self._my_tool_call_ids.add(message.tool_call_id)
+            logger.info(f"NLU tool call injecté: {message.write_topic} → attente sur {message.response_topic} (id={message.tool_call_id})")
+        else:
+            self.conversation_history.append({
+                "role": "tool",
+                "content": json.dumps({"status": "sent"}),
+                "tool_call_id": message.tool_call_id,
+            })
+            messages = self._prepare_messages()
+            self._call_openai_streaming(messages)
+
     def _handle_tool_response(self, tool_response: BaseMessage):
         """Traite la réponse d'un outil"""
         try:
