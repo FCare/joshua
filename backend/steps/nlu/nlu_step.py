@@ -219,11 +219,13 @@ class NLUStep(PipelineStep):
         if not slots:
             return {}
 
-        slots_desc = ", ".join(f'"{s}"' for s in slots)
+        schema_props = {s: {"type": "string"} for s in slots}
+        slots_list = "\n".join(f'  - "{s}": valeur à extraire de la phrase' for s in slots)
         prompt = (
-            f"Phrase : \"{phrase}\"\n"
-            f"Extrait les valeurs suivantes : {slots_desc}.\n"
-            f"Retourne un objet JSON avec uniquement ces clés. Exemple : {{\"publisher\": \"France Info\"}}"
+            f"Fonction : {intent.get('name', '?')} — {intent.get('description', '')}\n"
+            f"Paramètres à extraire de la phrase :\n{slots_list}\n\n"
+            f"Phrase : \"{phrase}\"\n\n"
+            f"Retourne uniquement un objet JSON avec ces clés."
         )
         try:
             response = self._llm.chat.completions.create(
@@ -232,16 +234,21 @@ class NLUStep(PipelineStep):
                 max_tokens=64,
                 temperature=0.0,
                 stream=False,
+                response_format={
+                    "type": "json_object",
+                    "schema": {
+                        "type": "object",
+                        "properties": schema_props,
+                        "required": slots,
+                    },
+                },
             )
             raw = response.choices[0].message.content.strip()
-            start = raw.find("{")
-            end = raw.rfind("}") + 1
-            if start == -1 or end == 0:
-                logger.warning(f"NLUStep extraction: pas de JSON pour '{phrase}' — raw={raw[:80]!r}")
-                return None
-            return json.loads(raw[start:end])
+            result = json.loads(raw)
+            logger.info(f"NLUStep extraction [{intent.get('name')}]: {result}")
+            return result
         except Exception as e:
-            logger.warning(f"NLUStep extraction failed: {e}")
+            logger.warning(f"NLUStep extraction failed [{intent.get('name')}]: {e}")
             return None
 
     def _build_payload(self, intent: dict, params: dict) -> dict:
