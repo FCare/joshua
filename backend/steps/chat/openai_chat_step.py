@@ -73,6 +73,7 @@ class OpenAIChatStep(PipelineStep):
         self._pending_tool_responses: dict = {}  # response_topic → tool_call_id
         self._my_tool_call_ids: set = set()      # tool_call_ids générés par ce client
         self._nlu_tool_call_ids: set = set()     # tool_call_ids émis par le NLUStep
+        self._capabilities_desc: str = ""        # description des agents disponibles (depuis IntentsUpdateMessage)
         
         # Thread safety
         self._lock = threading.Lock()
@@ -143,7 +144,9 @@ class OpenAIChatStep(PipelineStep):
                 elif isinstance(input_message, NLUToolCallMessage):
                     self._handle_nlu_tool_call(input_message)
                 elif isinstance(input_message, IntentsUpdateMessage):
-                    pass  # openai_chat n'utilise pas les intents directement
+                    self._capabilities_desc = self._build_capabilities_desc(list(input_message.intents))
+                    self.client_prompts = self._generate_enhanced_prompt()
+                    logger.info(f"💬 Capacités mises à jour depuis {len(input_message.intents)} intents")
                 elif isinstance(input_message, MqttWriteMessage):
                     if self.output_queue:
                         self.output_queue.enqueue(input_message)
@@ -511,12 +514,41 @@ class OpenAIChatStep(PipelineStep):
             logger.error(f"🔧 FIN _handle_tools_ready - ERROR")
             raise
     
-    def _generate_enhanced_prompt(self, tools_definitions):
-        """Génère un prompt enrichi avec le profil utilisateur"""
+    def _build_capabilities_desc(self, intents: list) -> str:
+        if not intents:
+            return ""
+        from collections import defaultdict
+        groups = defaultdict(list)
+        for intent in intents:
+            name = intent.get("name", "")
+            prefix = name.split(".")[0] if "." in name else name
+            desc = intent.get("description", "")
+            if desc and desc not in groups[prefix]:
+                groups[prefix].append(desc)
+        if not groups:
+            return ""
+        agent_labels = {
+            "news": "Actualités",
+            "weather": "Météo",
+            "search": "Recherche internet",
+            "profiler": "Mémoire personnelle",
+        }
+        lines = ["Tu as accès aux agents spécialisés suivants, activés automatiquement selon ta demande :"]
+        for prefix, descs in groups.items():
+            label = agent_labels.get(prefix, prefix.capitalize())
+            combined = " / ".join(d[0].lower() + d[1:] for d in descs)
+            lines.append(f"- {label} : {combined}")
+        return "\n".join(lines)
+
+    def _generate_enhanced_prompt(self, tools_definitions=None):
+        """Génère un prompt enrichi avec le profil utilisateur et les capacités disponibles"""
         parts = [self.system_prompt]
 
         if self.profile:
             parts.append(f"\nUser profile:\n{self.profile}")
+
+        if self._capabilities_desc:
+            parts.append(f"\n{self._capabilities_desc}")
 
         enhanced_prompt = "\n".join(parts)
         logger.info(f"Prompt enrichi généré: {enhanced_prompt[:100]}...")
