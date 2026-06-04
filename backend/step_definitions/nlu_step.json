@@ -8,7 +8,7 @@
     "properties": {
       "endpoint": {
         "type": "string",
-        "default": "http://thebrain.caronboulme.fr/v1",
+        "default": "http://thebrain:9000/v1",
         "description": "URL du LLM pour la reformulation"
       },
       "model": {
