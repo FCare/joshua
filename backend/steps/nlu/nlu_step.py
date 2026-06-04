@@ -125,7 +125,9 @@ class NLUStep(PipelineStep):
 
     def _reformulate(self, text: str) -> List[str]:
         intents_desc = "\n".join(
-            f"- {i['name']}: {i['description']}" for i in self._intents
+            f"- {i['name']}: {i['description']}"
+            + (f" (ex: {', '.join(repr(e) for e in i.get('examples', [])[:2])})" if i.get('examples') else "")
+            for i in self._intents
         )
         history_block = ""
         if self._conversation_history:
