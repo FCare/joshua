@@ -144,36 +144,42 @@ class NLUStep(PipelineStep):
         profile_block = f"Profil utilisateur :\n{self._user_profile}\n\n" if self._user_profile else ""
         prompt = (
             "Tu es un assistant de classification et reformulation.\n"
-            "TÂCHE : détermine si le message de l'utilisateur correspond à une des intentions ci-dessous.\n\n"
-            "RÈGLES ABSOLUES :\n"
-            "- Si le message est une conversation, une opinion, une préférence, une déclaration ou "
-            "une question générale sans lien direct avec une intention → réponds uniquement : AUCUNE\n"
-            "- Exemples de messages qui donnent AUCUNE : 'j'aime les films d'action', "
-            "'c'est sympa', 'merci', 'tu es intelligent', 'j'ai faim', 'raconte-moi une blague', "
-            "'j'aime bien les restaurants japonais'\n"
-            "- Sinon, reformule directement ce que l'utilisateur veut faire (une phrase par intention).\n"
+            "TÂCHE : identifie toutes les intentions présentes dans le message et reformule chacune "
+            "en une phrase canonique courte, une par ligne.\n\n"
+            "RÈGLES :\n"
+            "- Un message peut contenir PLUSIEURS intentions : traite-les toutes, une par ligne.\n"
+            "- Si une partie du message est une déclaration personnelle (goût, préférence, habitude), "
+            "reformule-la comme intention 'mémoriser un fait'.\n"
+            "- Si une partie est une conversation vide ('merci', 'c'est sympa', 'bonjour'), ignore-la.\n"
+            "- Si le message entier ne contient AUCUNE intention disponible, réponds uniquement : AUCUNE\n"
             "- Ne propose JAMAIS d'options. Ne pose JAMAIS de questions.\n"
             "- Si le message contient une référence vague (ex: 'ici', 'chez moi'), "
             "utilise le profil utilisateur pour la résoudre.\n\n"
+            "EXEMPLE :\n"
+            "Message : 'J'aime le jazz. C'est quoi les nouvelles ?'\n"
+            "Réponse :\n"
+            "J'aime le jazz.\n"
+            "Quelles sont les nouvelles du jour ?\n\n"
             f"Intentions disponibles :\n{intents_desc}\n\n"
             f"{profile_block}"
             + (f"Conversation récente :\n{history_block}\n\n" if history_block else "")
             + f"Message utilisateur : \"{text}\"\n\n"
-            "Réponse (AUCUNE ou reformulation directe) :"
+            "Réponse :"
         )
 
         response = self._llm.chat.completions.create(
             model=self._model,
             messages=[{"role": "user", "content": prompt}],
             max_tokens=REFORMULATION_MAX_TOKENS,
-            temperature=0.0,
+            temperature=0.1,
             stream=False,
         )
         raw = response.choices[0].message.content.strip()
         if raw.strip().upper() == "AUCUNE":
             logger.info("NLUStep reformulation: aucune intention détectée → passthrough")
             return []
-        phrases = [line.strip() for line in raw.splitlines() if line.strip()]
+        phrases = [line.strip() for line in raw.splitlines()
+                   if line.strip() and line.strip().upper() != "AUCUNE"]
         logger.info(f"NLUStep reformulation: {phrases}")
         return phrases
 
