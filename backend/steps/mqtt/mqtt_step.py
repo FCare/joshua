@@ -171,16 +171,26 @@ class MqttStep(PipelineStep):
             if not agent_intents:
                 continue
             # Enrich each intent with its resolved write_topic and response_topic
+            # An intent may carry an explicit write_topic (e.g. when an agent has multiple write topics)
             enriched = []
             for intent in agent_intents:
-                write_topic = None
-                response_topic = None
-                for t in agent_entry.get("topics", []):
-                    if t.get("access") == "write":
-                        write_topic = t["topic"]
-                        response_topic = t.get("response_topic")
-                        break
-                enriched.append({**intent, "write_topic": write_topic, "response_topic": response_topic})
+                explicit_write = intent.get("write_topic")
+                if explicit_write:
+                    response_topic = next(
+                        (t.get("response_topic") for t in agent_entry.get("topics", [])
+                         if t.get("access") == "write" and t["topic"] == explicit_write),
+                        None,
+                    )
+                    enriched.append({**intent, "write_topic": explicit_write, "response_topic": response_topic})
+                else:
+                    write_topic = None
+                    response_topic = None
+                    for t in agent_entry.get("topics", []):
+                        if t.get("access") == "write":
+                            write_topic = t["topic"]
+                            response_topic = t.get("response_topic")
+                            break
+                    enriched.append({**intent, "write_topic": write_topic, "response_topic": response_topic})
             if self._agent_intents.get(agent_name) != enriched:
                 self._agent_intents[agent_name] = enriched
                 intents_changed = True

@@ -219,7 +219,7 @@ class OpenAIChatStep(PipelineStep):
                 })
                 logger.info(f"💬 Chat: résultat tool injecté pour {message.topic} (call_id={tool_call_id}, nlu={is_nlu})")
                 messages = self._prepare_messages()
-                self._call_openai_streaming(messages, no_tools=is_nlu)
+                self._call_openai_streaming(messages)
             else:
                 logger.info(f"💬 Chat: résultat ignoré sur {message.topic} (call_id={tool_call_id} non émis par ce client)")
         elif isinstance(message.payload, dict):
@@ -321,7 +321,7 @@ class OpenAIChatStep(PipelineStep):
 
         return messages
     
-    def _call_openai_streaming(self, messages, no_tools: bool = False):
+    def _call_openai_streaming(self, messages):
         """Appel OpenAI en mode streaming avec support des tools"""
         try:
             logger.info(f"💬 Calling OpenAI API with model {self.model}")
@@ -336,16 +336,8 @@ class OpenAIChatStep(PipelineStep):
                 "stream": True
             }
 
-            # Ajouter les outils spécifiques au client actuel
-            if no_tools:
-                call_params["tools"] = self.client_tools
-                call_params["tool_choice"] = "none"
-                logger.info("🔧 tool_choice=none (réponse NLU, pas de nouvel appel outil)")
-            else:
-                call_params["tools"] = self.client_tools
-                already_called = any(m.get("role") == "tool" for m in messages)
-                call_params["tool_choice"] = "auto" if already_called else "required"
-                logger.info(f"🔧 Using {len(call_params['tools'])} tools (tool_choice={'auto' if already_called else 'required'})")
+            # Pas d'outils : le NLU gère tous les appels d'outils
+            logger.info("💬 LLM appelé sans outils (NLU pipeline actif)")
             
             response = self.client.chat.completions.create(**call_params)
             
@@ -520,25 +512,11 @@ class OpenAIChatStep(PipelineStep):
             raise
     
     def _generate_enhanced_prompt(self, tools_definitions):
-        """Génère un prompt enrichi avec le profil utilisateur et les outils disponibles"""
+        """Génère un prompt enrichi avec le profil utilisateur"""
         parts = [self.system_prompt]
 
         if self.profile:
             parts.append(f"\nUser profile:\n{self.profile}")
-
-        if tools_definitions:
-            tools_descriptions = []
-            if tools_definitions:
-                tools_descriptions.append(
-                    "IMPORTANT : utilise TOUJOURS l'outil le plus adapté avant de répondre. "
-                    "Lis attentivement la description de chaque outil et choisis celui dont le domaine correspond exactement à la question. "
-                    "Ne réponds jamais de mémoire sur un sujet couvert par un outil disponible."
-                )
-            tools_descriptions.append("Outils disponibles :")
-            for tool_def in tools_definitions:
-                func = tool_def['function']
-                tools_descriptions.append(f"- {func['name']}: {func['description']}")
-            parts.append("\n" + "\n".join(tools_descriptions))
 
         enhanced_prompt = "\n".join(parts)
         logger.info(f"Prompt enrichi généré: {enhanced_prompt[:100]}...")
