@@ -133,12 +133,17 @@ class NLUStep(PipelineStep):
             history_block = "\n".join(f"{m['role'].upper()}: {m['content']}" for m in last)
 
         prompt = (
-            f"Intents disponibles :\n{intents_desc}\n\n"
+            "Tu es un assistant de reformulation. Ton unique rôle est de réécrire le message "
+            "de l'utilisateur sous forme d'une phrase canonique courte et directe, "
+            "en t'appuyant sur les intentions disponibles ci-dessous.\n"
+            "RÈGLES ABSOLUES :\n"
+            "- Ne propose JAMAIS d'options. Ne pose JAMAIS de questions.\n"
+            "- Si le message ne correspond à AUCUNE intention disponible, réponds uniquement : AUCUNE\n"
+            "- Sinon, reformule directement ce que l'utilisateur veut faire (une phrase par intention).\n\n"
+            f"Intentions disponibles :\n{intents_desc}\n\n"
             + (f"Conversation récente :\n{history_block}\n\n" if history_block else "")
             + f"Message utilisateur : \"{text}\"\n\n"
-            "Reformule ce message en phrases simples et désambiguées, une par intention détectée. "
-            "Chaque phrase doit être claire et autonome. "
-            "Retourne uniquement les phrases reformulées, une par ligne, sans numérotation."
+            "Reformulation directe :"
         )
 
         response = self._llm.chat.completions.create(
@@ -149,6 +154,9 @@ class NLUStep(PipelineStep):
             stream=False,
         )
         raw = response.choices[0].message.content.strip()
+        if raw.strip().upper() == "AUCUNE":
+            logger.info("NLUStep reformulation: aucune intention détectée → passthrough")
+            return []
         phrases = [line.strip() for line in raw.splitlines() if line.strip()]
         logger.info(f"NLUStep reformulation: {phrases}")
         return phrases
