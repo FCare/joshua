@@ -43,6 +43,7 @@ class MqttStep(PipelineStep):
         self._write_topics_meta: dict = {}
         self._context_override_topics: set = set()
         self._watchdog_task: asyncio.Task | None = None
+        self._pending_writes: dict = {}  # response_topic → (write_topic, payload)
 
     def set_nexus(self, nexus) -> None:
         self._nexus = nexus
@@ -105,6 +106,11 @@ class MqttStep(PipelineStep):
             self._loop,
         )
         logger.info(f"MqttStep: publié sur {message.topic}")
+        # Track pending: if this write topic has a response topic, save for replay on reconnect
+        meta = self._write_topics_meta.get(message.topic, {})
+        response_topic = meta.get("response_topic")
+        if response_topic:
+            self._pending_writes[response_topic] = (message.topic, message.payload)
 
     async def _on_agent_topics(self, topic: str, payload):
         if not isinstance(payload, list):
@@ -158,6 +164,16 @@ class MqttStep(PipelineStep):
 
         if write_changed and self._write_topics_meta:
             self._send_write_tool_update()
+            # Replay any pending requests that agents may have missed (e.g. after agent restart)
+            if self._pending_writes:
+                logger.info(f"MqttStep: {len(self._pending_writes)} requête(s) en attente — republication")
+                for response_topic, (write_topic, payload) in list(self._pending_writes.items()):
+                    if write_topic in self._write_topics_meta:
+                        asyncio.run_coroutine_threadsafe(
+                            self._nexus.publish(write_topic, payload),
+                            self._loop,
+                        )
+                        logger.info(f"MqttStep: republié {write_topic} (en attente de {response_topic})")
 
     def _send_write_tool_update(self):
         topic_lines = []
@@ -213,6 +229,8 @@ class MqttStep(PipelineStep):
             return
         meta = self._read_topics_meta.get(topic, {})
         logger.info(f"MqttStep: données reçues sur {topic} ({meta.get('description', '')})")
+        # Response received: remove from pending queue
+        self._pending_writes.pop(topic, None)
         from messages.chat_message import AgentTopicMessage
         if self.output_queue:
             self.output_queue.enqueue(AgentTopicMessage(
