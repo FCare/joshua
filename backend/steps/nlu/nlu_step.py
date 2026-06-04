@@ -143,27 +143,30 @@ class NLUStep(PipelineStep):
 
         profile_block = f"Profil utilisateur :\n{self._user_profile}\n\n" if self._user_profile else ""
         prompt = (
-            "Tu es un assistant de reformulation. Ton unique rôle est de réécrire le message "
-            "de l'utilisateur sous forme d'une phrase canonique courte et directe, "
-            "en t'appuyant sur les intentions disponibles ci-dessous.\n"
+            "Tu es un assistant de classification et reformulation.\n"
+            "TÂCHE : détermine si le message de l'utilisateur correspond à une des intentions ci-dessous.\n\n"
             "RÈGLES ABSOLUES :\n"
-            "- Ne propose JAMAIS d'options. Ne pose JAMAIS de questions.\n"
-            "- Si le message ne correspond à AUCUNE intention disponible, réponds uniquement : AUCUNE\n"
+            "- Si le message est une conversation, une opinion, une préférence, une déclaration ou "
+            "une question générale sans lien direct avec une intention → réponds uniquement : AUCUNE\n"
+            "- Exemples de messages qui donnent AUCUNE : 'j'aime les films d'action', "
+            "'c'est sympa', 'merci', 'tu es intelligent', 'j'ai faim', 'raconte-moi une blague', "
+            "'j'aime bien les restaurants japonais'\n"
             "- Sinon, reformule directement ce que l'utilisateur veut faire (une phrase par intention).\n"
-            "- Si le message contient une référence personnelle vague (ex: 'ici', 'chez moi', 'mon endroit'), "
+            "- Ne propose JAMAIS d'options. Ne pose JAMAIS de questions.\n"
+            "- Si le message contient une référence vague (ex: 'ici', 'chez moi'), "
             "utilise le profil utilisateur pour la résoudre.\n\n"
             f"Intentions disponibles :\n{intents_desc}\n\n"
             f"{profile_block}"
             + (f"Conversation récente :\n{history_block}\n\n" if history_block else "")
             + f"Message utilisateur : \"{text}\"\n\n"
-            "Reformulation directe :"
+            "Réponse (AUCUNE ou reformulation directe) :"
         )
 
         response = self._llm.chat.completions.create(
             model=self._model,
             messages=[{"role": "user", "content": prompt}],
             max_tokens=REFORMULATION_MAX_TOKENS,
-            temperature=0.1,
+            temperature=0.0,
             stream=False,
         )
         raw = response.choices[0].message.content.strip()
