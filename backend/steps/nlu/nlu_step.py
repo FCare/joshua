@@ -11,7 +11,7 @@ from pipeline_framework import PipelineStep
 from messages.base_message import BaseMessage
 from messages.websocket_message import TextInputMessage
 from messages.asr_message import TranscriptionMessage
-from messages.chat_message import IntentsUpdateMessage, NLUToolCallMessage, MqttWriteMessage
+from messages.chat_message import IntentsUpdateMessage, NLUToolCallMessage, MqttWriteMessage, AgentTopicMessage
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +30,7 @@ class NLUStep(PipelineStep):
         self._model = config.get("model", "qwen3-vl-8b-instruct") if config else "qwen3-vl-8b-instruct"
         self._ef = None
         self._conversation_history: List[dict] = []
+        self._user_profile: str = ""
 
     def init(self) -> bool:
         try:
@@ -57,6 +58,12 @@ class NLUStep(PipelineStep):
         with self._lock:
             if isinstance(message, IntentsUpdateMessage):
                 self._handle_intents_update(message)
+            elif isinstance(message, AgentTopicMessage) and not message.is_response:
+                if isinstance(message.payload, dict) and message.payload.get("summary"):
+                    self._user_profile = message.payload["summary"]
+                    logger.info(f"NLUStep: profil utilisateur reçu ({len(self._user_profile)} chars)")
+                else:
+                    self._passthrough(message)
             elif isinstance(message, TranscriptionMessage) and message.is_final:
                 self._handle_user_input(message.text, source=message)
             elif isinstance(message, TextInputMessage):
@@ -134,6 +141,7 @@ class NLUStep(PipelineStep):
             last = self._conversation_history[-4:]
             history_block = "\n".join(f"{m['role'].upper()}: {m['content']}" for m in last)
 
+        profile_block = f"Profil utilisateur :\n{self._user_profile}\n\n" if self._user_profile else ""
         prompt = (
             "Tu es un assistant de reformulation. Ton unique rôle est de réécrire le message "
             "de l'utilisateur sous forme d'une phrase canonique courte et directe, "
@@ -141,8 +149,11 @@ class NLUStep(PipelineStep):
             "RÈGLES ABSOLUES :\n"
             "- Ne propose JAMAIS d'options. Ne pose JAMAIS de questions.\n"
             "- Si le message ne correspond à AUCUNE intention disponible, réponds uniquement : AUCUNE\n"
-            "- Sinon, reformule directement ce que l'utilisateur veut faire (une phrase par intention).\n\n"
+            "- Sinon, reformule directement ce que l'utilisateur veut faire (une phrase par intention).\n"
+            "- Si le message contient une référence personnelle vague (ex: 'ici', 'chez moi', 'mon endroit'), "
+            "utilise le profil utilisateur pour la résoudre.\n\n"
             f"Intentions disponibles :\n{intents_desc}\n\n"
+            f"{profile_block}"
             + (f"Conversation récente :\n{history_block}\n\n" if history_block else "")
             + f"Message utilisateur : \"{text}\"\n\n"
             "Reformulation directe :"
@@ -188,9 +199,13 @@ class NLUStep(PipelineStep):
             return {}
 
         slots_desc = ", ".join(f'"{s}"' for s in slots)
+        profile_block = f"Profil utilisateur :\n{self._user_profile}\n\n" if self._user_profile else ""
         prompt = (
             f"Phrase : \"{phrase}\"\n"
+            f"{profile_block}"
             f"Extrait les valeurs suivantes de la phrase : {slots_desc}.\n"
+            "Si la phrase contient une référence vague (ex: 'ici', 'chez moi', 'mon endroit'), "
+            "utilise le profil utilisateur pour résoudre la valeur réelle.\n"
             f"Retourne un objet JSON avec uniquement ces clés. Exemple : {{\"publisher\": \"France Info\"}}"
         )
         try:
