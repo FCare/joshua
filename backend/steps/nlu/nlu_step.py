@@ -155,7 +155,9 @@ class NLUStep(PipelineStep):
 
         profile_block = f"Profil utilisateur :\n{self._user_profile}\n\n" if self._user_profile else ""
         prompt = (
-            "Tu es un assistant de reformulation. "
+            "Tu es un assistant de reformulation pour un assistant vocal. "
+            "Le texte peut contenir des erreurs de transcription vocale (mots manquants, mal orthographiés) — "
+            "interprète charitablement et reformule l'intention réelle.\n\n"
             "Reformule chaque intention du message en une phrase canonique courte, une par ligne.\n\n"
             "RÈGLES :\n"
             "- Toute question sur l'actualité, la météo, une recherche, ou la mémoire personnelle "
