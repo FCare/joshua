@@ -144,6 +144,9 @@ class OpenAIChatStep(PipelineStep):
                     self._handle_nlu_tool_call(input_message)
                 elif isinstance(input_message, IntentsUpdateMessage):
                     pass  # openai_chat n'utilise pas les intents directement
+                elif isinstance(input_message, MqttWriteMessage):
+                    if self.output_queue:
+                        self.output_queue.enqueue(input_message)
         except Exception as e:
             logger.error(f"Erreur handling input event: {e}")
 
