@@ -155,35 +155,32 @@ class NLUStep(PipelineStep):
 
         profile_block = f"Profil utilisateur :\n{self._user_profile}\n\n" if self._user_profile else ""
         prompt = (
-            "Tu es un assistant de classification et reformulation.\n"
-            "TÂCHE : identifie toutes les intentions présentes dans le message et reformule chacune "
-            "en une phrase canonique courte, une par ligne.\n\n"
+            "Tu es un assistant de reformulation. "
+            "Reformule chaque intention du message en une phrase canonique courte, une par ligne.\n\n"
             "RÈGLES :\n"
-            "- Un message peut contenir PLUSIEURS intentions : traite-les toutes, une par ligne.\n"
-            "- Si une partie du message est une déclaration personnelle (goût, préférence, habitude), "
-            "reformule-la comme intention 'mémoriser un fait'.\n"
-            "- Si une partie est une conversation vide ('merci', 'c'est sympa', 'bonjour'), ignore-la.\n"
-            "- Si le message entier ne contient AUCUNE intention disponible, réponds uniquement : AUCUNE\n"
-            "- Ne propose JAMAIS d'options. Ne pose JAMAIS de questions.\n"
+            "- Toute question sur l'actualité, la météo, une recherche, ou la mémoire personnelle "
+            "doit être reformulée — ne jamais ignorer ces cas.\n"
+            "- Toute déclaration personnelle (goût, préférence, habitude) doit être reformulée telle quelle.\n"
+            "- Ignore uniquement les politesses vides ('merci', 'bonjour', 'ok').\n"
+            "- Si vraiment aucune partie du message n'est actionnable, réponds : AUCUNE\n"
             "- Si le message contient une référence vague (ex: 'ici', 'chez moi'), "
             "utilise le profil utilisateur pour la résoudre.\n\n"
-            "EXEMPLE :\n"
-            "Message : 'J'aime le jazz. C'est quoi les nouvelles ?'\n"
-            "Réponse :\n"
-            "J'aime le jazz.\n"
-            "Quelles sont les nouvelles du jour ?\n\n"
+            "EXEMPLES :\n"
+            "Message : 'J'aime le jazz. C'est quoi les nouvelles ?' → J'aime le jazz.\nQuelles sont les nouvelles du jour ?\n"
+            "Message : 'tu sais quoi de moi ?' → Qu'est-ce que tu sais de moi ?\n"
+            "Message : 'c'est quoi cette histoire de X ?' → Que s'est-il passé avec X ?\n"
+            "Message : 'merci !' → AUCUNE\n\n"
             f"Intentions disponibles :\n{intents_desc}\n\n"
             f"{profile_block}"
             + (f"Conversation récente :\n{history_block}\n\n" if history_block else "")
-            + f"Message utilisateur : \"{text}\"\n\n"
-            "Réponse :"
+            + f"Message utilisateur : \"{text}\"\n\nRéponse :"
         )
 
         response = self._llm.chat.completions.create(
             model=self._model,
             messages=[{"role": "user", "content": prompt}],
             max_tokens=REFORMULATION_MAX_TOKENS,
-            temperature=0.1,
+            temperature=0.4,
             stream=False,
         )
         raw = response.choices[0].message.content.strip()
