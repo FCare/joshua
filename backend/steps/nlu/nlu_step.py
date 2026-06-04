@@ -103,7 +103,8 @@ class NLUStep(PipelineStep):
 
                 tool_call_id = f"nlu-{uuid.uuid4().hex[:12]}"
                 if self.output_queue:
-                    self.output_queue.enqueue(MqttWriteMessage(topic=write_topic, payload=payload))
+                    # NLUToolCallMessage must arrive first so openai_chat registers the pending
+                    # response before MqttWriteMessage is forwarded to mqtt_step (race condition)
                     self.output_queue.enqueue(NLUToolCallMessage(
                         user_text=text,
                         write_topic=write_topic,
@@ -111,6 +112,7 @@ class NLUStep(PipelineStep):
                         response_topic=response_topic or "",
                         tool_call_id=tool_call_id,
                     ))
+                    self.output_queue.enqueue(MqttWriteMessage(topic=write_topic, payload=payload))
                 logger.info(f"NLUStep: intent={intent['name']} score={score:.2f} params={params}")
                 matched_any = True
 
