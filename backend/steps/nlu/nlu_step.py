@@ -220,13 +220,9 @@ class NLUStep(PipelineStep):
             return {}
 
         slots_desc = ", ".join(f'"{s}"' for s in slots)
-        profile_block = f"Profil utilisateur :\n{self._user_profile}\n\n" if self._user_profile else ""
         prompt = (
             f"Phrase : \"{phrase}\"\n"
-            f"{profile_block}"
-            f"Extrait les valeurs suivantes de la phrase : {slots_desc}.\n"
-            "Si la phrase contient une référence vague (ex: 'ici', 'chez moi', 'mon endroit'), "
-            "utilise le profil utilisateur pour résoudre la valeur réelle.\n"
+            f"Extrait les valeurs suivantes : {slots_desc}.\n"
             f"Retourne un objet JSON avec uniquement ces clés. Exemple : {{\"publisher\": \"France Info\"}}"
         )
         try:
@@ -241,10 +237,11 @@ class NLUStep(PipelineStep):
             start = raw.find("{")
             end = raw.rfind("}") + 1
             if start == -1 or end == 0:
+                logger.warning(f"NLUStep extraction: pas de JSON pour '{phrase}' — raw={raw[:80]!r}")
                 return None
             return json.loads(raw[start:end])
         except Exception as e:
-            logger.warning(f"NLUStep param extraction failed: {e}")
+            logger.warning(f"NLUStep extraction failed: {e}")
             return None
 
     def _build_payload(self, intent: dict, params: dict) -> dict:
