@@ -72,6 +72,7 @@ class OpenAIChatStep(PipelineStep):
         self._topic_response_map: dict = {}      # write_topic → response_topic
         self._pending_tool_responses: dict = {}  # response_topic → tool_call_id
         self._my_tool_call_ids: set = set()      # tool_call_ids générés par ce client
+        self._nlu_tool_call_ids: set = set()     # tool_call_ids émis par le NLUStep
         
         # Thread safety
         self._lock = threading.Lock()
@@ -205,15 +206,17 @@ class OpenAIChatStep(PipelineStep):
         if message.is_response:
             tool_call_id = self._pending_tool_responses.pop(message.topic, None)
             if tool_call_id and tool_call_id in self._my_tool_call_ids:
+                is_nlu = tool_call_id in self._nlu_tool_call_ids
                 self._my_tool_call_ids.discard(tool_call_id)
+                self._nlu_tool_call_ids.discard(tool_call_id)
                 self.conversation_history.append({
                     "role": "tool",
                     "content": json.dumps(message.payload, ensure_ascii=False),
                     "tool_call_id": tool_call_id,
                 })
-                logger.info(f"💬 Chat: résultat tool injecté pour {message.topic} (call_id={tool_call_id})")
+                logger.info(f"💬 Chat: résultat tool injecté pour {message.topic} (call_id={tool_call_id}, nlu={is_nlu})")
                 messages = self._prepare_messages()
-                self._call_openai_streaming(messages)
+                self._call_openai_streaming(messages, no_tools=is_nlu)
             else:
                 logger.info(f"💬 Chat: résultat ignoré sur {message.topic} (call_id={tool_call_id} non émis par ce client)")
         elif isinstance(message.payload, dict):
@@ -315,7 +318,7 @@ class OpenAIChatStep(PipelineStep):
 
         return messages
     
-    def _call_openai_streaming(self, messages):
+    def _call_openai_streaming(self, messages, no_tools: bool = False):
         """Appel OpenAI en mode streaming avec support des tools"""
         try:
             logger.info(f"💬 Calling OpenAI API with model {self.model}")
@@ -331,10 +334,15 @@ class OpenAIChatStep(PipelineStep):
             }
 
             # Ajouter les outils spécifiques au client actuel
-            call_params["tools"] = self.client_tools
-            already_called = any(m.get("role") == "tool" for m in messages)
-            call_params["tool_choice"] = "auto" if already_called else "required"
-            logger.info(f"🔧 Using {len(call_params['tools'])} tools (tool_choice={'auto' if already_called else 'required'})")
+            if no_tools:
+                call_params["tools"] = self.client_tools
+                call_params["tool_choice"] = "none"
+                logger.info("🔧 tool_choice=none (réponse NLU, pas de nouvel appel outil)")
+            else:
+                call_params["tools"] = self.client_tools
+                already_called = any(m.get("role") == "tool" for m in messages)
+                call_params["tool_choice"] = "auto" if already_called else "required"
+                logger.info(f"🔧 Using {len(call_params['tools'])} tools (tool_choice={'auto' if already_called else 'required'})")
             
             response = self.client.chat.completions.create(**call_params)
             
@@ -551,6 +559,7 @@ class OpenAIChatStep(PipelineStep):
         if message.response_topic:
             self._pending_tool_responses[message.response_topic] = message.tool_call_id
             self._my_tool_call_ids.add(message.tool_call_id)
+            self._nlu_tool_call_ids.add(message.tool_call_id)
             logger.info(f"NLU tool call injecté: {message.write_topic} → attente sur {message.response_topic} (id={message.tool_call_id})")
         else:
             self.conversation_history.append({
