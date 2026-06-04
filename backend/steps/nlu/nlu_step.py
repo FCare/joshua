@@ -83,6 +83,14 @@ class NLUStep(PipelineStep):
 
     def _handle_user_input(self, text: str, source: BaseMessage):
         if not self._intents or not self._ef:
+            # Agents may still be declaring intents after a fresh user_connected event.
+            # Poll briefly before falling back to passthrough.
+            import time
+            for _ in range(20):
+                time.sleep(0.1)
+                if self._intents and self._ef:
+                    break
+        if not self._intents or not self._ef:
             self._passthrough(source)
             return
 
