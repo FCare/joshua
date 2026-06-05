@@ -72,7 +72,8 @@ class OpenAIChatStep(PipelineStep):
         self._topic_response_map: dict = {}      # write_topic → response_topic
         self._pending_tool_responses: dict = {}  # response_topic → tool_call_id
         self._my_tool_call_ids: set = set()      # tool_call_ids générés par ce client
-        
+        self._next_system_addendum: str | None = None  # prompt temporaire injecté une fois après un tool result
+
         # Thread safety
         self._lock = threading.Lock()
 
@@ -202,9 +203,14 @@ class OpenAIChatStep(PipelineStep):
             tool_call_id = self._pending_tool_responses.pop(message.topic, None)
             if tool_call_id and tool_call_id in self._my_tool_call_ids:
                 self._my_tool_call_ids.discard(tool_call_id)
+                payload = message.payload
+                if isinstance(payload, dict) and "prompt_addendum" in payload:
+                    self._next_system_addendum = payload["prompt_addendum"]
+                    payload = {k: v for k, v in payload.items() if k != "prompt_addendum"}
+                    logger.info(f"💬 Chat: prompt_addendum extrait du tool result ({message.topic})")
                 self.conversation_history.append({
                     "role": "tool",
-                    "content": json.dumps(message.payload, ensure_ascii=False),
+                    "content": json.dumps(payload, ensure_ascii=False),
                     "tool_call_id": tool_call_id,
                 })
                 logger.info(f"💬 Chat: résultat tool injecté pour {message.topic} (call_id={tool_call_id})")
@@ -304,7 +310,11 @@ class OpenAIChatStep(PipelineStep):
             "role": "system",
             "content": f"Current date and time: {current_time}"
         })
-        
+
+        if self._next_system_addendum:
+            messages.append({"role": "system", "content": self._next_system_addendum})
+            self._next_system_addendum = None
+
         messages.extend(self.conversation_history)
         
         logger.info(f"LLM called with {messages}")

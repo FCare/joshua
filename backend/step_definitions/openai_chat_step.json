@@ -20,7 +20,7 @@
             "endpoint": {
                 "type": "string",
                 "description": "Endpoint URL (Llama.cpp server ou Azure OpenAI)",
-                "default": "https://thebrain.caronboulme.fr"
+                "default": "http://thebrain:9000"
             },
             "api_version": {
                 "type": "string",
