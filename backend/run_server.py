@@ -146,12 +146,18 @@ async def start_server():
 
     await publish_manifest()
 
-    connection = await websockets.serve(handle_client, '0.0.0.0', args.port, ping_timeout=None, extensions=[compression_config])
-    try:
-        await connection.wait_closed()
-    except:
-        pass
-    sys.exit("Server closed")
+    while True:
+        try:
+            connection = await websockets.serve(handle_client, '0.0.0.0', args.port, ping_timeout=None, extensions=[compression_config])
+            await connection.wait_closed()
+            logging.warning("WebSocket server closed unexpectedly, restarting in 1s...")
+        except OSError as e:
+            logging.error(f"WebSocket server bind error: {e}, retrying in 5s...")
+            await asyncio.sleep(5)
+            continue
+        except Exception as e:
+            logging.error(f"WebSocket server error: {e}, restarting in 1s...")
+        await asyncio.sleep(1)
 
 async def handle_client(websocket):
     cookie_header = websocket.request.headers.get("Cookie", "")

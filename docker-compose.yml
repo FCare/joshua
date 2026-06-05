@@ -33,18 +33,25 @@ services:
       
     ports:
       - "${WEBSOCKET_PORT:-8769}:${WEBSOCKET_PORT:-8769}"
-    
+
     volumes:
       # Logs et fichiers temporaires
       - joshua_logs:/app/logs
       - joshua_temp:/app/temp
       - ./cache:/root/.cache    # Persiste le cache llama.cpp
-    
+
     networks:
       - ansible
-    
+
     # Restart policy
     restart: unless-stopped
+
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import socket; s=socket.socket(); s.settimeout(2); s.connect(('localhost', 8769)); s.close()"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
     
     # Logs configuration
     logging:
