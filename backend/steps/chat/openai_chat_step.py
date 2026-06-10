@@ -519,7 +519,9 @@ class OpenAIChatStep(PipelineStep):
         parts = [self.system_prompt]
 
         if self.profile:
-            parts.append(f"\nUser profile:\n{self.profile}")
+            parts.append(
+                f"\nUser profile (STRICT: report only what is written here, never infer, guess, or add details):\n{self.profile}"
+            )
 
         if tools_definitions:
             tools_descriptions = []
