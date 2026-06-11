@@ -529,7 +529,10 @@ class OpenAIChatStep(PipelineStep):
                 tools_descriptions.append(
                     "IMPORTANT : utilise TOUJOURS l'outil le plus adapté avant de répondre. "
                     "Lis attentivement la description de chaque outil et choisis celui dont le domaine correspond exactement à la question. "
-                    "Ne réponds jamais de mémoire sur un sujet couvert par un outil disponible."
+                    "Ne réponds jamais de mémoire sur un sujet couvert par un outil disponible. "
+                    "STRICT : après avoir reçu le résultat d'un outil, base-toi UNIQUEMENT sur ce résultat. "
+                    "N'ajoute aucun fait, détail ou chiffre tiré de ta base de connaissances — ils peuvent être faux ou obsolètes. "
+                    "Si l'information demandée n'est pas dans le résultat de l'outil, dis-le explicitement plutôt que d'inventer."
                 )
             tools_descriptions.append("Outils disponibles :")
             for tool_def in tools_definitions:
