@@ -714,13 +714,28 @@ class JoshuaChat {
                 method: 'POST',
                 credentials: 'include'
             });
-            
+
             if (response.ok) {
                 const data = await response.json();
                 this.apiKey = data.api_key;
                 this.apiKeyExpiresAt = data.expires_at;
                 console.log(`WebSocket API key obtained (${data.status}), expires: ${data.expires_at}`);
+
+                // Schedule automatic logout when the session expires
+                if (this._sessionExpiryTimer) clearTimeout(this._sessionExpiryTimer);
+                const msUntilExpiry = new Date(data.expires_at).getTime() - Date.now();
+                if (msUntilExpiry > 0) {
+                    this._sessionExpiryTimer = setTimeout(() => {
+                        console.log('Session expired, redirecting to login');
+                        window.location.reload();
+                    }, msUntilExpiry);
+                }
+
                 return true;
+            } else if (response.status === 401 || response.status === 403) {
+                console.log('Session expired, redirecting to login');
+                window.location.reload();
+                return false;
             } else {
                 console.error('Failed to get WebSocket API key:', response.status);
                 return false;
