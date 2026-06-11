@@ -529,14 +529,12 @@ class OpenAIChatStep(PipelineStep):
             tools_descriptions = []
             if tools_definitions:
                 tools_descriptions.append(
-                    "IMPORTANT : utilise TOUJOURS l'outil le plus adapté avant de répondre. "
-                    "Lis attentivement la description de chaque outil et choisis celui dont le domaine correspond exactement à la question. "
-                    "Ne réponds jamais de mémoire sur un sujet couvert par un outil disponible. "
-                    "RÈGLE ABSOLUE : pour toute question de connaissance générale (histoire, sport, science, géographie, culture, etc.), "
-                    "utilise OBLIGATOIREMENT un outil de recherche — ne réponds JAMAIS de mémoire, même si tu penses connaître la réponse. "
+                    "RÈGLE ABSOLUE : ne réponds JAMAIS de mémoire à une question factuelle — utilise toujours un outil. "
+                    "Pour choisir le bon outil : "
+                    "→ utilise 'search' pour toute question historique, encyclopédique ou de connaissance générale (compositions d'équipes sportives, événements passés, biographies, sciences, géographie) ; "
+                    "→ utilise 'news' UNIQUEMENT pour les actualités et événements des derniers jours. "
                     "STRICT : après avoir reçu le résultat d'un outil, base-toi UNIQUEMENT sur ce résultat. "
-                    "N'ajoute aucun fait, détail ou chiffre qui ne figure pas explicitement dans le résultat de l'outil. "
-                    "Si l'information n'est pas dans le résultat, dis-le explicitement plutôt que d'inventer."
+                    "Si le résultat est vide ou insuffisant, dis-le explicitement — n'invente jamais."
                 )
             tools_descriptions.append("Outils disponibles :")
             for tool_def in tools_definitions:
