@@ -338,7 +338,9 @@ class OpenAIChatStep(PipelineStep):
 
             # Ajouter les outils spécifiques au client actuel
             call_params["tools"] = self.client_tools
-            already_called = any(m.get("role") == "tool" for m in messages)
+            # Check only messages since the last user message to reset tool_choice per turn
+            last_user_idx = max((i for i, m in enumerate(messages) if m.get("role") == "user"), default=-1)
+            already_called = any(m.get("role") == "tool" for m in messages[last_user_idx:])
             call_params["tool_choice"] = "auto" if already_called else "required"
             logger.info(f"🔧 Using {len(call_params['tools'])} tools (tool_choice={'auto' if already_called else 'required'})")
             
