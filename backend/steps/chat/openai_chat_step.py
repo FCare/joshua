@@ -531,8 +531,9 @@ class OpenAIChatStep(PipelineStep):
                 tools_descriptions.append(
                     "RÈGLE ABSOLUE : ne réponds JAMAIS de mémoire à une question factuelle — utilise toujours un outil. "
                     "Pour choisir le bon outil : "
-                    "→ utilise 'search' pour toute question historique, encyclopédique ou de connaissance générale (compositions d'équipes sportives, événements passés, biographies, sciences, géographie) ; "
-                    "→ utilise 'news' UNIQUEMENT pour les actualités et événements des derniers jours. "
+                    "→ utilise le topic '.../search/request' (SearXNG) pour toute question historique, encyclopédique ou de connaissance générale (compositions d'équipes sportives, événements passés, biographies, sciences, géographie) ; "
+                    "→ utilise le topic '.../news/request' UNIQUEMENT pour les actualités et événements des derniers jours ; "
+                    "→ utilise le topic '.../search_preference' UNIQUEMENT pour les données personnelles de l'utilisateur. "
                     "STRICT : après avoir reçu le résultat d'un outil, base-toi UNIQUEMENT sur ce résultat. "
                     "Si le résultat est vide ou insuffisant, dis-le explicitement — n'invente jamais."
                 )
