@@ -632,6 +632,7 @@ class JoshuaChat {
         const hasImages = this.uploadedFiles.length > 0;
         const canSend = (hasText || hasImages) && !this.isGenerating && this.isConnected;
         this.sendBtn.disabled = !canSend;
+        console.log('[sendBtn] hasText:', hasText, '| isGenerating:', this.isGenerating, '| isConnected:', this.isConnected, '=> canSend:', canSend);
         
         // Update button title based on state
         if (!this.isConnected) {
@@ -659,6 +660,7 @@ class JoshuaChat {
     }
 
     setGenerating(generating) {
+        console.debug('[setGenerating]', generating, new Error().stack.split('\n')[2]?.trim());
         this.isGenerating = generating;
         this.updateSendButton();
         
