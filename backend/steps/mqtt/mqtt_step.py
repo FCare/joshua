@@ -23,8 +23,8 @@ PRIVATE_TOPICS = [
                 "format": [{"role": "user | assistant", "content": "string"}],
             },
             {
-                "topic": "users/{username}/agent_topics",
-                "description": "Topics publiés par les agents",
+                "topic": "users/{username}/{session_id}/agent_topics",
+                "description": "Topics publiés par les agents pour cette session",
                 "access": "write",
                 "format": [{"agent": "string", "topics": [{"topic": "string", "description": "string", "access": "read | write | readwrite", "format": {}}]}],
             },
@@ -39,20 +39,22 @@ class MqttStep(PipelineStep):
         super().__init__(name, config, handler=self._handle_message)
         self._nexus = None
         self._loop = None
+        self._session_id: str = "default"
         self._read_topics_meta: dict = {}
         self._write_topics_meta: dict = {}
         self._context_override_topics: set = set()
         self._watchdog_task: asyncio.Task | None = None
         self._pending_writes: dict = {}  # response_topic → (write_topic, payload)
 
-    def set_nexus(self, nexus) -> None:
+    def set_nexus(self, nexus, session_id: str = None) -> None:
         self._nexus = nexus
         self._loop = asyncio.get_event_loop()
+        self._session_id = session_id or "default"
         username = nexus.username
-        agent_topics_topic = f"users/{username}/agent_topics"
+        agent_topics_topic = f"users/{username}/{self._session_id}/agent_topics"
         nexus.subscribe(agent_topics_topic, self._on_agent_topics)
         nexus.start_listening()
-        logger.info(f"MqttStep: souscrit à {agent_topics_topic}")
+        logger.info(f"MqttStep: souscrit à {agent_topics_topic} (session={self._session_id})")
 
     def init(self) -> bool:
         return True
@@ -79,15 +81,17 @@ class MqttStep(PipelineStep):
 
     def _handle_user_connected(self, message: UserConnectionMessage):
         username = message.username
+        session_id = self._session_id
         payload = {
             "event": "user_connected",
             "username": username,
+            "session_id": session_id,
             "password": self._nexus.password,
             "private_topics": [
                 {
                     "agent": entry["agent"],
                     "topics": [
-                        {**t, "topic": t["topic"].format(username=username)}
+                        {**t, "topic": t["topic"].format(username=username, session_id=session_id)}
                         for t in entry["topics"]
                     ],
                 }

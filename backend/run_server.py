@@ -4,6 +4,7 @@ import os
 import sys
 import logging
 import websockets
+from uuid import uuid4
 from websockets.extensions import permessage_deflate
 
 from pipeline_loader import PipelineLoader
@@ -24,6 +25,7 @@ MANIFEST = {
             "payload": {
                 "event": "user_connected",
                 "username": "string",
+                "session_id": "string (UUID unique par connexion WebSocket)",
                 "password": "string (cookie de session VK — utilisable comme mot de passe MQTT)",
                 "private_topics": "list[{agent, topics[]}] — topics privés de l'utilisateur par agent",
             },
@@ -61,7 +63,7 @@ def _extract_cookie(cookie_header: str, name: str) -> str:
 class Client():
 
     @classmethod
-    async def create(cls, pipeline_name: str, websocket, nexus: NexusClient | None):
+    async def create(cls, pipeline_name: str, websocket, nexus: NexusClient | None, session_id: str = None):
         """Factory method async pour créer un Client"""
         pipeline = run_pipeline(pipeline_name)
         if not pipeline:
@@ -71,20 +73,21 @@ class Client():
         if not success:
             raise ValueError(f"Impossible de démarrer le pipeline: {pipeline_name}")
 
-        return cls(pipeline, websocket, nexus)
+        return cls(pipeline, websocket, nexus, session_id)
 
-    def __init__(self, pipeline: str, websocket, nexus: NexusClient | None):
+    def __init__(self, pipeline: str, websocket, nexus: NexusClient | None, session_id: str = None):
         self.pipeline = pipeline
         self.pipeline_input = self.pipeline.get_step("websocket_server")
         self.ws = websocket
         self.username = nexus.username if nexus else "anonymous"
+        self.session_id = session_id or str(uuid4())
 
         # set_nexus must happen before set_ws_callback: set_ws_callback sends
         # UserConnectionMessage which triggers user_connected on MQTT; the
         # mqtt_step must already be subscribed to agent_topics at that point.
         mqtt_step = self.pipeline.get_step("mqtt_step")
         if mqtt_step and nexus:
-            mqtt_step.set_nexus(nexus)
+            mqtt_step.set_nexus(nexus, self.session_id)
 
         self.pipeline_input.set_ws_callback(self.sendToClient, self.username)
 
@@ -170,15 +173,10 @@ async def handle_client(websocket):
     else:
         logging.info("Nouvelle connexion WebSocket: pas de session cookie")
 
-    # Close any existing pipeline for this user BEFORE creating the new one
-    username = nexus.username if nexus else "anonymous"
-    stale = [c for c in connected_clients if c.username == username]
-    for stale_client in stale:
-        logging.info(f"Closing stale connection for {username}")
-        connected_clients.discard(stale_client)
-        await stale_client.ws.close(code=4001, reason="replaced_by_new_session")
+    session_id = str(uuid4())
+    logging.info(f"Nouvelle session: {session_id}")
 
-    client = await Client.create(pipeline_args, websocket, nexus)
+    client = await Client.create(pipeline_args, websocket, nexus, session_id)
     connected_clients.add(client)
     await client.handle_message(websocket)
     
