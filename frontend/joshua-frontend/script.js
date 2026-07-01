@@ -97,6 +97,11 @@ class JoshuaChat {
         this.messageInput.addEventListener('input', () => {
             this.autoResizeTextarea();
             this.updateSendButton();
+            // Si l'utilisateur tape alors qu'il est déconnecté, reconnecter (reprend la session)
+            if (!this.isConnected) {
+                console.log('[reconnect] User typed while disconnected, reconnecting...');
+                this.connectWebSocket();
+            }
         });
 
         // File upload
