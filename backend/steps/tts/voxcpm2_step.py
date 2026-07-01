@@ -219,7 +219,7 @@ class VoxCPM2Step(PipelineStep):
                     print(f"VoxCPM2: HTTP {response.status_code}: {response.text[:200]}")
                     return
 
-                for chunk in response:
+                for chunk in response.iter_content(chunk_size=4800):
                     with self._lock:
                         if self._interrupted:
                             break

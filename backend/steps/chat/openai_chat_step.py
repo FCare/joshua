@@ -97,7 +97,8 @@ class OpenAIChatStep(PipelineStep):
                 # Configuration Llama.cpp (Qwen3 VL 8B Instruct)
                 self.client = openai.OpenAI(
                     api_key=self.api_key,
-                    base_url=endpoint
+                    base_url=endpoint,
+                    timeout=90.0,
                 )
                 print(f"Llama.cpp (Qwen3 VL 8B) initialisé - endpoint: {endpoint}, modèle: {self.model}")
             elif provider == "azure":
@@ -344,10 +345,9 @@ class OpenAIChatStep(PipelineStep):
             call_params["tool_choice"] = "auto" if already_called else "required"
             logger.info(f"🔧 Using {len(call_params['tools'])} tools (tool_choice={'auto' if already_called else 'required'})")
             
-            response = self.client.chat.completions.create(**call_params, extra_body={"priority": 0})
-            
-            # Gestion du streaming avec support des tool calls
-            self._handle_streaming_response(response)
+            with self.client.chat.completions.create(**call_params, extra_body={"priority": 0}) as response:
+                # Gestion du streaming avec support des tool calls
+                self._handle_streaming_response(response)
             
         except Exception as e:
             logger.error(f"Erreur appel OpenAI: {e}")
