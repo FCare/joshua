@@ -170,15 +170,15 @@ async def handle_client(websocket):
     else:
         logging.info("Nouvelle connexion WebSocket: pas de session cookie")
 
-    client = await Client.create(pipeline_args, websocket, nexus)
-
-    # Close any existing pipeline for this user (stale reconnections)
+    # Close any existing pipeline for this user BEFORE creating the new one
     username = nexus.username if nexus else "anonymous"
     stale = [c for c in connected_clients if c.username == username]
     for stale_client in stale:
         logging.info(f"Closing stale connection for {username}")
-        await stale_client.ws.close()
+        connected_clients.discard(stale_client)
+        await stale_client.ws.close(code=4001, reason="replaced_by_new_session")
 
+    client = await Client.create(pipeline_args, websocket, nexus)
     connected_clients.add(client)
     await client.handle_message(websocket)
     

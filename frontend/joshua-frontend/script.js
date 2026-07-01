@@ -237,14 +237,21 @@ class JoshuaChat {
             this.ws.onclose = async (event) => {
                 console.log('WebSocket disconnected:', event.code, event.reason);
                 this.isConnected = false;
+                this.setGenerating(false);
                 this.updateConnectionStatus();
-                
+
+                // Session remplacée par une autre — ne pas reconnecter
+                if (event.code === 4001) {
+                    console.log('WebSocket closed: replaced by another session, not reconnecting');
+                    return;
+                }
+
                 // Vérifier si c'est une erreur d'authentification
                 if (event.code === 1008 || event.code === 1002) { // Unauthorized codes
                     console.log('WebSocket closed due to auth error, refreshing API key');
                     await this.fetchWebSocketApiKey();
                 }
-                
+
                 // Attempt to reconnect after 3 seconds
                 setTimeout(async () => {
                     if (!this.isConnected) {
