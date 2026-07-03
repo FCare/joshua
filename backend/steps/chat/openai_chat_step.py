@@ -339,11 +339,8 @@ class OpenAIChatStep(PipelineStep):
 
             # Ajouter les outils spécifiques au client actuel
             call_params["tools"] = self.client_tools
-            # Check only messages since the last user message to reset tool_choice per turn
-            last_user_idx = max((i for i, m in enumerate(messages) if m.get("role") == "user"), default=-1)
-            already_called = any(m.get("role") == "tool" for m in messages[last_user_idx:])
-            call_params["tool_choice"] = "auto" if already_called else "required"
-            logger.info(f"🔧 Using {len(call_params['tools'])} tools (tool_choice={'auto' if already_called else 'required'})")
+            call_params["tool_choice"] = "auto"
+            logger.info(f"🔧 Using {len(call_params['tools'])} tools (tool_choice=auto)")
             
             with self.client.chat.completions.create(**call_params, extra_body={"priority": 0}) as response:
                 # Gestion du streaming avec support des tool calls
@@ -410,8 +407,8 @@ class OpenAIChatStep(PipelineStep):
                         logger.info(f"🛠️ Tool calls detected, processing {len(tool_calls)} calls")
                         self._handle_tool_calls(tool_calls, assistant_response)
                         break
-                    elif choice.finish_reason == "stop":
-                        logger.info(f"End of response")
+                    elif choice.finish_reason in ("stop", "length", "eos", "end_of_text"):
+                        logger.info(f"End of response (finish_reason={choice.finish_reason})")
                         if assistant_response:
                             self.conversation_history.append({
                                 "role": "assistant",
