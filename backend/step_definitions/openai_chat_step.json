@@ -20,7 +20,7 @@
             "endpoint": {
                 "type": "string",
                 "description": "Endpoint URL (Llama.cpp server ou Azure OpenAI)",
-                "default": "http://thebrain:8000"
+                "default": "http://thebrain:8000/v1"
             },
             "api_version": {
                 "type": "string",
@@ -29,8 +29,8 @@
             },
             "model": {
                 "type": "string",
-                "description": "Modèle à utiliser (gemma-4-12b-it-UD-Q4_K_XL.gguf pour Llama.cpp ou gpt-4o-mini pour Azure)",
-                "default": "gemma-4-12b-it-UD-Q4_K_XL.gguf"
+                "description": "Modèle à utiliser (identifiant vLLM/Llama.cpp ou gpt-4o-mini pour Azure)",
+                "default": "google/gemma-4-12B-it-qat-w4a16-ct"
             },
             "temperature": {
                 "type": "number",

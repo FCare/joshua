@@ -29,6 +29,7 @@ except ImportError as e:
 
 logger = logging.getLogger(__name__)
 
+
 class OpenAIChatStep(PipelineStep):
     """
     Step de chat utilisant OpenAI avec streaming.
@@ -55,6 +56,13 @@ class OpenAIChatStep(PipelineStep):
         self.model = config.get("model", "gpt-4o-mini") if config else "gpt-4o-mini"
         self.temperature = config.get("temperature", 0.7) if config else 0.7
         self.max_tokens = config.get("max_tokens", 1000) if config else 1000
+        # Cap réel (côté serveur vLLM) sur les tokens de "réflexion" — contrairement à la
+        # consigne de prompt "300 mots max" (que le modèle peut ignorer), ce paramètre est
+        # appliqué par le backend : une fois le budget atteint, le modèle est forcé de
+        # passer proprement à la réponse plutôt que de continuer à réfléchir jusqu'à
+        # épuiser tout le max_tokens (observé en pratique : finish_reason=length avec une
+        # réponse totalement vide après une longue réflexion consécutive à une erreur d'outil).
+        self.thinking_token_budget = config.get("thinking_token_budget", 400) if config else 400
         self.system_prompt = ""
         self._original_system_prompt: str | None = None
         self.profile = ""
@@ -279,13 +287,13 @@ class OpenAIChatStep(PipelineStep):
                 logger.info(f"💬 Prepared text message: '{text}'")
             
             self.conversation_history.append(user_message)
-            
+
             # Prépare les messages pour l'API
             messages = self._prepare_messages()
-            
+
             # Appel API OpenAI en streaming
             self._call_openai_streaming(messages)
-            
+
         except Exception as e:
             logger.error(f"Erreur traitement requête chat: {e}")
             self._send_error_response(str(e))
@@ -341,40 +349,42 @@ class OpenAIChatStep(PipelineStep):
             call_params["tools"] = self.client_tools
             call_params["tool_choice"] = "auto"
             logger.info(f"🔧 Using {len(call_params['tools'])} tools (tool_choice=auto)")
-            
-            with self.client.chat.completions.create(**call_params, extra_body={"priority": 0}) as response:
+
+            extra_body = {"priority": 0}
+            if self.thinking_token_budget:
+                extra_body["thinking_token_budget"] = self.thinking_token_budget
+            with self.client.chat.completions.create(**call_params, extra_body=extra_body) as response:
                 # Gestion du streaming avec support des tool calls
                 self._handle_streaming_response(response)
-            
+
         except Exception as e:
             logger.error(f"Erreur appel OpenAI: {e}")
             self._send_error_response(str(e))
-    
+
     def _handle_streaming_response(self, response):
         """Gère la réponse streaming avec support des tool calls"""
         try:
             logger.info(f"💬 API response received, starting streaming...")
             assistant_response = ""
             tool_calls = []
-            current_tool_call = None
             chunk_count = 0
-            
+
             for chunk in response:
                 chunk_count += 1
                 # Vérification de sécurité pour Azure OpenAI
                 logger.info(f"💬 API response Chunk {chunk}")
                 if not hasattr(chunk, 'choices') or not chunk.choices:
                     continue
-                    
+
                 choice = chunk.choices[0]
                 delta = choice.delta
-                
+
                 # Gestion du contenu texte
                 if delta and delta.content:
                     content = delta.content
                     assistant_response += content
                     logger.info(f"OpenAI stream chunk: '{content[:50]}{'...' if len(content) > 50 else ''}'")
-                    
+
                     # Envoie directement vers l'output_queue
                     if self.output_queue:
                         from messages.chat_message import ChatResponseMessage
@@ -382,7 +392,7 @@ class OpenAIChatStep(PipelineStep):
                             text=content,
                         )
                         self.output_queue.enqueue(output_message)
-                
+
                 # Gestion des tool calls
                 if delta and delta.tool_calls:
                     for tool_call_delta in delta.tool_calls:
@@ -400,7 +410,7 @@ class OpenAIChatStep(PipelineStep):
                             # Continuer un tool call existant
                             if tool_call_delta.function and tool_call_delta.function.arguments:
                                 tool_calls[tool_call_delta.index]["function"]["arguments"] += tool_call_delta.function.arguments
-                
+
                 # Vérifie si c'est la fin
                 if hasattr(choice, 'finish_reason'):
                     if choice.finish_reason == "tool_calls":
@@ -409,6 +419,24 @@ class OpenAIChatStep(PipelineStep):
                         break
                     elif choice.finish_reason in ("stop", "length", "eos", "end_of_text"):
                         logger.info(f"End of response (finish_reason={choice.finish_reason})")
+                        if not assistant_response and not tool_calls:
+                            # Le budget de tokens a été entièrement consommé par la
+                            # réflexion interne (reasoning) sans jamais produire de
+                            # contenu ni d'appel d'outil — sans ce filet, l'utilisateur
+                            # ne reçoit strictement rien (silence total, pas même une
+                            # erreur), voir finish_reason=length observé en pratique
+                            # après une erreur d'outil qui a fait sur-réfléchir le modèle.
+                            logger.warning(
+                                f"Réponse vide malgré finish_reason={choice.finish_reason} "
+                                f"({chunk_count} chunks reçus, tout en reasoning) — fallback envoyé"
+                            )
+                            assistant_response = (
+                                "Désolé, je n'ai pas réussi à formuler de réponse. "
+                                "Tu peux reformuler ta question ?"
+                            )
+                            if self.output_queue:
+                                from messages.chat_message import ChatResponseMessage
+                                self.output_queue.enqueue(ChatResponseMessage(text=assistant_response))
                         if assistant_response:
                             self.conversation_history.append({
                                 "role": "assistant",
@@ -416,7 +444,7 @@ class OpenAIChatStep(PipelineStep):
                             })
                         self._send_chat_finish_message()
                         break
-            
+
         except Exception as e:
             logger.error(f"Erreur handling streaming response: {e}")
             self._send_error_response(str(e))
@@ -526,11 +554,44 @@ class OpenAIChatStep(PipelineStep):
             tools_descriptions = []
             if tools_definitions:
                 tools_descriptions.append(
-                    "RÈGLE ABSOLUE : ne réponds JAMAIS de mémoire à une question factuelle — utilise toujours un outil. "
-                    "Pour choisir le bon outil : "
-                    "→ utilise le topic '.../search/request' (SearXNG) pour toute question historique, encyclopédique ou de connaissance générale (compositions d'équipes sportives, événements passés, biographies, sciences, géographie) ; "
-                    "→ utilise le topic '.../news/request' UNIQUEMENT pour les actualités et événements des derniers jours ; "
-                    "→ utilise le topic '.../search_preference' UNIQUEMENT pour les données personnelles de l'utilisateur. "
+                    # --reasoning-budget côté serveur ne coupe pas toujours la réflexion à temps en
+                    # pratique (constaté : parfois tout le budget de tokens y passe, réponse vide) —
+                    # cette consigne, lue par le modèle dès l'ouverture de son bloc de réflexion,
+                    # est la méthode documentée pour les backends où le paramètre serveur n'est pas fiable.
+                    "Garde ta réflexion interne très brève, quelques phrases maximum, jamais plus de "
+                    "300 mots, avant de répondre."
+                )
+                tools_descriptions.append(
+                    "Si un outil renvoie une erreur, ne rumine pas longuement dessus : corrige "
+                    "immédiatement l'appel fautif et réessaie tout de suite, ou si tu ne vois pas "
+                    "la correction, dis simplement à l'utilisateur qu'une erreur technique est "
+                    "survenue. Ne jamais laisser ta réflexion s'éterniser après une erreur d'outil."
+                )
+                tools_descriptions.append(
+                    "RÈGLE ABSOLUE : tu ne réponds JAMAIS de mémoire à une question factuelle. Tu n'as JAMAIS le "
+                    "droit de répondre négativement (\"je ne trouve pas\", \"je n'ai pas cette information\", "
+                    "\"je ne sais pas\", \"il n'y a rien à ce sujet\") sans avoir D'ABORD appelé au moins un outil "
+                    "pertinent parmi TOUS ceux listés plus bas — cette liste n'est PAS limitée aux exemples "
+                    "ci-dessous : avant de conclure qu'aucun outil ne convient, relis chaque outil disponible et "
+                    "son domaine, y compris les outils spécialisés (catalogues, listes personnelles, etc.), même "
+                    "si le lien avec la question n'est pas évident au premier abord. "
+                    "Exemples de routage parmi les cas les plus fréquents : "
+                    "→ tout outil spécialisé listé plus bas (catalogues personnels, contes, etc.) dès que la "
+                    "question touche à son domaine, même de loin — à vérifier EN PREMIER, avant tout autre outil ; "
+                    "cela inclut un titre d'œuvre qui te semble correspondre à une connaissance générale ou "
+                    "encyclopédique connue (ex: un livre, un conte publié) : vérifie D'ABORD s'il existe dans le "
+                    "catalogue personnel de l'utilisateur avant de supposer qu'il s'agit d'une question externe — "
+                    "la version qu'il possède peut différer de l'œuvre originale ; "
+                    "→ '.../news/request' UNIQUEMENT pour les actualités et événements des derniers jours ; "
+                    "→ '.../search_preference' UNIQUEMENT pour les données personnelles de l'utilisateur ; "
+                    "→ '.../search/request' (SearXNG) SEULEMENT EN DERNIER RECOURS : utilise ta réflexion pour "
+                    "d'abord écarter explicitement chaque outil spécialisé disponible, et n'y a recours que si tu "
+                    "es certain qu'aucun ne peut raisonnablement s'appliquer à cette question. "
+                    "Cette règle s'applique aussi aux demandes de recommandation, suggestion ou choix parmi un "
+                    "contenu personnel réel ('propose-moi un conte', 'qu'est-ce que tu me conseilles') dès qu'un "
+                    "outil donne accès à ce catalogue : ne propose JAMAIS un titre de mémoire, même un titre déjà "
+                    "mentionné plus tôt dans la conversation ou qui te semble plausible — interroge D'ABORD l'outil "
+                    "pour ne suggérer que ce qui existe réellement dans le catalogue de l'utilisateur. "
                     "STRICT : après avoir reçu le résultat d'un outil, base-toi UNIQUEMENT sur ce résultat. "
                     "Si le résultat est vide ou insuffisant, dis-le explicitement — n'invente jamais."
                 )
@@ -593,7 +654,17 @@ class OpenAIChatStep(PipelineStep):
 
                 if tool_name == "write_topic":
                     topic = parameters.get("topic", "")
-                    payload = parameters.get("payload", {})
+                    # Les champs du payload sont des paramètres de premier niveau de
+                    # l'appel (voir mqtt_step._send_write_tool_update) — pas un objet
+                    # imbriqué que le modèle doit construire lui-même. On reconstitue le
+                    # payload ici à partir de tout ce qui n'est pas 'topic'.
+                    payload = {k: v for k, v in parameters.items() if k != "topic"}
+                    # Filet de sécurité : si le modèle imbrique quand même par habitude
+                    # ({"payload": {...}} comme unique champ), on le déballe plutôt que
+                    # de l'envoyer tel quel à l'agent cible.
+                    if set(payload.keys()) == {"payload"} and isinstance(payload["payload"], dict):
+                        logger.warning(f"write_topic: payload imbriqué malgré le nouveau schéma à plat, déballage: {payload}")
+                        payload = payload["payload"]
                     response_topic = self._topic_response_map.get(topic)
                     if self.output_queue:
                         self.output_queue.enqueue(MqttWriteMessage(topic=topic, payload=payload))

@@ -62,7 +62,9 @@
     {
       "instance_id": "openai_chat",
       "step_definition": "OpenAI Chat Step",
-      "config_overrides": {}
+      "config_overrides": {
+        "max_tokens": 2000
+      }
     },
     {
       "instance_id": "duplicator",

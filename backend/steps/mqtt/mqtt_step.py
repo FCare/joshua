@@ -181,16 +181,53 @@ class MqttStep(PipelineStep):
 
     def _send_write_tool_update(self):
         topic_lines = []
+        # Union de tous les champs de tous les 'format' déclarés par les agents, exposés
+        # comme paramètres de PREMIER NIVEAU de write_topic (plutôt qu'imbriqués sous un
+        # 'payload' opaque) : le modèle remplit directement les champs pertinents pour le
+        # topic choisi, sans avoir à construire lui-même un objet JSON imbriqué — c'est
+        # cette construction manuelle qui causait des erreurs récurrentes d'imbrication
+        # (payload contenant un payload, topic égaré à l'intérieur, etc.), quel que soit
+        # le backend LLM utilisé.
+        merged_properties: dict[str, list[str]] = {}
         for write_topic, meta in self._write_topics_meta.items():
             line = f"- {write_topic} : {meta['description']}. Format: {json.dumps(meta['format'], ensure_ascii=False)}"
             if meta.get("response_topic"):
                 line += f". La réponse arrive ensuite automatiquement via: {meta['response_topic']}"
+
+            fmt = meta.get("format")
+            if isinstance(fmt, dict):
+                if "type" in fmt:
+                    # 'type' n'est qu'un paramètre optionnel parmi d'autres dans le schéma
+                    # (il ne s'applique pas à tous les topics) — sans ce rappel explicite,
+                    # le modèle l'omet facilement, et la requête échoue silencieusement
+                    # (dispatch renvoie 'type inconnu') sans qu'aucune erreur ne remonte à
+                    # l'utilisateur, qui reçoit alors une réponse inventée.
+                    line += " ⚠️ Le paramètre 'type' est OBLIGATOIRE pour ce topic — sans lui la requête échoue silencieusement."
+                for key, val in fmt.items():
+                    desc = val if isinstance(val, str) else f"exemple: {json.dumps(val, ensure_ascii=False)}"
+                    merged_properties.setdefault(key, []).append(f"[{write_topic}] {desc}")
             topic_lines.append(line)
         description = (
-            "Envoie une requête à l'un des agents disponibles. "
-            "Choisis le topic correspondant au service demandé selon les descriptions ci-dessous.\n"
+            "Envoie une requête à l'un des agents disponibles. Choisis le topic "
+            "correspondant au service demandé selon les descriptions ci-dessous, puis "
+            "remplis directement, en paramètres de cet appel, les champs pertinents pour "
+            "CE topic (voir son 'Format' ci-dessous) — laisse simplement de côté les "
+            "champs qui ne s'appliquent pas à ce topic, n'essaie jamais de les regrouper "
+            "toi-même dans un objet JSON imbriqué. Si le topic choisi indique un champ "
+            "'type' obligatoire, ne l'oublie JAMAIS : une requête sans lui échoue "
+            "silencieusement, sans qu'aucune erreur ne te soit signalée.\n"
             "Topics disponibles :\n" + "\n".join(topic_lines)
         )
+
+        properties = {
+            "topic": {
+                "type": "string",
+                "enum": sorted(list(self._write_topics_meta.keys())),
+                "description": "Le topic MQTT à cibler parmi ceux listés",
+            },
+        }
+        for key, descs in merged_properties.items():
+            properties[key] = {"description": " | ".join(descs)}
 
         tool_definition = {
             "type": "function",
@@ -199,18 +236,8 @@ class MqttStep(PipelineStep):
                 "description": description,
                 "parameters": {
                     "type": "object",
-                    "properties": {
-                        "topic": {
-                            "type": "string",
-                            "enum": sorted(list(self._write_topics_meta.keys())),
-                            "description": "Le topic MQTT à cibler parmi ceux listés",
-                        },
-                        "payload": {
-                            "type": "object",
-                            "description": "Le payload JSON à publier sur le topic",
-                        },
-                    },
-                    "required": ["topic", "payload"],
+                    "properties": properties,
+                    "required": ["topic"],
                 },
             },
         }
