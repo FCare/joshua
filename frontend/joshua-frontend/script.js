@@ -16,6 +16,13 @@ class JoshuaChat {
         // WebSocket Authentication (API key only)
         this.apiKey = null; // API key temporaire pour WebSocket
         this.apiKeyExpiresAt = null; // Heure d'expiration de l'API key
+
+        // Identifiant de conversation stable, persisté en localStorage : survit à une
+        // reconnexion WebSocket (coupure réseau brève, etc.) pour permettre au backend
+        // de reprendre l'historique au lieu de démarrer une conversation vide à chaque
+        // reconnexion. Distinct du session_id, qui reste un identifiant technique par
+        // connexion généré côté serveur.
+        this.conversationId = this.getOrCreateConversationId();
         
         // Audio properties
         this.audioContext = null;
@@ -60,6 +67,24 @@ class JoshuaChat {
         // WebSocket direct vers le backend Joshua (bypass Traefik pour WebSocket pur)
         // WebSocket servers purs ne peuvent pas être routés par Traefik
         return `wss://joshua.caronboulme.fr`;
+    }
+
+    getOrCreateConversationId() {
+        const STORAGE_KEY = 'joshua_conversation_id';
+        try {
+            let id = localStorage.getItem(STORAGE_KEY);
+            if (!id) {
+                id = crypto.randomUUID();
+                localStorage.setItem(STORAGE_KEY, id);
+            }
+            return id;
+        } catch (e) {
+            // localStorage indisponible (navigation privée stricte, etc.) — pas de
+            // persistance possible, mais la conversation continue de fonctionner
+            // normalement pour la durée de la connexion en cours.
+            console.warn('localStorage indisponible, conversation_id non persisté:', e);
+            return crypto.randomUUID();
+        }
     }
 
     initElements() {
@@ -223,7 +248,7 @@ class JoshuaChat {
             }
         }
         
-        const wsUrl = `${this.getWebSocketUrl()}?api_key=${encodeURIComponent(this.apiKey)}`;
+        const wsUrl = `${this.getWebSocketUrl()}?api_key=${encodeURIComponent(this.apiKey)}&conversation_id=${encodeURIComponent(this.conversationId)}`;
         console.log(`Connecting to WebSocket: ${wsUrl}`);
         
         try {

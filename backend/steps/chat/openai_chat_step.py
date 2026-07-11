@@ -1,8 +1,9 @@
-import time
 import threading
 import logging
 import os
 import json
+from datetime import datetime
+from zoneinfo import ZoneInfo
 from typing import Optional, Dict, Any
 from dataclasses import dataclass
 from enum import Enum
@@ -62,7 +63,12 @@ class OpenAIChatStep(PipelineStep):
         # passer proprement à la réponse plutôt que de continuer à réfléchir jusqu'à
         # épuiser tout le max_tokens (observé en pratique : finish_reason=length avec une
         # réponse totalement vide après une longue réflexion consécutive à une erreur d'outil).
-        self.thinking_token_budget = config.get("thinking_token_budget", 400) if config else 400
+        # Testé empiriquement à 400 avec reasoning_effort="low" : encore trop juste sur des
+        # questions à plusieurs étapes (calcul, comparaisons) — remonté à 800 pour laisser
+        # de la marge, épaulé par reasoning_effort (contrôle sémantique côté vLLM, cf.
+        # _call_openai_streaming) et par le retry automatique sans thinking en dernier
+        # recours si même ça ne suffit pas.
+        self.thinking_token_budget = config.get("thinking_token_budget", 800) if config else 800
         self.system_prompt = ""
         self._original_system_prompt: str | None = None
         self.profile = ""
@@ -313,8 +319,11 @@ class OpenAIChatStep(PipelineStep):
                 "content": system_prompt
             })
         
-        # Ajoute l'heure actuelle
-        current_time = time.strftime("%A %d %B %Y %H:%M", time.localtime())
+        # Ajoute l'heure actuelle — time.localtime() suit le fuseau du système hôte
+        # (UTC ici), pas celui de l'utilisateur ; fixé sur Europe/Paris comme dans
+        # system_prompt_step.py pour rester cohérent avec le "Nous sommes le..." du
+        # prompt système (qui, lui, utilisait déjà ZoneInfo("Europe/Paris")).
+        current_time = datetime.now(ZoneInfo("Europe/Paris")).strftime("%A %d %B %Y %H:%M")
         messages.append({
             "role": "system",
             "content": f"Current date and time: {current_time}"
@@ -330,10 +339,17 @@ class OpenAIChatStep(PipelineStep):
 
         return messages
     
-    def _call_openai_streaming(self, messages):
-        """Appel OpenAI en mode streaming avec support des tools"""
+    def _call_openai_streaming(self, messages, enable_thinking: bool = True, _is_retry: bool = False):
+        """Appel OpenAI en mode streaming avec support des tools.
+
+        enable_thinking contrôle explicitement le mode réflexion du modèle
+        (chat_template_kwargs.enable_thinking) — le template ne l'active jamais
+        de lui-même par défaut. _is_retry marque un second appel automatique
+        sans thinking après un premier essai qui a épuisé son budget de
+        réflexion sans produire de contenu (voir _handle_streaming_response).
+        """
         try:
-            logger.info(f"💬 Calling OpenAI API with model {self.model}")
+            logger.info(f"💬 Calling OpenAI API with model {self.model} (enable_thinking={enable_thinking})")
             logger.info(f"💬 Messages to send: {len(messages)} messages")
 
             # Paramètres de base
@@ -345,27 +361,34 @@ class OpenAIChatStep(PipelineStep):
                 "stream": True
             }
 
-            # Ajouter les outils spécifiques au client actuel
-            call_params["tools"] = self.client_tools
-            call_params["tool_choice"] = "auto"
-            logger.info(f"🔧 Using {len(call_params['tools'])} tools (tool_choice=auto)")
+            # Ajouter les outils spécifiques au client actuel — self.client_tools vaut None
+            # tant qu'aucun MqttToolUpdateMessage n'est encore arrivé (ex: session sans MQTT
+            # connecté, ou fenêtre de course juste après la connexion) ; sans ce filet, un
+            # simple len(None) fait planter CHAQUE appel pour toute la durée de la session.
+            client_tools = self.client_tools or []
+            if client_tools:
+                call_params["tools"] = client_tools
+                call_params["tool_choice"] = "auto"
+            logger.info(f"🔧 Using {len(client_tools)} tools (tool_choice=auto)")
 
-            extra_body = {"priority": 0}
-            if self.thinking_token_budget:
+            extra_body = {"priority": 0, "chat_template_kwargs": {"enable_thinking": enable_thinking}}
+            if enable_thinking and self.thinking_token_budget:
                 extra_body["thinking_token_budget"] = self.thinking_token_budget
             with self.client.chat.completions.create(**call_params, extra_body=extra_body) as response:
                 # Gestion du streaming avec support des tool calls
-                self._handle_streaming_response(response)
+                self._handle_streaming_response(response, messages, enable_thinking, _is_retry)
 
         except Exception as e:
             logger.error(f"Erreur appel OpenAI: {e}")
             self._send_error_response(str(e))
 
-    def _handle_streaming_response(self, response):
+    def _handle_streaming_response(self, response, messages=None, enable_thinking: bool = True,
+                                    _is_retry: bool = False):
         """Gère la réponse streaming avec support des tool calls"""
         try:
             logger.info(f"💬 API response received, starting streaming...")
             assistant_response = ""
+            reasoning_text = ""
             tool_calls = []
             chunk_count = 0
 
@@ -378,6 +401,17 @@ class OpenAIChatStep(PipelineStep):
 
                 choice = chunk.choices[0]
                 delta = choice.delta
+
+                # Réflexion interne du modèle — jamais envoyée au client (TTS la lirait
+                # à voix haute), uniquement loggée pour diagnostic. Champ "reasoning" (pas
+                # "reasoning_content"), propre à ce build vLLM/gemma4. Le pydantic ChoiceDelta
+                # du SDK openai (2.45.0) ne le déclare pas comme attribut typé — présent
+                # uniquement via model_extra (constaté en pratique : getattr(delta,
+                # "reasoning", None) renvoie toujours None malgré un flux réel confirmé
+                # au niveau HTTP brut).
+                reasoning_delta = (delta.model_extra or {}).get("reasoning") if delta else None
+                if reasoning_delta:
+                    reasoning_text += reasoning_delta
 
                 # Gestion du contenu texte
                 if delta and delta.content:
@@ -418,7 +452,10 @@ class OpenAIChatStep(PipelineStep):
                         self._handle_tool_calls(tool_calls, assistant_response)
                         break
                     elif choice.finish_reason in ("stop", "length", "eos", "end_of_text"):
-                        logger.info(f"End of response (finish_reason={choice.finish_reason})")
+                        logger.info(
+                            f"End of response (finish_reason={choice.finish_reason}, "
+                            f"reasoning={len(reasoning_text)} car., content={len(assistant_response)} car.)"
+                        )
                         if not assistant_response and not tool_calls:
                             # Le budget de tokens a été entièrement consommé par la
                             # réflexion interne (reasoning) sans jamais produire de
@@ -426,9 +463,18 @@ class OpenAIChatStep(PipelineStep):
                             # ne reçoit strictement rien (silence total, pas même une
                             # erreur), voir finish_reason=length observé en pratique
                             # après une erreur d'outil qui a fait sur-réfléchir le modèle.
+                            if enable_thinking and not _is_retry and messages is not None:
+                                logger.warning(
+                                    f"Réponse vide malgré finish_reason={choice.finish_reason} "
+                                    f"({chunk_count} chunks reçus, {len(reasoning_text)} car. de reasoning) "
+                                    f"— relance automatique sans thinking"
+                                )
+                                self._call_openai_streaming(messages, enable_thinking=False, _is_retry=True)
+                                return
                             logger.warning(
                                 f"Réponse vide malgré finish_reason={choice.finish_reason} "
-                                f"({chunk_count} chunks reçus, tout en reasoning) — fallback envoyé"
+                                f"({chunk_count} chunks reçus{', relance sans thinking déjà tentée' if _is_retry else ''}) "
+                                f"— fallback envoyé"
                             )
                             assistant_response = (
                                 "Désolé, je n'ai pas réussi à formuler de réponse. "
@@ -480,6 +526,26 @@ class OpenAIChatStep(PipelineStep):
         msg = DiscussionHistoryMessage(history=tuple(self.conversation_history))
         self._send_output_message(msg)
         logger.info(f"DiscussionHistoryMessage émis ({len(self.conversation_history)} messages)")
+
+    def restore_history(self, history: list):
+        """Reprend une conversation persistée (reconnexion websocket sur le même conversation_id)."""
+        with self._lock:
+            self.conversation_history = list(history)
+        logger.info(f"Historique de conversation restauré ({len(self.conversation_history)} messages)")
+
+    def export_history(self) -> list:
+        """Copie de l'historique courant, pour persistance côté serveur avant fermeture.
+
+        Si la déconnexion survient pendant un appel d'outil en cours (résultat MQTT
+        pas encore reçu), le dernier message est un tool_calls sans réponse associée
+        — invalide à rejouer à l'API. On le retire plutôt que de reprendre une
+        conversation cassée.
+        """
+        with self._lock:
+            history = list(self.conversation_history)
+        if history and history[-1].get("role") == "assistant" and history[-1].get("tool_calls"):
+            history.pop()
+        return history
 
     def reset_conversation(self):
         """Remet à zéro la conversation"""
@@ -550,56 +616,75 @@ class OpenAIChatStep(PipelineStep):
                 f"\nUser profile (STRICT: report only what is written here, never infer, guess, or add details):\n{self.profile}"
             )
 
+        # --reasoning-budget côté serveur ne coupe pas toujours la réflexion à temps en
+        # pratique (constaté : parfois tout le budget de tokens y passe, réponse vide) —
+        # cette consigne, lue par le modèle dès l'ouverture de son bloc de réflexion,
+        # est la méthode documentée pour les backends où le paramètre serveur n'est pas fiable.
+        # Ces deux consignes et la règle d'honnêteté ci-dessous sont TOUJOURS incluses, même
+        # sans outil enregistré (self.client_tools vide) — sinon, sans elles, le modèle perd
+        # toute contrainte anti-invention et se remet à fabuler de mémoire (constaté en
+        # pratique : sans cette règle, il invente des classifications, des personnages et
+        # des histoires entières comme si de rien n'était).
+        common_rules = [
+            "Garde ta réflexion interne très brève, quelques phrases maximum, jamais plus de "
+            "300 mots, avant de répondre.",
+            "Si un outil renvoie une erreur, ne rumine pas longuement dessus : corrige "
+            "immédiatement l'appel fautif et réessaie tout de suite, ou si tu ne vois pas "
+            "la correction, dis simplement à l'utilisateur qu'une erreur technique est "
+            "survenue. Ne jamais laisser ta réflexion s'éterniser après une erreur d'outil.",
+        ]
+
         if tools_definitions:
-            tools_descriptions = []
-            if tools_definitions:
-                tools_descriptions.append(
-                    # --reasoning-budget côté serveur ne coupe pas toujours la réflexion à temps en
-                    # pratique (constaté : parfois tout le budget de tokens y passe, réponse vide) —
-                    # cette consigne, lue par le modèle dès l'ouverture de son bloc de réflexion,
-                    # est la méthode documentée pour les backends où le paramètre serveur n'est pas fiable.
-                    "Garde ta réflexion interne très brève, quelques phrases maximum, jamais plus de "
-                    "300 mots, avant de répondre."
-                )
-                tools_descriptions.append(
-                    "Si un outil renvoie une erreur, ne rumine pas longuement dessus : corrige "
-                    "immédiatement l'appel fautif et réessaie tout de suite, ou si tu ne vois pas "
-                    "la correction, dis simplement à l'utilisateur qu'une erreur technique est "
-                    "survenue. Ne jamais laisser ta réflexion s'éterniser après une erreur d'outil."
-                )
-                tools_descriptions.append(
-                    "RÈGLE ABSOLUE : tu ne réponds JAMAIS de mémoire à une question factuelle. Tu n'as JAMAIS le "
-                    "droit de répondre négativement (\"je ne trouve pas\", \"je n'ai pas cette information\", "
-                    "\"je ne sais pas\", \"il n'y a rien à ce sujet\") sans avoir D'ABORD appelé au moins un outil "
-                    "pertinent parmi TOUS ceux listés plus bas — cette liste n'est PAS limitée aux exemples "
-                    "ci-dessous : avant de conclure qu'aucun outil ne convient, relis chaque outil disponible et "
-                    "son domaine, y compris les outils spécialisés (catalogues, listes personnelles, etc.), même "
-                    "si le lien avec la question n'est pas évident au premier abord. "
-                    "Exemples de routage parmi les cas les plus fréquents : "
-                    "→ tout outil spécialisé listé plus bas (catalogues personnels, contes, etc.) dès que la "
-                    "question touche à son domaine, même de loin — à vérifier EN PREMIER, avant tout autre outil ; "
-                    "cela inclut un titre d'œuvre qui te semble correspondre à une connaissance générale ou "
-                    "encyclopédique connue (ex: un livre, un conte publié) : vérifie D'ABORD s'il existe dans le "
-                    "catalogue personnel de l'utilisateur avant de supposer qu'il s'agit d'une question externe — "
-                    "la version qu'il possède peut différer de l'œuvre originale ; "
-                    "→ '.../news/request' UNIQUEMENT pour les actualités et événements des derniers jours ; "
-                    "→ '.../search_preference' UNIQUEMENT pour les données personnelles de l'utilisateur ; "
-                    "→ '.../search/request' (SearXNG) SEULEMENT EN DERNIER RECOURS : utilise ta réflexion pour "
-                    "d'abord écarter explicitement chaque outil spécialisé disponible, et n'y a recours que si tu "
-                    "es certain qu'aucun ne peut raisonnablement s'appliquer à cette question. "
-                    "Cette règle s'applique aussi aux demandes de recommandation, suggestion ou choix parmi un "
-                    "contenu personnel réel ('propose-moi un conte', 'qu'est-ce que tu me conseilles') dès qu'un "
-                    "outil donne accès à ce catalogue : ne propose JAMAIS un titre de mémoire, même un titre déjà "
-                    "mentionné plus tôt dans la conversation ou qui te semble plausible — interroge D'ABORD l'outil "
-                    "pour ne suggérer que ce qui existe réellement dans le catalogue de l'utilisateur. "
-                    "STRICT : après avoir reçu le résultat d'un outil, base-toi UNIQUEMENT sur ce résultat. "
-                    "Si le résultat est vide ou insuffisant, dis-le explicitement — n'invente jamais."
-                )
-            tools_descriptions.append("Outils disponibles :")
+            common_rules.append(
+                "RÈGLE ABSOLUE : tu ne réponds JAMAIS de mémoire à une question factuelle. Tu n'as JAMAIS le "
+                "droit de répondre négativement (\"je ne trouve pas\", \"je n'ai pas cette information\", "
+                "\"je ne sais pas\", \"il n'y a rien à ce sujet\") sans avoir D'ABORD appelé au moins un outil "
+                "pertinent parmi TOUS ceux listés plus bas — cette liste n'est PAS limitée aux exemples "
+                "ci-dessous : avant de conclure qu'aucun outil ne convient, relis chaque outil disponible et "
+                "son domaine, y compris les outils spécialisés (catalogues, listes personnelles, etc.), même "
+                "si le lien avec la question n'est pas évident au premier abord. "
+                "Exemples de routage parmi les cas les plus fréquents : "
+                "→ tout outil spécialisé listé plus bas (catalogues personnels, contes, etc.) dès que la "
+                "question touche à son domaine, même de loin — à vérifier EN PREMIER, avant tout autre outil ; "
+                "cela inclut un titre d'œuvre qui te semble correspondre à une connaissance générale ou "
+                "encyclopédique connue (ex: un livre, un conte publié) : vérifie D'ABORD s'il existe dans le "
+                "catalogue personnel de l'utilisateur avant de supposer qu'il s'agit d'une question externe — "
+                "la version qu'il possède peut différer de l'œuvre originale ; "
+                "→ '.../news/request' UNIQUEMENT pour les actualités et événements des derniers jours ; "
+                "→ '.../search_preference' UNIQUEMENT pour les données personnelles de l'utilisateur ; "
+                "→ '.../search/request' (SearXNG) SEULEMENT EN DERNIER RECOURS : utilise ta réflexion pour "
+                "d'abord écarter explicitement chaque outil spécialisé disponible, et n'y a recours que si tu "
+                "es certain qu'aucun ne peut raisonnablement s'appliquer à cette question. "
+                "Cette règle s'applique aussi aux demandes de recommandation, suggestion ou choix parmi un "
+                "contenu personnel réel ('propose-moi un conte', 'qu'est-ce que tu me conseilles') dès qu'un "
+                "outil donne accès à ce catalogue : ne propose JAMAIS un titre de mémoire, même un titre déjà "
+                "mentionné plus tôt dans la conversation ou qui te semble plausible — interroge D'ABORD l'outil "
+                "pour ne suggérer que ce qui existe réellement dans le catalogue de l'utilisateur. "
+                "STRICT : après avoir reçu le résultat d'un outil, base-toi UNIQUEMENT sur ce résultat. "
+                "Si le résultat est vide ou insuffisant, dis-le explicitement — n'invente jamais. "
+                "Un résultat d'outil obtenu pour une question précédente NE COUVRE PAS une nouvelle question, "
+                "même sur un sujet proche ou déjà mentionné dans la conversation : par exemple, le flash "
+                "d'actualités général du jour ne répond PAS à une question précise sur un événement particulier "
+                "— refais TOUJOURS un appel d'outil ciblé pour chaque nouvelle question factuelle plutôt que de "
+                "déduire une réponse à partir d'un résultat obtenu pour autre chose."
+            )
+            common_rules.append("Outils disponibles :")
             for tool_def in tools_definitions:
                 func = tool_def['function']
-                tools_descriptions.append(f"- {func['name']}: {func['description']}")
-            parts.append("\n" + "\n".join(tools_descriptions))
+                common_rules.append(f"- {func['name']}: {func['description']}")
+        else:
+            common_rules.append(
+                "RÈGLE ABSOLUE : tu n'as ACTUELLEMENT accès à aucun outil externe (catalogue personnel, "
+                "actualités, données personnelles...), probablement une interruption technique temporaire. "
+                "Pour TOUTE question factuelle, de recommandation, ou portant sur un contenu personnel de "
+                "l'utilisateur (contes, préférences, actualités...), NE FABRIQUE JAMAIS de réponse comme si "
+                "tu avais accès à ces données — dis explicitement que tes outils sont temporairement "
+                "indisponibles et propose de réessayer dans un instant. Ne réponds depuis ta mémoire "
+                "générale que pour des questions génériques ne nécessitant clairement aucune donnée "
+                "personnelle ou actuelle."
+            )
+
+        parts.append("\n" + "\n".join(common_rules))
 
         enhanced_prompt = "\n".join(parts)
         logger.info(f"Prompt enrichi généré: {enhanced_prompt[:100]}...")

@@ -28,14 +28,24 @@ class PipelineStep(ABC):
         pass
     
     async def start(self):
-        if not self.init():
+        # init()/cleanup() sont synchrones et certains steps y font des connexions
+        # réseau bloquantes (ex: ASR/TTS). Appelés directement ici, ils gelaient toute
+        # la boucle asyncio pendant leur durée — plus aucune AUTRE connexion cliente ne
+        # pouvait aboutir son handshake pendant ce temps (constaté en pratique : la
+        # plupart des connexions WebSocket qui arrivaient pendant l'init d'une session
+        # timeoutaient). Les déporter dans l'executor libère la boucle pour les autres
+        # sessions pendant qu'une init/cleanup est en cours.
+        loop = asyncio.get_event_loop()
+        success = await loop.run_in_executor(None, self.init)
+        if not success:
             return False
         self.is_running = True
         return True
-    
+
     async def stop(self):
         self.is_running = False
-        self.cleanup()
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(None, self.cleanup)
 
 
 class Pipeline:

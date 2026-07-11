@@ -60,6 +60,8 @@ class MqttStep(PipelineStep):
         return True
 
     def cleanup(self):
+        if self._nexus:
+            self._nexus.stop_listening()
         if hasattr(self, "input_queue") and self.input_queue:
             self.input_queue.stop()
 

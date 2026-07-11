@@ -2,8 +2,10 @@ import argparse
 import asyncio
 import os
 import sys
+import time
 import logging
 import websockets
+from urllib.parse import urlsplit, parse_qs
 from uuid import uuid4
 from websockets.extensions import permessage_deflate
 
@@ -52,6 +54,41 @@ logging.basicConfig(
 connected_clients = set()
 pipeline_args = None
 
+# Historique de conversation persisté en mémoire, keyé par conversation_id
+# (généré et stocké côté client dans localStorage, survit à une reconnexion
+# websocket) — contrairement à session_id qui reste un identifiant technique
+# unique par connexion. TTL courte : ceci ne sert qu'à absorber une coupure
+# réseau brève au milieu d'une conversation active, pas à faire une mémoire
+# longue durée entre deux sessions d'usage distinctes.
+CONVERSATION_HISTORY_TTL = 30 * 60
+_conversation_histories: dict[str, tuple[float, list]] = {}
+
+
+def _prune_conversation_histories():
+    now = time.time()
+    expired = [cid for cid, (ts, _) in _conversation_histories.items() if now - ts > CONVERSATION_HISTORY_TTL]
+    for cid in expired:
+        del _conversation_histories[cid]
+
+
+def _load_conversation_history(conversation_id: str | None) -> list:
+    if not conversation_id:
+        return []
+    _prune_conversation_histories()
+    entry = _conversation_histories.get(conversation_id)
+    return list(entry[1]) if entry else []
+
+
+def _save_conversation_history(conversation_id: str | None, history: list):
+    if not conversation_id:
+        return
+    if not history:
+        _conversation_histories.pop(conversation_id, None)
+        return
+    _conversation_histories[conversation_id] = (time.time(), history)
+    _prune_conversation_histories()
+
+
 def _extract_cookie(cookie_header: str, name: str) -> str:
     for part in cookie_header.split(";"):
         k, _, v = part.strip().partition("=")
@@ -63,7 +100,8 @@ def _extract_cookie(cookie_header: str, name: str) -> str:
 class Client():
 
     @classmethod
-    async def create(cls, pipeline_name: str, websocket, nexus: NexusClient | None, session_id: str = None):
+    async def create(cls, pipeline_name: str, websocket, nexus: NexusClient | None, session_id: str = None,
+                      conversation_id: str = None):
         """Factory method async pour créer un Client"""
         pipeline = run_pipeline(pipeline_name)
         if not pipeline:
@@ -73,14 +111,16 @@ class Client():
         if not success:
             raise ValueError(f"Impossible de démarrer le pipeline: {pipeline_name}")
 
-        return cls(pipeline, websocket, nexus, session_id)
+        return cls(pipeline, websocket, nexus, session_id, conversation_id)
 
-    def __init__(self, pipeline: str, websocket, nexus: NexusClient | None, session_id: str = None):
+    def __init__(self, pipeline: str, websocket, nexus: NexusClient | None, session_id: str = None,
+                 conversation_id: str = None):
         self.pipeline = pipeline
         self.pipeline_input = self.pipeline.get_step("websocket_server")
         self.ws = websocket
         self.username = nexus.username if nexus else "anonymous"
         self.session_id = session_id or str(uuid4())
+        self.conversation_id = conversation_id
 
         # set_nexus must happen before set_ws_callback: set_ws_callback sends
         # UserConnectionMessage which triggers user_connected on MQTT; the
@@ -88,6 +128,12 @@ class Client():
         mqtt_step = self.pipeline.get_step("mqtt_step")
         if mqtt_step and nexus:
             mqtt_step.set_nexus(nexus, self.session_id)
+
+        self.chat_step = self.pipeline.get_step("openai_chat")
+        if self.chat_step and self.conversation_id:
+            restored = _load_conversation_history(self.conversation_id)
+            if restored:
+                self.chat_step.restore_history(restored)
 
         self.pipeline_input.set_ws_callback(self.sendToClient, self.username)
 
@@ -108,7 +154,10 @@ class Client():
         finally:
             # Remove the client from the set of connected clients
             connected_clients.remove(self)
-            
+
+            if self.chat_step and self.conversation_id:
+                _save_conversation_history(self.conversation_id, self.chat_step.export_history())
+
             # CLEANUP: Stop pipeline to free resources (TTS WebSocket, threads, etc.)
             try:
                 if self.pipeline:
@@ -166,6 +215,9 @@ async def handle_client(websocket):
     cookie_header = websocket.request.headers.get("Cookie", "")
     session_cookie = _extract_cookie(cookie_header, "vk_session")
 
+    query = parse_qs(urlsplit(websocket.request.path).query)
+    conversation_id = (query.get("conversation_id") or [None])[0]
+
     nexus = None
     if session_cookie:
         nexus = await NexusClient.from_session_cookie(VK_URL, MQTT_HOST, session_cookie, MQTT_PORT)
@@ -174,9 +226,9 @@ async def handle_client(websocket):
         logging.info("Nouvelle connexion WebSocket: pas de session cookie")
 
     session_id = str(uuid4())
-    logging.info(f"Nouvelle session: {session_id}")
+    logging.info(f"Nouvelle session: {session_id} (conversation_id={conversation_id})")
 
-    client = await Client.create(pipeline_args, websocket, nexus, session_id)
+    client = await Client.create(pipeline_args, websocket, nexus, session_id, conversation_id)
     connected_clients.add(client)
     await client.handle_message(websocket)
     
