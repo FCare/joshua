@@ -8,7 +8,7 @@ CONTEXT_OVERRIDE_TTL = 30 * 60  # 30 min watchdog
 
 from pipeline_framework import PipelineStep
 from messages.websocket_message import UserConnectionMessage
-from messages.chat_message import DiscussionHistoryMessage, MqttWriteMessage
+from messages.chat_message import MqttWriteMessage
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +45,7 @@ class MqttStep(PipelineStep):
         self._context_override_topics: set = set()
         self._watchdog_task: asyncio.Task | None = None
         self._pending_writes: dict = {}  # response_topic → (write_topic, payload)
+        self._alias_to_topic: dict = {}  # alias stable (ex: "news/request") → topic MQTT réel
 
     def set_nexus(self, nexus, session_id: str = None) -> None:
         self._nexus = nexus
@@ -71,10 +72,6 @@ class MqttStep(PipelineStep):
                 logger.warning("MqttStep: nexus non configuré, message ignoré")
                 return
             self._handle_user_connected(message)
-        elif isinstance(message, DiscussionHistoryMessage):
-            if not self._nexus or not self._loop:
-                return
-            self._handle_discussion_history(message)
         elif isinstance(message, MqttWriteMessage):
             if not self._nexus or not self._loop:
                 logger.warning("MqttStep: nexus non configuré, MqttWriteMessage ignoré")
@@ -106,17 +103,30 @@ class MqttStep(PipelineStep):
         )
         logger.info(f"MQTT user_connected publié pour {username}")
 
+    @staticmethod
+    def _topic_alias(topic: str) -> str:
+        """Alias stable (ex: 'news/request') dérivé d'un topic MQTT complet (ex:
+        'users/alice/6e6afc97-.../news/request') en retirant le préfixe
+        users/{username}/{session_id}/, qui varie par utilisateur et par session.
+        Exposer cet alias au LLM plutôt que le topic complet garde la description
+        et l'enum de l'outil write_topic identiques d'une conversation à l'autre,
+        ce qui permet au cache de préfixe de vLLM de s'appliquer (sinon 0% de hit
+        rate, ~8s de préfill en plus à chaque nouvelle conversation)."""
+        parts = topic.split("/")
+        return "/".join(parts[3:]) if len(parts) > 3 else topic
+
     def _handle_mqtt_write(self, message: MqttWriteMessage):
+        real_topic = self._alias_to_topic.get(message.topic, message.topic)
         asyncio.run_coroutine_threadsafe(
-            self._nexus.publish(message.topic, message.payload),
+            self._nexus.publish(real_topic, message.payload),
             self._loop,
         )
-        logger.info(f"MqttStep: publié sur {message.topic}")
+        logger.info(f"MqttStep: publié sur {real_topic} (alias={message.topic})")
         # Track pending: if this write topic has a response topic, save for replay on reconnect
-        meta = self._write_topics_meta.get(message.topic, {})
+        meta = self._write_topics_meta.get(real_topic, {})
         response_topic = meta.get("response_topic")
         if response_topic:
-            self._pending_writes[response_topic] = (message.topic, message.payload)
+            self._pending_writes[response_topic] = (real_topic, message.payload)
 
     async def _on_agent_topics(self, topic: str, payload):
         if not isinstance(payload, list):
@@ -182,6 +192,7 @@ class MqttStep(PipelineStep):
                         logger.info(f"MqttStep: republié {write_topic} (en attente de {response_topic})")
 
     def _send_write_tool_update(self):
+        self._alias_to_topic = {self._topic_alias(t): t for t in self._write_topics_meta}
         topic_lines = []
         # Union de tous les champs de tous les 'format' déclarés par les agents, exposés
         # comme paramètres de PREMIER NIVEAU de write_topic (plutôt qu'imbriqués sous un
@@ -192,9 +203,10 @@ class MqttStep(PipelineStep):
         # le backend LLM utilisé.
         merged_properties: dict[str, list[str]] = {}
         for write_topic, meta in self._write_topics_meta.items():
-            line = f"- {write_topic} : {meta['description']}. Format: {json.dumps(meta['format'], ensure_ascii=False)}"
+            alias = self._topic_alias(write_topic)
+            line = f"- {alias} : {meta['description']}. Format: {json.dumps(meta['format'], ensure_ascii=False)}"
             if meta.get("response_topic"):
-                line += f". La réponse arrive ensuite automatiquement via: {meta['response_topic']}"
+                line += f". La réponse arrive ensuite automatiquement via: {self._topic_alias(meta['response_topic'])}"
 
             fmt = meta.get("format")
             if isinstance(fmt, dict):
@@ -207,7 +219,7 @@ class MqttStep(PipelineStep):
                     line += " ⚠️ Le paramètre 'type' est OBLIGATOIRE pour ce topic — sans lui la requête échoue silencieusement."
                 for key, val in fmt.items():
                     desc = val if isinstance(val, str) else f"exemple: {json.dumps(val, ensure_ascii=False)}"
-                    merged_properties.setdefault(key, []).append(f"[{write_topic}] {desc}")
+                    merged_properties.setdefault(key, []).append(f"[{alias}] {desc}")
             topic_lines.append(line)
         description = (
             "Envoie une requête à l'un des agents disponibles. Choisis le topic "
@@ -224,8 +236,8 @@ class MqttStep(PipelineStep):
         properties = {
             "topic": {
                 "type": "string",
-                "enum": sorted(list(self._write_topics_meta.keys())),
-                "description": "Le topic MQTT à cibler parmi ceux listés",
+                "enum": sorted(self._alias_to_topic.keys()),
+                "description": "Le topic à cibler parmi ceux listés",
             },
         }
         for key, descs in merged_properties.items():
@@ -245,7 +257,7 @@ class MqttStep(PipelineStep):
         }
 
         response_map = {
-            topic: meta["response_topic"]
+            self._topic_alias(topic): meta["response_topic"]
             for topic, meta in self._write_topics_meta.items()
             if meta.get("response_topic")
         }
@@ -297,11 +309,3 @@ class MqttStep(PipelineStep):
             self.output_queue.enqueue(SystemPromptMessage(prompt=None))
         self._watchdog_task = None
 
-    def _handle_discussion_history(self, message: DiscussionHistoryMessage):
-        username = self._nexus.username
-        topic = f"users/{username}/discussions"
-        asyncio.run_coroutine_threadsafe(
-            self._nexus.publish(topic, list(message.history)),
-            self._loop,
-        )
-        logger.info(f"MQTT discussion history publiée sur {topic} ({len(message.history)} messages)")

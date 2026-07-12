@@ -787,6 +787,14 @@ class JoshuaChat {
 
     async logout() {
         try {
+            // Signale au backend qu'il s'agit d'une déconnexion volontaire (pas une coupure
+            // réseau) : la discussion est publiée pour agent-profiler immédiatement, au lieu
+            // d'attendre les 30 min du sweeper TTL. Petite pause pour laisser le message
+            // partir avant de fermer la socket juste après.
+            if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                this.ws.send(JSON.stringify({ type: 'logout' }));
+                await new Promise(resolve => setTimeout(resolve, 200));
+            }
             // Use absolute URL to auth service
             await fetch('https://auth.caronboulme.fr/auth/logout', {
                 credentials: 'include'
@@ -797,6 +805,13 @@ class JoshuaChat {
         } finally {
             this.apiKey = null;
             this.disconnect(); // Close WebSocket connection
+            // Nouvelle conversation_id au prochain login — celle-ci est terminée
+            // (déjà publiée) et ne doit pas être reprise par une future session.
+            try {
+                localStorage.removeItem('joshua_conversation_id');
+            } catch (e) {
+                // localStorage indisponible — rien à nettoyer
+            }
             // Redirect to current page - Traefik will handle auth redirect
             window.location.reload();
         }

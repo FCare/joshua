@@ -1,5 +1,6 @@
 import argparse
 import asyncio
+import json
 import os
 import sys
 import time
@@ -61,32 +62,66 @@ pipeline_args = None
 # réseau brève au milieu d'une conversation active, pas à faire une mémoire
 # longue durée entre deux sessions d'usage distinctes.
 CONVERSATION_HISTORY_TTL = 30 * 60
-_conversation_histories: dict[str, tuple[float, list]] = {}
+_conversation_histories: dict[str, tuple[float, list, str]] = {}  # conversation_id -> (ts, history, username)
 
-
-def _prune_conversation_histories():
-    now = time.time()
-    expired = [cid for cid, (ts, _) in _conversation_histories.items() if now - ts > CONVERSATION_HISTORY_TTL]
-    for cid in expired:
-        del _conversation_histories[cid]
+# Client MQTT service partagé, créé paresseusement, utilisé uniquement par le sweeper TTL
+# ci-dessous (publication de discussions dont personne n'est plus propriétaire d'une
+# connexion websocket active pour le faire via son propre nexus).
+_service_nexus: NexusClient | None = None
 
 
 def _load_conversation_history(conversation_id: str | None) -> list:
     if not conversation_id:
         return []
-    _prune_conversation_histories()
     entry = _conversation_histories.get(conversation_id)
     return list(entry[1]) if entry else []
 
 
-def _save_conversation_history(conversation_id: str | None, history: list):
+def _save_conversation_history(conversation_id: str | None, history: list, username: str):
     if not conversation_id:
         return
     if not history:
         _conversation_histories.pop(conversation_id, None)
         return
-    _conversation_histories[conversation_id] = (time.time(), history)
-    _prune_conversation_histories()
+    _conversation_histories[conversation_id] = (time.time(), history, username)
+
+
+async def _publish_discussion(nexus: NexusClient, username: str, history: list):
+    if not history:
+        return
+    try:
+        await nexus.publish(f"users/{username}/discussions", history)
+        logging.info(f"[{username}] Discussion publiée sur users/{username}/discussions ({len(history)} messages)")
+    except Exception as e:
+        logging.error(f"[{username}] Échec publication discussion: {e}")
+
+
+async def _conversation_ttl_sweeper():
+    """Publie vers agent-profiler (topic users/{username}/discussions) les conversations
+    dont le conversation_id a expiré (30 min sans reconnexion) — la meilleure définition
+    disponible de "discussion réellement terminée" : contrairement à une simple
+    déconnexion websocket (qui peut n'être qu'une coupure réseau suivie d'une reconnexion
+    sur le même conversation_id grâce à la persistance de conversation), ici on sait que
+    rien n'est revenu la reprendre depuis 30 min. Complète le déclenchement explicite sur
+    logout (voir Client._publish_discussion_now) pour le cas où l'utilisateur ferme
+    l'onglet/perd la connexion sans jamais se déconnecter proprement."""
+    global _service_nexus
+    while True:
+        await asyncio.sleep(60)
+        now = time.time()
+        expired = [cid for cid, (ts, _, _) in _conversation_histories.items() if now - ts > CONVERSATION_HISTORY_TTL]
+        if not expired:
+            continue
+        if _service_nexus is None:
+            if not (MQTT_SERVICE_USERNAME and MQTT_SERVICE_API_KEY):
+                logging.warning("Sweeper TTL conversations: pas de credentials service, publication ignorée")
+                for cid in expired:
+                    _conversation_histories.pop(cid, None)
+                continue
+            _service_nexus = NexusClient.from_api_key(VK_URL, MQTT_HOST, MQTT_SERVICE_USERNAME, MQTT_SERVICE_API_KEY, MQTT_PORT)
+        for cid in expired:
+            _, history, username = _conversation_histories.pop(cid)
+            await _publish_discussion(_service_nexus, username, history)
 
 
 def _extract_cookie(cookie_header: str, name: str) -> str:
@@ -118,16 +153,27 @@ class Client():
         self.pipeline = pipeline
         self.pipeline_input = self.pipeline.get_step("websocket_server")
         self.ws = websocket
+        self.nexus = nexus
         self.username = nexus.username if nexus else "anonymous"
         self.session_id = session_id or str(uuid4())
         self.conversation_id = conversation_id
+        self._discussion_published = False
+
+        # Les topics MQTT (agent_topics, requêtes/réponses des agents) sont scopés sur
+        # cet identifiant — conversation_id plutôt que session_id : conversation_id est
+        # stable à travers les reconnexions (persisté en localStorage côté client), alors
+        # que session_id est un UUID neuf à chaque connexion WebSocket. Scoper sur
+        # session_id orphelinait toute réponse d'outil encore en vol au moment d'une
+        # reconnexion (le topic de réponse n'était plus écouté par personne). Fallback sur
+        # session_id si conversation_id est absent (ex: navigation privée sans localStorage).
+        mqtt_scope_id = self.conversation_id or self.session_id
 
         # set_nexus must happen before set_ws_callback: set_ws_callback sends
         # UserConnectionMessage which triggers user_connected on MQTT; the
         # mqtt_step must already be subscribed to agent_topics at that point.
         mqtt_step = self.pipeline.get_step("mqtt_step")
         if mqtt_step and nexus:
-            mqtt_step.set_nexus(nexus, self.session_id)
+            mqtt_step.set_nexus(nexus, mqtt_scope_id)
 
         self.chat_step = self.pipeline.get_step("openai_chat")
         if self.chat_step and self.conversation_id:
@@ -144,10 +190,31 @@ class Client():
     def sendToClient(self, message):
         asyncio.get_running_loop().create_task(self.ws.send(message))
 
+    async def _publish_discussion_now(self):
+        """Déclenché sur logout explicite (voir handle_message) : publie immédiatement la
+        discussion pour agent-profiler au lieu d'attendre les 30 min du sweeper TTL, et
+        retire l'entrée de _conversation_histories pour éviter une double publication si
+        le sweeper la voyait passer plus tard."""
+        if not self.chat_step or not self.nexus:
+            return
+        history = self.chat_step.export_history()
+        await _publish_discussion(self.nexus, self.username, history)
+        if self.conversation_id:
+            _conversation_histories.pop(self.conversation_id, None)
+        self._discussion_published = True
+
     async def handle_message(self, websocket):
         try:
             # Listen for messages from the chat client
             async for message in websocket:
+                if isinstance(message, str):
+                    try:
+                        data = json.loads(message)
+                    except (json.JSONDecodeError, TypeError):
+                        data = None
+                    if isinstance(data, dict) and data.get("type") == "logout":
+                        await self._publish_discussion_now()
+                        continue
                 self.pipeline_input.handle_websocket(message)
         except websockets.exceptions.ConnectionClosed as ie:
             logging.info(f"Client connection closed: {ie}")
@@ -155,8 +222,12 @@ class Client():
             # Remove the client from the set of connected clients
             connected_clients.remove(self)
 
-            if self.chat_step and self.conversation_id:
-                _save_conversation_history(self.conversation_id, self.chat_step.export_history())
+            # Sur logout explicite, la discussion a déjà été publiée et l'entrée retirée
+            # de _conversation_histories — une simple déconnexion (reconnexion possible,
+            # cf. persistance de conversation) ne republie PAS, seul le sweeper TTL ou un
+            # futur logout explicite le fera.
+            if not self._discussion_published and self.chat_step and self.conversation_id:
+                _save_conversation_history(self.conversation_id, self.chat_step.export_history(), self.username)
 
             # CLEANUP: Stop pipeline to free resources (TTS WebSocket, threads, etc.)
             try:
@@ -197,6 +268,7 @@ async def start_server():
     pipeline_args = args.pipeline
 
     await publish_manifest()
+    asyncio.create_task(_conversation_ttl_sweeper())
 
     while True:
         try:

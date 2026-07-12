@@ -26,12 +26,6 @@ class ToolsReadyMessage(BaseMessage):
 
 
 @dataclass(frozen=True)
-class DiscussionHistoryMessage(BaseMessage):
-    """Historique complet d'une session, émis à la déconnexion"""
-    history: tuple
-
-
-@dataclass(frozen=True)
 class AgentTopicMessage(BaseMessage):
     """Données reçues sur un topic read-access annoncé par un agent via agent_topics"""
     topic: str

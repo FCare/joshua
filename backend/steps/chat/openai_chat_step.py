@@ -56,7 +56,7 @@ class OpenAIChatStep(PipelineStep):
         
         self.model = config.get("model", "gpt-4o-mini") if config else "gpt-4o-mini"
         self.temperature = config.get("temperature", 0.7) if config else 0.7
-        self.max_tokens = config.get("max_tokens", 1000) if config else 1000
+        self.max_tokens = config.get("max_tokens", 5000) if config else 5000
         # Cap réel (côté serveur vLLM) sur les tokens de "réflexion" — contrairement à la
         # consigne de prompt "300 mots max" (que le modèle peut ignorer), ce paramètre est
         # appliqué par le backend : une fois le budget atteint, le modèle est forcé de
@@ -68,7 +68,7 @@ class OpenAIChatStep(PipelineStep):
         # de la marge, épaulé par reasoning_effort (contrôle sémantique côté vLLM, cf.
         # _call_openai_streaming) et par le retry automatique sans thinking en dernier
         # recours si même ça ne suffit pas.
-        self.thinking_token_budget = config.get("thinking_token_budget", 800) if config else 800
+        self.thinking_token_budget = config.get("thinking_token_budget", 4000) if config else 4000
         self.system_prompt = ""
         self._original_system_prompt: str | None = None
         self.profile = ""
@@ -318,11 +318,19 @@ class OpenAIChatStep(PipelineStep):
                 "role": "system",
                 "content": system_prompt
             })
-        
-        # Ajoute l'heure actuelle — time.localtime() suit le fuseau du système hôte
-        # (UTC ici), pas celui de l'utilisateur ; fixé sur Europe/Paris comme dans
-        # system_prompt_step.py pour rester cohérent avec le "Nous sommes le..." du
-        # prompt système (qui, lui, utilisait déjà ZoneInfo("Europe/Paris")).
+
+        messages.extend(self.conversation_history)
+
+        # L'heure actuelle est ajoutée APRÈS l'historique, pas avant : elle change à
+        # chaque appel (donc à chaque tour), et le cache de préfixe de vLLM exige une
+        # correspondance exacte depuis le premier token — la placer avant l'historique
+        # invalidait le cache de tout l'historique déjà envoyé à CHAQUE tour, même
+        # quand son contenu n'avait pas changé. En la mettant après, seul ce message
+        # (et le tour courant) est retraité, l'historique déjà envoyé reste un préfixe
+        # stable et réutilisable d'un tour à l'autre. time.localtime() suit le fuseau
+        # du système hôte (UTC ici), pas celui de l'utilisateur ; fixé sur Europe/Paris
+        # comme dans system_prompt_step.py pour rester cohérent avec le "Nous sommes
+        # le..." du prompt système.
         current_time = datetime.now(ZoneInfo("Europe/Paris")).strftime("%A %d %B %Y %H:%M")
         messages.append({
             "role": "system",
@@ -333,8 +341,6 @@ class OpenAIChatStep(PipelineStep):
             messages.append({"role": "system", "content": self._next_system_addendum})
             self._next_system_addendum = None
 
-        messages.extend(self.conversation_history)
-        
         logger.info(f"LLM called with {messages}")
 
         return messages
@@ -519,14 +525,6 @@ class OpenAIChatStep(PipelineStep):
         )
         self._send_output_message(error_message)
     
-    def _publish_history(self):
-        if not self.conversation_history:
-            return
-        from messages.chat_message import DiscussionHistoryMessage
-        msg = DiscussionHistoryMessage(history=tuple(self.conversation_history))
-        self._send_output_message(msg)
-        logger.info(f"DiscussionHistoryMessage émis ({len(self.conversation_history)} messages)")
-
     def restore_history(self, history: list):
         """Reprend une conversation persistée (reconnexion websocket sur le même conversation_id)."""
         with self._lock:
@@ -628,6 +626,10 @@ class OpenAIChatStep(PipelineStep):
         common_rules = [
             "Garde ta réflexion interne très brève, quelques phrases maximum, jamais plus de "
             "300 mots, avant de répondre.",
+            "Ne verbalise JAMAIS ton plan de réponse ou ta réflexion dans ta réponse elle-même — "
+            "pas de phrases comme 'l'utilisateur veut...', 'je dois répondre...', 'voici mon "
+            "plan', 'je vais rechercher...'. Commence directement par la réponse, sans préambule "
+            "ni méta-commentaire sur ce que tu es en train de faire.",
             "Si un outil renvoie une erreur, ne rumine pas longuement dessus : corrige "
             "immédiatement l'appel fautif et réessaie tout de suite, ou si tu ne vois pas "
             "la correction, dis simplement à l'utilisateur qu'une erreur technique est "
@@ -798,9 +800,6 @@ class OpenAIChatStep(PipelineStep):
 
         if hasattr(self, 'input_queue') and self.input_queue:
             self.input_queue.stop()
-
-        # Publier l'historique avant de l'effacer
-        self._publish_history()
 
         # Nettoie l'état
         with self._lock:
