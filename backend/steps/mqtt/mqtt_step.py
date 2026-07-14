@@ -222,14 +222,10 @@ class MqttStep(PipelineStep):
                     merged_properties.setdefault(key, []).append(f"[{alias}] {desc}")
             topic_lines.append(line)
         description = (
-            "Envoie une requête à l'un des agents disponibles. Choisis le topic "
-            "correspondant au service demandé selon les descriptions ci-dessous, puis "
-            "remplis directement, en paramètres de cet appel, les champs pertinents pour "
-            "CE topic (voir son 'Format' ci-dessous) — laisse simplement de côté les "
-            "champs qui ne s'appliquent pas à ce topic, n'essaie jamais de les regrouper "
-            "toi-même dans un objet JSON imbriqué. Si le topic choisi indique un champ "
-            "'type' obligatoire, ne l'oublie JAMAIS : une requête sans lui échoue "
-            "silencieusement, sans qu'aucune erreur ne te soit signalée.\n"
+            "Envoie une requête à l'agent du topic choisi (descriptions ci-dessous). Remplis "
+            "en paramètres de PREMIER NIVEAU uniquement les champs du 'Format' de CE topic — "
+            "jamais regroupés dans un objet imbriqué. Un champ 'type' listé est OBLIGATOIRE : "
+            "sans lui la requête échoue silencieusement.\n"
             "Topics disponibles :\n" + "\n".join(topic_lines)
         )
 

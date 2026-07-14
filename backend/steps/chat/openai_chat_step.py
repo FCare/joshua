@@ -606,13 +606,18 @@ class OpenAIChatStep(PipelineStep):
             raise
     
     def _generate_enhanced_prompt(self, tools_definitions):
-        """Génère un prompt enrichi avec le profil utilisateur et les outils disponibles"""
-        parts = [self.system_prompt]
+        """Génère un prompt enrichi avec le profil utilisateur et les outils disponibles.
 
-        if self.profile:
-            parts.append(
-                f"\nUser profile (STRICT: report only what is written here, never infer, guess, or add details):\n{self.profile}"
-            )
+        Ordre volontaire, du plus statique au moins statique, pour maximiser la réutilisation
+        du préfixe en cache KV côté vLLM (--enable-prefix-caching) : (1) persona + règles,
+        identiques pour TOUS les utilisateurs et TOUTES les sessions — seul ce bloc peut être
+        partagé en cache entre utilisateurs différents ; (2) profil utilisateur, stable sur
+        toute une session mais propre à chaque utilisateur ; (3) liste d'outils, la partie la
+        plus volatile (change à chaque connexion/déconnexion d'agent). Le profil AVANT les
+        règles casserait le partage de cache inter-utilisateurs sur du texte pourtant
+        identique pour tout le monde.
+        """
+        parts = [self.system_prompt]
 
         # --reasoning-budget côté serveur ne coupe pas toujours la réflexion à temps en
         # pratique (constaté : parfois tout le budget de tokens y passe, réponse vide) —
@@ -637,43 +642,28 @@ class OpenAIChatStep(PipelineStep):
         ]
 
         if tools_definitions:
+            # Compacté (voir historique git pour la version longue) : chaque règle ci-dessous
+            # a été ajoutée suite à une confusion de routage réelle constatée en production —
+            # ne pas en supprimer sans preuve que le cas correspondant ne se reproduit plus.
             common_rules.append(
-                "RÈGLE ABSOLUE : tu ne réponds JAMAIS de mémoire à une question factuelle. Tu n'as JAMAIS le "
-                "droit de répondre négativement (\"je ne trouve pas\", \"je n'ai pas cette information\", "
-                "\"je ne sais pas\", \"il n'y a rien à ce sujet\") sans avoir D'ABORD appelé au moins un outil "
-                "pertinent parmi TOUS ceux listés plus bas — cette liste n'est PAS limitée aux exemples "
-                "ci-dessous : avant de conclure qu'aucun outil ne convient, relis chaque outil disponible et "
-                "son domaine, y compris les outils spécialisés (catalogues, listes personnelles, etc.), même "
-                "si le lien avec la question n'est pas évident au premier abord. "
-                "Exemples de routage parmi les cas les plus fréquents : "
-                "→ tout outil spécialisé listé plus bas (catalogues personnels, contes, etc.) dès que la "
-                "question touche à son domaine, même de loin — à vérifier EN PREMIER, avant tout autre outil ; "
-                "cela inclut un titre d'œuvre qui te semble correspondre à une connaissance générale ou "
-                "encyclopédique connue (ex: un livre, un conte publié) : vérifie D'ABORD s'il existe dans le "
-                "catalogue personnel de l'utilisateur avant de supposer qu'il s'agit d'une question externe — "
-                "la version qu'il possède peut différer de l'œuvre originale ; "
-                "→ '.../news/request' UNIQUEMENT pour les actualités et événements des derniers jours ; "
-                "→ '.../search_preference' UNIQUEMENT pour les données personnelles de l'utilisateur ; "
-                "→ '.../search/request' (SearXNG) SEULEMENT EN DERNIER RECOURS : utilise ta réflexion pour "
-                "d'abord écarter explicitement chaque outil spécialisé disponible, et n'y a recours que si tu "
-                "es certain qu'aucun ne peut raisonnablement s'appliquer à cette question. "
-                "Cette règle s'applique aussi aux demandes de recommandation, suggestion ou choix parmi un "
-                "contenu personnel réel ('propose-moi un conte', 'qu'est-ce que tu me conseilles') dès qu'un "
-                "outil donne accès à ce catalogue : ne propose JAMAIS un titre de mémoire, même un titre déjà "
-                "mentionné plus tôt dans la conversation ou qui te semble plausible — interroge D'ABORD l'outil "
-                "pour ne suggérer que ce qui existe réellement dans le catalogue de l'utilisateur. "
-                "STRICT : après avoir reçu le résultat d'un outil, base-toi UNIQUEMENT sur ce résultat. "
-                "Si le résultat est vide ou insuffisant, dis-le explicitement — n'invente jamais. "
-                "Un résultat d'outil obtenu pour une question précédente NE COUVRE PAS une nouvelle question, "
-                "même sur un sujet proche ou déjà mentionné dans la conversation : par exemple, le flash "
-                "d'actualités général du jour ne répond PAS à une question précise sur un événement particulier "
-                "— refais TOUJOURS un appel d'outil ciblé pour chaque nouvelle question factuelle plutôt que de "
-                "déduire une réponse à partir d'un résultat obtenu pour autre chose."
+                "RÈGLE ABSOLUE : ne réponds JAMAIS de mémoire à une question factuelle sans avoir "
+                "D'ABORD appelé un outil pertinent — relis TOUS les outils listés plus bas, y compris "
+                "les plus spécialisés, avant d'écarter cette option. Priorité de routage : "
+                "(1) un outil spécialisé (catalogue personnel, contes...) dès que son domaine touche la "
+                "question même indirectement, à vérifier EN PREMIER — y compris pour un titre d'œuvre "
+                "qui te semble connu/encyclopédique (vérifie D'ABORD le catalogue personnel, la version "
+                "de l'utilisateur peut différer de l'originale) ; même priorité pour une demande de "
+                "recommandation/suggestion sur un contenu personnel — ne propose JAMAIS un titre de "
+                "mémoire, interroge toujours l'outil d'abord. "
+                "(2) '.../news/request' UNIQUEMENT pour l'actualité et les événements récents. "
+                "(3) '.../search_preference' UNIQUEMENT pour les données personnelles de l'utilisateur. "
+                "(4) '.../search/request' (SearXNG) SEULEMENT EN DERNIER RECOURS, après avoir "
+                "explicitement écarté chaque outil spécialisé. "
+                "STRICT : base-toi UNIQUEMENT sur le résultat reçu — s'il est vide ou insuffisant, "
+                "dis-le, n'invente jamais. Un résultat obtenu pour une question précédente NE COUVRE "
+                "PAS une nouvelle question même proche (ex: le flash d'actualités du jour ne répond pas "
+                "à une question précise sur un événement) — refais TOUJOURS un appel ciblé."
             )
-            common_rules.append("Outils disponibles :")
-            for tool_def in tools_definitions:
-                func = tool_def['function']
-                common_rules.append(f"- {func['name']}: {func['description']}")
         else:
             common_rules.append(
                 "RÈGLE ABSOLUE : tu n'as ACTUELLEMENT accès à aucun outil externe (catalogue personnel, "
@@ -687,6 +677,18 @@ class OpenAIChatStep(PipelineStep):
             )
 
         parts.append("\n" + "\n".join(common_rules))
+
+        if self.profile:
+            parts.append(
+                f"\nUser profile (STRICT: report only what is written here, never infer, guess, or add details):\n{self.profile}"
+            )
+
+        if tools_definitions:
+            tool_lines = ["Outils disponibles :"]
+            for tool_def in tools_definitions:
+                func = tool_def['function']
+                tool_lines.append(f"- {func['name']}: {func['description']}")
+            parts.append("\n" + "\n".join(tool_lines))
 
         enhanced_prompt = "\n".join(parts)
         logger.info(f"Prompt enrichi généré: {enhanced_prompt[:100]}...")
@@ -746,12 +748,21 @@ class OpenAIChatStep(PipelineStep):
                     # imbriqué que le modèle doit construire lui-même. On reconstitue le
                     # payload ici à partir de tout ce qui n'est pas 'topic'.
                     payload = {k: v for k, v in parameters.items() if k != "topic"}
-                    # Filet de sécurité : si le modèle imbrique quand même par habitude
-                    # ({"payload": {...}} comme unique champ), on le déballe plutôt que
-                    # de l'envoyer tel quel à l'agent cible.
-                    if set(payload.keys()) == {"payload"} and isinstance(payload["payload"], dict):
-                        logger.warning(f"write_topic: payload imbriqué malgré le nouveau schéma à plat, déballage: {payload}")
-                        payload = payload["payload"]
+                    # Filet de sécurité : si le modèle imbrique quand même par habitude tous
+                    # les champs sous une seule clé objet (vu en pratique sous "payload" ET
+                    # sous "parameters" — le nom de la clé varie, seule la forme se répète :
+                    # {"<clé quelconque>": {...champs...}} au lieu des champs à plat), on
+                    # déballe plutôt que d'envoyer tel quel à l'agent cible. Un appel bien
+                    # formé n'a jamais un unique champ de premier niveau qui soit lui-même un
+                    # objet — aucun topic actuel n'a de paramètre de ce type.
+                    if len(payload) == 1:
+                        (only_key, only_value), = payload.items()
+                        if isinstance(only_value, dict):
+                            logger.warning(f"write_topic: payload imbriqué sous '{only_key}' malgré le schéma à plat, déballage: {payload}")
+                            payload = only_value
+                    # Un 'topic' égaré à l'intérieur d'un payload imbriqué (vu en pratique) ne
+                    # doit pas être transmis à l'agent cible comme un champ de faits.
+                    payload.pop("topic", None)
                     response_topic = self._topic_response_map.get(topic)
                     if self.output_queue:
                         self.output_queue.enqueue(MqttWriteMessage(topic=topic, payload=payload))
