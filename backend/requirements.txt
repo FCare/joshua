@@ -14,3 +14,6 @@ openai>=1.0.0
 python-dotenv>=1.0.0
 
 git+https://github.com/FCare/nexus-client.git@master
+httpx==0.28.1
+fastapi==0.115.5
+uvicorn[standard]==0.34.0

@@ -248,8 +248,8 @@ class JoshuaChat {
             }
         }
         
-        const wsUrl = `${this.getWebSocketUrl()}?api_key=${encodeURIComponent(this.apiKey)}&conversation_id=${encodeURIComponent(this.conversationId)}`;
-        console.log(`Connecting to WebSocket: ${wsUrl}`);
+        const wsUrl = `${this.getWebSocketUrl()}?access_token=${encodeURIComponent(this.apiKey)}&conversation_id=${encodeURIComponent(this.conversationId)}`;
+        console.log(`Connecting to WebSocket...`);
         
         try {
             this.ws = new WebSocket(wsUrl);
@@ -748,26 +748,27 @@ class JoshuaChat {
 
     async fetchWebSocketApiKey() {
         try {
-            // Use absolute URL to auth service
-            const response = await fetch('https://auth.caronboulme.fr/auth/session-api-key', {
-                method: 'POST',
+            // Obtenir un token OAuth Authentik via notre endpoint
+            const response = await fetch('https://joshua.caronboulme.fr/get-oauth-token', {
+                method: 'GET',
                 credentials: 'include'
             });
 
             if (response.ok) {
                 const data = await response.json();
-                this.apiKey = data.api_key;
-                this.apiKeyExpiresAt = data.expires_at;
-                console.log(`WebSocket API key obtained (${data.status}), expires: ${data.expires_at}`);
+                this.apiKey = data.access_token;
+                // Calculer l'expiration (timestamp actuel + expires_in secondes)
+                const expiresInMs = data.expires_in * 1000;
+                this.apiKeyExpiresAt = new Date(Date.now() + expiresInMs).toISOString();
+                console.log(`OAuth token obtained for ${data.username}, expires in ${data.expires_in}s`);
 
                 // Schedule automatic logout when the session expires
                 if (this._sessionExpiryTimer) clearTimeout(this._sessionExpiryTimer);
-                const msUntilExpiry = new Date(data.expires_at).getTime() - Date.now();
-                if (msUntilExpiry > 0) {
+                if (expiresInMs > 0) {
                     this._sessionExpiryTimer = setTimeout(() => {
-                        console.log('Session expired, redirecting to login');
+                        console.log('OAuth token expired, redirecting to login');
                         window.location.reload();
-                    }, msUntilExpiry);
+                    }, expiresInMs);
                 }
 
                 return true;

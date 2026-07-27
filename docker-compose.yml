@@ -27,12 +27,18 @@ services:
       - MQTT_SERVICE_USERNAME=${MQTT_SERVICE_USERNAME}
       - MQTT_SERVICE_API_KEY=${MQTT_SERVICE_API_KEY}
 
+      # Authentik OAuth
+      - AUTHENTIK_URL=${AUTHENTIK_URL:-https://sso.caronboulme.fr}
+      - JOSHUA_CLIENT_ID=${JOSHUA_CLIENT_ID}
+      - JOSHUA_CLIENT_SECRET=${JOSHUA_CLIENT_SECRET}
+
       # Configuration Python
       - PYTHONPATH=/app
       - PYTHONUNBUFFERED=1
       
     ports:
       - "${WEBSOCKET_PORT:-8769}:${WEBSOCKET_PORT:-8769}"
+      - "8770:8770"  # API HTTP pour /get-oauth-token
 
     volumes:
       # Logs et fichiers temporaires

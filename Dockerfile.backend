@@ -25,5 +25,9 @@ ENV PYTHONUNBUFFERED=1
 # Exposer le port WebSocket
 EXPOSE ${WEBSOCKET_PORT}
 
-# Point d'entrée pour démarrer le pipeline
-CMD ["sh", "-c", "python run_server.py run --pipeline \"${PIPELINE_NAME}\" --port \"${WEBSOCKET_PORT}\""]
+# Rendre le script de démarrage exécutable et l'utiliser
+COPY backend/start.sh .
+RUN chmod +x start.sh
+
+# Point d'entrée pour démarrer le pipeline ET l'API HTTP
+CMD ["./start.sh"]

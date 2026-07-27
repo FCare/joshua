@@ -9,3 +9,9 @@ pipeline.log
 # Virtual environment
 venv/
 env/
+.venv/
+cache/
+debug_audio/
+test/
+result.txt
+test.json

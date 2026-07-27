@@ -19,6 +19,11 @@ MQTT_PORT = int(os.environ.get("MQTT_PORT", "1883"))
 MQTT_SERVICE_USERNAME = os.environ.get("MQTT_SERVICE_USERNAME")
 MQTT_SERVICE_API_KEY = os.environ.get("MQTT_SERVICE_API_KEY")
 
+# Authentik OAuth
+AUTHENTIK_URL = os.environ.get("AUTHENTIK_URL", "https://sso.caronboulme.fr")
+JOSHUA_CLIENT_ID = os.environ.get("JOSHUA_CLIENT_ID")
+JOSHUA_CLIENT_SECRET = os.environ.get("JOSHUA_CLIENT_SECRET")
+
 MANIFEST = {
     "service": "joshua",
     "publishes": [
@@ -284,18 +289,36 @@ async def start_server():
         await asyncio.sleep(1)
 
 async def handle_client(websocket):
-    cookie_header = websocket.request.headers.get("Cookie", "")
-    session_cookie = _extract_cookie(cookie_header, "vk_session")
-
     query = parse_qs(urlsplit(websocket.request.path).query)
     conversation_id = (query.get("conversation_id") or [None])[0]
+    access_token = (query.get("access_token") or [None])[0]
 
     nexus = None
-    if session_cookie:
-        nexus = await NexusClient.from_session_cookie(VK_URL, MQTT_HOST, session_cookie, MQTT_PORT)
-        logging.info(f"Nouvelle connexion WebSocket: username={nexus.username}")
-    else:
-        logging.info("Nouvelle connexion WebSocket: pas de session cookie")
+
+    # Priorité 1 : Token OAuth (nouveau flow Authentik)
+    if access_token and JOSHUA_CLIENT_ID and JOSHUA_CLIENT_SECRET:
+        try:
+            nexus = await NexusClient.from_authentik_token(
+                AUTHENTIK_URL, MQTT_HOST, access_token,
+                JOSHUA_CLIENT_ID, JOSHUA_CLIENT_SECRET, MQTT_PORT
+            )
+            logging.info(f"Nouvelle connexion WebSocket (OAuth): username={nexus.username}")
+        except Exception as e:
+            logging.error(f"Échec création NexusClient OAuth: {e}")
+
+    # Fallback : Cookie VoightKampff (ancien flow, à supprimer plus tard)
+    if not nexus:
+        cookie_header = websocket.request.headers.get("Cookie", "")
+        session_cookie = _extract_cookie(cookie_header, "vk_session")
+        if session_cookie:
+            try:
+                nexus = await NexusClient.from_session_cookie(VK_URL, MQTT_HOST, session_cookie, MQTT_PORT)
+                logging.info(f"Nouvelle connexion WebSocket (VK fallback): username={nexus.username}")
+            except Exception as e:
+                logging.error(f"Échec création NexusClient VK: {e}")
+
+    if not nexus:
+        logging.warning("Nouvelle connexion WebSocket: pas d'authentification valide")
 
     session_id = str(uuid4())
     logging.info(f"Nouvelle session: {session_id} (conversation_id={conversation_id})")
