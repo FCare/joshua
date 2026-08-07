@@ -457,7 +457,7 @@ class OpenAIChatStep(PipelineStep):
                         logger.info(f"🛠️ Tool calls detected, processing {len(tool_calls)} calls")
                         self._handle_tool_calls(tool_calls, assistant_response)
                         break
-                    elif choice.finish_reason in ("stop", "length", "eos", "end_of_text"):
+                    elif choice.finish_reason in ("stop", "length", "eos", "end_of_text", "streaming_complete"):
                         logger.info(
                             f"End of response (finish_reason={choice.finish_reason}, "
                             f"reasoning={len(reasoning_text)} car., content={len(assistant_response)} car.)"
