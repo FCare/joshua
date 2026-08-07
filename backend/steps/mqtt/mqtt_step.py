@@ -85,7 +85,13 @@ class MqttStep(PipelineStep):
             "event": "user_connected",
             "username": username,
             "session_id": session_id,
-            "password": self._nexus.password,
+            # Booléen de présence, jamais le vrai token MQTT : ce topic
+            # (common/user_connected) est lu par tout agent abonné — y diffuser
+            # self._nexus.password (le token OAuth réel de CE client) permettrait à
+            # n'importe quel agent authentifié de s'authentifier en usurpant cette
+            # identité MQTT. Aucun consommateur (wiki-agent, weather, contes-agent)
+            # n'utilise ce champ au-delà d'un test de présence.
+            "authenticated": bool(self._nexus.password),
             "private_topics": [
                 {
                     "agent": entry["agent"],
