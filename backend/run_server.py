@@ -5,6 +5,7 @@ import os
 import sys
 import time
 import logging
+import httpx
 import websockets
 from urllib.parse import urlsplit, parse_qs
 from uuid import uuid4
@@ -13,11 +14,8 @@ from websockets.extensions import permessage_deflate
 from pipeline_loader import PipelineLoader
 from nexus_client import NexusClient
 
-VK_URL = os.environ.get("VK_URL", "http://voight-kampff:8080")
 MQTT_HOST = os.environ.get("MQTT_HOST", "mosquitto-broker")
 MQTT_PORT = int(os.environ.get("MQTT_PORT", "1883"))
-MQTT_SERVICE_USERNAME = os.environ.get("MQTT_SERVICE_USERNAME")
-MQTT_SERVICE_API_KEY = os.environ.get("MQTT_SERVICE_API_KEY")
 
 # Authentik OAuth
 AUTHENTIK_URL = os.environ.get("AUTHENTIK_URL", "https://sso.caronboulme.fr")
@@ -34,12 +32,46 @@ MANIFEST = {
                 "event": "user_connected",
                 "username": "string",
                 "session_id": "string (UUID unique par connexion WebSocket)",
-                "password": "string (cookie de session VK — utilisable comme mot de passe MQTT)",
+                "authenticated": "bool (jamais le vrai token MQTT — voir mqtt_step.py)",
                 "private_topics": "list[{agent, topics[]}] — topics privés de l'utilisateur par agent",
             },
         }
     ],
 }
+
+
+async def _new_mqtt_nexus() -> NexusClient | None:
+    """Obtient un token OAuth Client Credentials via Authentik et construit un
+    NexusClient authentifié — mosquitto-auth-authentik valide le mot de passe MQTT
+    comme un JWT Authentik, un token frais est donc nécessaire à chaque connexion.
+    Utilisé pour les connexions MQTT "service" de ce process (sweeper TTL,
+    manifeste), qui n'ont pas de session websocket/nexus par-connexion à
+    réutiliser. Même pattern que panoramix/server.py::_new_mqtt_nexus."""
+    if not (JOSHUA_CLIENT_ID and JOSHUA_CLIENT_SECRET):
+        logging.warning("JOSHUA_CLIENT_ID/JOSHUA_CLIENT_SECRET absents — MQTT service désactivé")
+        return None
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.post(
+                f"{AUTHENTIK_URL}/application/o/token/",
+                data={
+                    "grant_type": "client_credentials",
+                    "client_id": JOSHUA_CLIENT_ID,
+                    "client_secret": JOSHUA_CLIENT_SECRET,
+                },
+            )
+            if resp.status_code != 200:
+                logging.error(f"Échec obtention token OAuth: {resp.status_code} {resp.text}")
+                return None
+            access_token = resp.json()["access_token"]
+
+        return await NexusClient.from_authentik_token(
+            AUTHENTIK_URL, MQTT_HOST, access_token,
+            JOSHUA_CLIENT_ID, JOSHUA_CLIENT_SECRET, MQTT_PORT,
+        )
+    except Exception as e:
+        logging.error(f"Échec création NexusClient OAuth: {e}")
+        return None
 
 # Charger les variables d'environnement
 try:
@@ -118,23 +150,15 @@ async def _conversation_ttl_sweeper():
         if not expired:
             continue
         if _service_nexus is None:
-            if not (MQTT_SERVICE_USERNAME and MQTT_SERVICE_API_KEY):
-                logging.warning("Sweeper TTL conversations: pas de credentials service, publication ignorée")
+            _service_nexus = await _new_mqtt_nexus()
+            if _service_nexus is None:
+                logging.warning("Sweeper TTL conversations: nexus MQTT indisponible, publication ignorée")
                 for cid in expired:
                     _conversation_histories.pop(cid, None)
                 continue
-            _service_nexus = NexusClient.from_api_key(VK_URL, MQTT_HOST, MQTT_SERVICE_USERNAME, MQTT_SERVICE_API_KEY, MQTT_PORT)
         for cid in expired:
             _, history, username = _conversation_histories.pop(cid)
             await _publish_discussion(_service_nexus, username, history)
-
-
-def _extract_cookie(cookie_header: str, name: str) -> str:
-    for part in cookie_header.split(";"):
-        k, _, v = part.strip().partition("=")
-        if k.strip() == name:
-            return v.strip()
-    return ""
 
 
 class Client():
@@ -247,11 +271,11 @@ class Client():
         return
 
 async def publish_manifest():
-    if not MQTT_SERVICE_USERNAME or not MQTT_SERVICE_API_KEY:
-        logging.warning("MQTT_SERVICE_USERNAME/MQTT_SERVICE_API_KEY absents — manifeste non publié")
+    client = await _new_mqtt_nexus()
+    if client is None:
+        logging.warning("Nexus MQTT indisponible — manifeste non publié")
         return
     try:
-        client = NexusClient.from_api_key(VK_URL, MQTT_HOST, MQTT_SERVICE_USERNAME, MQTT_SERVICE_API_KEY, MQTT_PORT)
         await client.publish("common/services/joshua", MANIFEST, retain=True)
         logging.info("Manifeste MQTT publié sur common/services/joshua")
     except Exception as e:
@@ -295,7 +319,6 @@ async def handle_client(websocket):
 
     nexus = None
 
-    # Priorité 1 : Token OAuth (nouveau flow Authentik)
     if access_token and JOSHUA_CLIENT_ID and JOSHUA_CLIENT_SECRET:
         try:
             nexus = await NexusClient.from_authentik_token(
@@ -305,17 +328,6 @@ async def handle_client(websocket):
             logging.info(f"Nouvelle connexion WebSocket (OAuth): username={nexus.username}")
         except Exception as e:
             logging.error(f"Échec création NexusClient OAuth: {e}")
-
-    # Fallback : Cookie VoightKampff (ancien flow, à supprimer plus tard)
-    if not nexus:
-        cookie_header = websocket.request.headers.get("Cookie", "")
-        session_cookie = _extract_cookie(cookie_header, "vk_session")
-        if session_cookie:
-            try:
-                nexus = await NexusClient.from_session_cookie(VK_URL, MQTT_HOST, session_cookie, MQTT_PORT)
-                logging.info(f"Nouvelle connexion WebSocket (VK fallback): username={nexus.username}")
-            except Exception as e:
-                logging.error(f"Échec création NexusClient VK: {e}")
 
     if not nexus:
         logging.warning("Nouvelle connexion WebSocket: pas d'authentification valide")
